@@ -116,6 +116,7 @@ pub fn router() -> Router<Arc<AppState>> {
                 .post(create_virtual_folder)
                 .delete(remove_virtual_folder),
         )
+        .route("/Library/VirtualFolders/Name", axum::routing::post(rename_virtual_folder))
         .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
@@ -544,19 +545,35 @@ pub(crate) async fn accessible_nodes(
 ) -> Result<Vec<ItemDto>, StatusCode> {
     let (state_dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let (mut files, mut roots) = tokio::task::spawn_blocking(move || {
+    let (mut files, mut entries) = tokio::task::spawn_blocking(move || {
         let files = catalog::all_files(&state_dir)?;
-        let roots = catalog::library_roots(&state_dir)?;
-        Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
+        let entries = catalog::library_entries(&state_dir)?;
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, entries))
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if let Some(granted) = allowed {
         files.retain(|file| granted.contains(&file.root));
-        roots.retain(|root| granted.contains(root));
+        entries.retain(|entry| granted.contains(&entry.root));
     }
-    Ok(catalog_nodes(files, roots, &server_id))
+    let labels = entries
+        .iter()
+        .map(|entry| (stable_id(&entry.root, ""), entry.name.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut nodes = catalog_nodes(
+        files,
+        entries.into_iter().map(|entry| entry.root).collect(),
+        &server_id,
+    );
+    for item in &mut nodes {
+        if item.item_type == "CollectionFolder" {
+            if let Some(label) = labels.get(&item.id) {
+                item.name.clone_from(label);
+            }
+        }
+    }
+    Ok(nodes)
 }
 
 async fn query_items(
@@ -897,12 +914,8 @@ async fn create_virtual_folder(
             return Err(StatusCode::BAD_REQUEST);
         }
         let existing =
-            catalog::library_roots(&dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        if existing.iter().any(|root| {
-            Path::new(root)
-                .file_name()
-                .is_some_and(|leaf| leaf == name.as_str())
-        }) {
+            catalog::library_entries(&dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if existing.iter().any(|entry| entry.name.eq_ignore_ascii_case(&name)) {
             return Err(StatusCode::CONFLICT);
         }
         catalog::index(&dir, &canonical).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
@@ -911,6 +924,57 @@ async fn create_virtual_folder(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameVirtualFolderQuery {
+    name: Option<String>,
+    new_name: Option<String>,
+    refresh_library: Option<bool>,
+}
+
+/// Pinned POST /Library/VirtualFolders/Name subset. Only display metadata
+/// changes: original media paths, stable item IDs and grants remain intact.
+async fn rename_virtual_folder(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<RenameVirtualFolderQuery>,
+    body: Bytes,
+) -> Result<StatusCode, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.refresh_library == Some(true) || !body.is_empty() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let old = query.name.ok_or(StatusCode::BAD_REQUEST)?;
+    let new = query.new_name.ok_or(StatusCode::BAD_REQUEST)?;
+    if [&old, &new].iter().any(|name| {
+        name.is_empty()
+            || name.len() > 255
+            || name.trim() != name.as_str()
+            || name.chars().any(char::is_control)
+            || name == &"."
+            || name == &".."
+            || name.contains('/')
+            || name.contains('\\')
+    }) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    match tokio::task::spawn_blocking(move || catalog::rename_by_name(&dir, &old, &new))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+    {
+        catalog::LibraryRename::Renamed => Ok(StatusCode::NO_CONTENT),
+        catalog::LibraryRename::Missing => Err(StatusCode::NOT_FOUND),
+        catalog::LibraryRename::Ambiguous | catalog::LibraryRename::Conflict => {
+            Err(StatusCode::CONFLICT)
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -964,19 +1028,16 @@ async fn library_virtual_folders(
         return Err(StatusCode::FORBIDDEN);
     }
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    let roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
+    let roots = tokio::task::spawn_blocking(move || catalog::library_entries(&dir))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut folders = roots
         .into_iter()
-        .map(|root| VirtualFolderInfo {
-            name: Path::new(&root)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Library".to_owned()),
-            item_id: stable_id(&root, ""),
-            locations: vec![root],
+        .map(|entry| VirtualFolderInfo {
+            name: entry.name,
+            item_id: stable_id(&entry.root, ""),
+            locations: vec![entry.root],
         })
         .collect::<Vec<_>>();
     folders.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.item_id.cmp(&b.item_id)));
