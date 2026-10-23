@@ -162,8 +162,41 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
     )
     .await;
     assert_eq!(bad.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    // An opaque non-ASCII Range must not silently become a full-file response.
+    let opaque = axum::http::HeaderValue::from_bytes(b"bytes=\xff").unwrap();
+    let opaque_download = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&video)
+                .header("X-Emby-Token", &admin.access_token)
+                .header(header::RANGE, opaque.clone())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(opaque_download.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    assert_eq!(
+        opaque_download.headers()[header::CONTENT_RANGE],
+        "bytes */11"
+    );
 
     let old = format!("/Items/{}/File", id("Café"));
+    let opaque_direct = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&old)
+                .header("X-Emby-Token", &viewer.access_token)
+                .header(header::RANGE, opaque)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(opaque_direct.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    assert_eq!(opaque_direct.headers()[header::CONTENT_RANGE], "bytes */11");
     let original = request(&router, &old, Some(&viewer.access_token), None).await;
     assert!(
         original
