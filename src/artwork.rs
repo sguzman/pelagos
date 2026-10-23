@@ -146,9 +146,7 @@ pub(crate) fn sidecar_keys(files: &[catalog::CatalogFile]) -> HashSet<(String, S
         .filter(|image| image.kind == "image")
         .filter_map(|image| {
             let path = Path::new(&image.relative_path);
-            if supported_mime(path).is_none() {
-                return None;
-            }
+            supported_mime(path)?;
             let parent = path.parent().unwrap_or_else(|| Path::new(""));
             let name = path.file_stem()?.to_str()?.to_lowercase();
             let folder_art = matches!(name.as_str(), "poster" | "folder" | "cover")
