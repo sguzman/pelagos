@@ -52,6 +52,8 @@ pub struct ItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub production_year: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub child_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_data: Option<user_data::UserItemData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_tags: Option<std::collections::BTreeMap<String, String>>,
@@ -219,6 +221,7 @@ fn virtual_root(server_id: &str) -> ItemDto {
         index_number: None,
         parent_index_number: None,
         production_year: None,
+        child_count: None,
         user_data: None,
         image_tags: None,
     }
@@ -366,6 +369,7 @@ fn map_item(
         index_number: episode.as_ref().map(|hint| hint.episode),
         parent_index_number: episode.as_ref().map(|hint| hint.season),
         production_year: movie.map(|hint| hint.production_year),
+        child_count: None,
         user_data: None,
         image_tags: primary_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -391,6 +395,7 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         index_number: None,
         parent_index_number: None,
         production_year: None,
+        child_count: None,
         user_data: None,
         image_tags: image_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -487,6 +492,7 @@ fn catalog_nodes(
                         index_number,
                         parent_index_number: None,
                         production_year: None,
+                        child_count: None,
                         user_data: None,
                         image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
                             .and_then(artwork::image_tag)
