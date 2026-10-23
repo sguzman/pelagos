@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 26%` across 122 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 27%` across 124 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40004888920](https://github.com/sguzman/pelagos/actions/runs/40004888920) — disabled Quick Connect behavior, deterministic resume ordering, formatting, Clippy, Rust tests and tracking checks.
+**Latest passing CI:** [run 40007768099](https://github.com/sguzman/pelagos/actions/runs/40007768099) — TV season and episode navigation, continuation tests, formatting, Clippy, Rust tests and source/roadmap guards.
 
 ## 🚀 Current starter
 
@@ -65,6 +65,8 @@ The scoped `GET /Library/MediaFolders` exposes indexed collection roots, includi
 System info now reports `LocalAddress` from a concrete listening IPv4/IPv6 socket, using the actual bound port, never from the incoming HTTP `Host` header. Wildcard binds intentionally return null rather than an invalid `0.0.0.0` or `::` URL. UDP LAN discovery continues to choose its address per requester. This network contract remains synthetic-tested; actual Smart TV connection is not verified.
 
 `GET /QuickConnect/Enabled` now returns `false`, while disabled initiation, secret polling and authorization refuse requests without issuing pairing credentials. This deliberately does **not** implement Jellyfin Quick Connect; manual credentials remain the only preliminary login path. Resume queries now have deterministic automated tests for saved-position newest-first ordering, including when UserData is omitted from display. Both features still require real-client acceptance.
+
+Conservative local SxxEyy recognition now identifies Series, Season and Episode objects only under season-directory agreement, retaining generic Video for unrecognized files. Stable SeriesId/SeasonId references connect the existing virtual folder IDs. Preliminary `GET /Shows/{seriesId}/Seasons` and `/Shows/{seriesId}/Episodes` expose permission-scoped results, numeric season/episode order, specials, paging and `startItemId` continuation. Unsupported options refuse rather than imply metadata that Pelagos lacks. Full naming parity, missing-episode discovery, NextUp and unmodified client acceptance remain open.
 
 ## 🦀 Architecture and independence
 

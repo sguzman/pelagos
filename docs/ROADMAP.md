@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 26%` across 122 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 27%` across 124 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -214,11 +214,11 @@
   - [x] CI verifies descending pagination, user data/image opt-out, 401/403 account isolation and unimplemented sort/metadata rejection — GitHub Actions 40002822616 — full Rust CI and test suite green
   - [ ] Real Jellyfin clients validate multi-key sort/filter options, full DTO field semantics and query metadata parity
 
-## 📚 M2 — Full media library and metadata — `███░░░░░░░ 29%`
+## 📚 M2 — Full media library and metadata — `███░░░░░░░ 32%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
-### 📂 P6 — Filesystem and items — `█░░░░░░░░░ 13%`
+### 📂 P6 — Filesystem and items — `██░░░░░░░░ 22%`
 
 - 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
   - [ ] Implement multi-root libraries, watcher updates and rescan correctness
@@ -240,6 +240,10 @@
   - [x] V2 SQLite schema registers empty media libraries independently from file rows and migrates old roots — src/catalog.rs — transaction-preserving catalog migration, explicit library roots, stale-row cleanup
   - [x] CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation — GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed
   - [ ] Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades
+- 📺 **T205 — Conservative local series, season and episode recognition** — `███████░░░ 67%`
+  - [x] Recognize unambiguous season-folder-matched SxxEyy filenames with Unicode-aware paths while leaving unmatched media generic — src/naming.rs; tests/episode_items_http.rs — standalone parser and protected catalog DTO classification
+  - [x] Full CI verifies stable SeasonId/SeriesId graph, partial naming metadata, image/search/resume integration and library grant revocation — GitHub Actions 40006848897 and 40007505990 — formatting, Clippy and full Rust HTTP/unit tests passed
+  - [ ] Full Jellyfin naming, provider identifiers, collections, multi-episode files and unmodified client acceptance verified
 
 ### 🧩 P7 — Metadata systems — `███░░░░░░░ 34%`
 
@@ -276,7 +280,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `███░░░░░░░ 34%`
+### 🎼 P8 — Library feature APIs — `████░░░░░░ 37%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -310,6 +314,10 @@
   - [x] Implement pinned Jellyfin GET /Items/Root and legacy root, with stable root ID and authorized collection-folder parent graph — src/catalog_api.rs; tests/root_http.rs; tests/ancestors_http.rs — stable pathless root, parent chain, recursive browse and self-only identity
   - [x] CI verifies empty/ungranted roots, grant/revoke, ancestor chain, direct/root DTO consistency and persistence across restart — GitHub Actions 40002822616 — full Rust format, Clippy, HTTP tests, upstream matrix and roadmap checks passed
   - [ ] Unmodified Jellyfin clients and upstream comparison verify root folder DTO and navigation parity
+- 📚 **T229 — Jellyfin TV show season and episode navigation subsets** — `███████░░░ 67%`
+  - [x] Implement pinned GET Shows/{seriesId}/Seasons and /Episodes with season filters, specials, index ordering, paging, StartItemId and optional UserData/images — src/shows.rs; tests/shows_http.rs — scoped catalog graph with explicit refusal of unsupported query options
+  - [x] Full CI verifies unavailable/foreign series, cross-user identity, typed seasons/episodes, stable season links, continuation and permission revocation — GitHub Actions 40007768099 — formatting, Clippy, all Rust HTTP tests and upstream/roadmap checks passed
+  - [ ] Unmodified Jellyfin Smart TV/web clients validate complete Shows routes, missing episodes, NextUp, metadata and alternate media behaviors
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 

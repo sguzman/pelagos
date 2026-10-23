@@ -1150,6 +1150,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T205",
+              "emoji": "📺",
+              "name": "Conservative local series, season and episode recognition",
+              "checks": [
+                {
+                  "title": "Recognize unambiguous season-folder-matched SxxEyy filenames with Unicode-aware paths while leaving unmatched media generic",
+                  "passed": true,
+                  "evidence": "src/naming.rs; tests/episode_items_http.rs — standalone parser and protected catalog DTO classification"
+                },
+                {
+                  "title": "Full CI verifies stable SeasonId/SeriesId graph, partial naming metadata, image/search/resume integration and library grant revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40006848897 and 40007505990 — formatting, Clippy and full Rust HTTP/unit tests passed"
+                },
+                {
+                  "title": "Full Jellyfin naming, provider identifiers, collections, multi-episode files and unmodified client acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -1496,6 +1518,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin clients and upstream comparison verify root folder DTO and navigation parity",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T229",
+              "emoji": "📚",
+              "name": "Jellyfin TV show season and episode navigation subsets",
+              "checks": [
+                {
+                  "title": "Implement pinned GET Shows/{seriesId}/Seasons and /Episodes with season filters, specials, index ordering, paging, StartItemId and optional UserData/images",
+                  "passed": true,
+                  "evidence": "src/shows.rs; tests/shows_http.rs — scoped catalog graph with explicit refusal of unsupported query options"
+                },
+                {
+                  "title": "Full CI verifies unavailable/foreign series, cross-user identity, typed seasons/episodes, stable season links, continuation and permission revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40007768099 — formatting, Clippy, all Rust HTTP tests and upstream/roadmap checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV/web clients validate complete Shows routes, missing episodes, NextUp, metadata and alternate media behaviors",
                   "passed": false
                 }
               ],
