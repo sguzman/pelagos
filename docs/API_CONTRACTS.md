@@ -1,6 +1,6 @@
 # 📡 Jellyfin v12.3 controller attribute inventory
 
-**Partial inventory:** 30/60 upstream controllers, 236 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
+**Partial inventory:** 40/60 upstream controllers, 308 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
 
 This is **not** a complete API inventory and **not** accepted parity. Method attribute lines alone do not establish route registration, authentication, parameter binding, response schemas, event streams or actual TV client behavior. Fields with `path: null` require manual route-attribute resolution.
 
@@ -25,9 +25,19 @@ This is **not** a complete API inventory and **not** accepted parity. Method att
 - **ImageController** — `/` — 45 method attributes
 - **InstantMixController** — `/` — 8 method attributes
 - **ItemLookupController** — `/` — 11 method attributes
+- **ItemRefreshController** — `Items` — 1 method attributes
 - **ItemsController** — `/` — 8 method attributes
+- **ItemUpdateController** — `/` — 3 method attributes
 - **LibraryController** — `/` — 25 method attributes
+- **LibraryStructureController** — `Library/VirtualFolders` — 8 method attributes
+- **LiveTvController** — `LiveTv` — 40 method attributes
+- **LocalizationController** — `Localization` — 4 method attributes
+- **LyricsController** — `/` — 6 method attributes
 - **MediaInfoController** — `/` — 5 method attributes
+- **MediaSegmentsController** — `MediaSegments` — 1 method attributes
+- **MoviesController** — `Movies` — 1 method attributes
+- **MusicGenresController** — `MusicGenres` — 2 method attributes
+- **PackageController** — `/` — 6 method attributes
 - **PlaystateController** — `/` — 14 method attributes
 - **QuickConnectController** — `QuickConnect` — 4 method attributes
 - **SessionController** — `/` — 16 method attributes

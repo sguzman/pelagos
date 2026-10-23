@@ -822,6 +822,19 @@
       ]
     },
     {
+      "controller": "ItemRefreshController",
+      "source_path": "Jellyfin.Api/Controllers/ItemRefreshController.cs",
+      "upstream_blob_sha": "5fc4ad88b61a862b083bc8a6a0fcb6541f4094c7",
+      "route_prefix": "Items",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/Refresh",
+          "source_line": 58
+        }
+      ]
+    },
+    {
       "controller": "ItemsController",
       "source_path": "Jellyfin.Api/Controllers/ItemsController.cs",
       "upstream_blob_sha": "385795e9f7f3338b0c2ce9ed9a97f5d67e381ea1",
@@ -866,6 +879,29 @@
           "method": "POST",
           "path": "/Users/{userId}/Items/{itemId}/UserData",
           "source_line": 1169
+        }
+      ]
+    },
+    {
+      "controller": "ItemUpdateController",
+      "source_path": "Jellyfin.Api/Controllers/ItemUpdateController.cs",
+      "upstream_blob_sha": "288efebc4f6bd59bc583bff4c2057f3386b27b46",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}",
+          "source_line": 72
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/MetadataEditor",
+          "source_line": 145
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/ContentType",
+          "source_line": 207
         }
       ]
     },
@@ -1003,6 +1039,328 @@
       ]
     },
     {
+      "controller": "LibraryStructureController",
+      "source_path": "Jellyfin.Api/Controllers/LibraryStructureController.cs",
+      "upstream_blob_sha": "9e6bfde085913b20cb5d1d4abc33902cc544aded",
+      "route_prefix": "Library/VirtualFolders",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Library/VirtualFolders",
+          "source_line": 72
+        },
+        {
+          "method": "POST",
+          "path": "/Library/VirtualFolders",
+          "source_line": 89
+        },
+        {
+          "method": "DELETE",
+          "path": "/Library/VirtualFolders",
+          "source_line": 120
+        },
+        {
+          "method": "POST",
+          "path": "/Library/VirtualFolders/Name",
+          "source_line": 144
+        },
+        {
+          "method": "POST",
+          "path": "/Library/VirtualFolders/Paths",
+          "source_line": 364
+        },
+        {
+          "method": "POST",
+          "path": "/Library/VirtualFolders/Paths/Update",
+          "source_line": 407
+        },
+        {
+          "method": "DELETE",
+          "path": "/Library/VirtualFolders/Paths",
+          "source_line": 429
+        },
+        {
+          "method": "POST",
+          "path": "/Library/VirtualFolders/LibraryOptions",
+          "source_line": 474
+        }
+      ]
+    },
+    {
+      "controller": "LiveTvController",
+      "source_path": "Jellyfin.Api/Controllers/LiveTvController.cs",
+      "upstream_blob_sha": "1c570daf21a4d72472ffae840c908c7d61a3eda3",
+      "route_prefix": "LiveTv",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/LiveTv/Info",
+          "source_line": 102
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Channels",
+          "source_line": 138
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Channels/{channelId}",
+          "source_line": 218
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Recordings",
+          "source_line": 265
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Recordings/Series",
+          "source_line": 336
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Recordings/Groups",
+          "source_line": 366
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Recordings/Folders",
+          "source_line": 382
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Recordings/{recordingId}",
+          "source_line": 406
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/Tuners/{tunerId}/Reset",
+          "source_line": 435
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Timers/{timerId}",
+          "source_line": 452
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Timers/Defaults",
+          "source_line": 468
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Timers",
+          "source_line": 488
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Programs",
+          "source_line": 542
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/Programs",
+          "source_line": 626
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Programs/Recommended",
+          "source_line": 694
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Programs/{programId}",
+          "source_line": 749
+        },
+        {
+          "method": "DELETE",
+          "path": "/LiveTv/Recordings/{recordingId}",
+          "source_line": 778
+        },
+        {
+          "method": "DELETE",
+          "path": "/LiveTv/Timers/{timerId}",
+          "source_line": 804
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/Timers/{timerId}",
+          "source_line": 820
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/Timers",
+          "source_line": 835
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/SeriesTimers/{timerId}",
+          "source_line": 851
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/SeriesTimers",
+          "source_line": 873
+        },
+        {
+          "method": "DELETE",
+          "path": "/LiveTv/SeriesTimers/{timerId}",
+          "source_line": 893
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/SeriesTimers/{timerId}",
+          "source_line": 909
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/SeriesTimers",
+          "source_line": 924
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/GuideInfo",
+          "source_line": 938
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/TunerHosts",
+          "source_line": 950
+        },
+        {
+          "method": "DELETE",
+          "path": "/LiveTv/TunerHosts",
+          "source_line": 962
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/ListingProviders/Default",
+          "source_line": 976
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/ListingProviders",
+          "source_line": 993
+        },
+        {
+          "method": "DELETE",
+          "path": "/LiveTv/ListingProviders",
+          "source_line": 1017
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/ListingProviders/Lineups",
+          "source_line": 1035
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/ListingProviders/SchedulesDirect/Countries",
+          "source_line": 1050
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/ChannelMappingOptions",
+          "source_line": 1066
+        },
+        {
+          "method": "POST",
+          "path": "/LiveTv/ChannelMappings",
+          "source_line": 1078
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/TunerHosts/Types",
+          "source_line": 1089
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Tuners/Discvover",
+          "source_line": 1101
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/Tuners/Discover",
+          "source_line": 1102
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/LiveRecordings/{recordingId}/stream",
+          "source_line": 1118
+        },
+        {
+          "method": "GET",
+          "path": "/LiveTv/LiveStreamFiles/{streamId}/stream.{container}",
+          "source_line": 1145
+        }
+      ]
+    },
+    {
+      "controller": "LocalizationController",
+      "source_path": "Jellyfin.Api/Controllers/LocalizationController.cs",
+      "upstream_blob_sha": "dd8f935dc111449659327d95a3566ac3d57e3ca1",
+      "route_prefix": "Localization",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Localization/Cultures",
+          "source_line": 35
+        },
+        {
+          "method": "GET",
+          "path": "/Localization/Countries",
+          "source_line": 54
+        },
+        {
+          "method": "GET",
+          "path": "/Localization/ParentalRatings",
+          "source_line": 66
+        },
+        {
+          "method": "GET",
+          "path": "/Localization/Options",
+          "source_line": 78
+        }
+      ]
+    },
+    {
+      "controller": "LyricsController",
+      "source_path": "Jellyfin.Api/Controllers/LyricsController.cs",
+      "upstream_blob_sha": "5a27b2719ea5e7ab6f1b10fcac6b38a278180233",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/Lyrics",
+          "source_line": 67
+        },
+        {
+          "method": "POST",
+          "path": "/Audio/{itemId}/Lyrics",
+          "source_line": 97
+        },
+        {
+          "method": "DELETE",
+          "path": "/Audio/{itemId}/Lyrics",
+          "source_line": 152
+        },
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/RemoteSearch/Lyrics",
+          "source_line": 176
+        },
+        {
+          "method": "POST",
+          "path": "/Audio/{itemId}/RemoteSearch/Lyrics/{lyricId}",
+          "source_line": 200
+        },
+        {
+          "method": "GET",
+          "path": "/Providers/Lyrics/{lyricId}",
+          "source_line": 231
+        }
+      ]
+    },
+    {
       "controller": "MediaInfoController",
       "source_path": "Jellyfin.Api/Controllers/MediaInfoController.cs",
       "upstream_blob_sha": "aa942e76428c0711d2d0f24da5db339c1fa260c7",
@@ -1032,6 +1390,88 @@
           "method": "GET",
           "path": "/Playback/BitrateTest",
           "source_line": 329
+        }
+      ]
+    },
+    {
+      "controller": "MediaSegmentsController",
+      "source_path": "Jellyfin.Api/Controllers/MediaSegmentsController.cs",
+      "upstream_blob_sha": "65565826a4e86c6960d9e4d21779b1c5b301f85d",
+      "route_prefix": "MediaSegments",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/MediaSegments/{itemId}",
+          "source_line": 46
+        }
+      ]
+    },
+    {
+      "controller": "MoviesController",
+      "source_path": "Jellyfin.Api/Controllers/MoviesController.cs",
+      "upstream_blob_sha": "a1f2fe7ce759b85e4da78b581d4f9d76214375c1",
+      "route_prefix": "Movies",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Movies/Recommendations",
+          "source_line": 59
+        }
+      ]
+    },
+    {
+      "controller": "MusicGenresController",
+      "source_path": "Jellyfin.Api/Controllers/MusicGenresController.cs",
+      "upstream_blob_sha": "4ebf9148958853a662fa95556e32ee589cf7b365",
+      "route_prefix": "MusicGenres",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/MusicGenres",
+          "source_line": 74
+        },
+        {
+          "method": "GET",
+          "path": "/MusicGenres/{genreName}",
+          "source_line": 152
+        }
+      ]
+    },
+    {
+      "controller": "PackageController",
+      "source_path": "Jellyfin.Api/Controllers/PackageController.cs",
+      "upstream_blob_sha": "10bcf4e717464ec2a111e664aa4587cc6e498c0d",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Packages/{name}",
+          "source_line": 53
+        },
+        {
+          "method": "GET",
+          "path": "/Packages",
+          "source_line": 86
+        },
+        {
+          "method": "POST",
+          "path": "/Packages/Installed/{name}",
+          "source_line": 105
+        },
+        {
+          "method": "DELETE",
+          "path": "/Packages/Installing/{packageId}",
+          "source_line": 149
+        },
+        {
+          "method": "GET",
+          "path": "/Repositories",
+          "source_line": 163
+        },
+        {
+          "method": "POST",
+          "path": "/Repositories",
+          "source_line": 176
         }
       ]
     },
