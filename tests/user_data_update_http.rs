@@ -30,7 +30,11 @@ async fn call(
     } else {
         Body::empty()
     };
-    router.clone().oneshot(req.body(body).unwrap()).await.unwrap()
+    router
+        .clone()
+        .oneshot(req.body(body).unwrap())
+        .await
+        .unwrap()
 }
 
 async fn body(response: Response) -> Value {
@@ -62,10 +66,7 @@ async fn partial_user_data_update_is_transactional_scoped_and_persistent() {
         "server".to_owned(),
         state.clone(),
     )));
-    let listing = body(
-        call(&router, "GET", "/Items", Some(&admin.access_token), None).await,
-    )
-    .await;
+    let listing = body(call(&router, "GET", "/Items", Some(&admin.access_token), None).await).await;
     let items = listing["Items"].as_array().unwrap();
     let id = items.iter().find(|item| item["Name"] == "Clip").unwrap()["Id"]
         .as_str()
@@ -111,8 +112,14 @@ async fn partial_user_data_update_is_transactional_scoped_and_persistent() {
 
     for rejected in [
         (json!({"PlaybackPositionTicks":-1}), StatusCode::BAD_REQUEST),
-        (json!({"Played":true,"PlaybackPositionTicks":10}), StatusCode::BAD_REQUEST),
-        (json!({"ItemId":"other","Played":true}), StatusCode::BAD_REQUEST),
+        (
+            json!({"Played":true,"PlaybackPositionTicks":10}),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            json!({"ItemId":"other","Played":true}),
+            StatusCode::BAD_REQUEST,
+        ),
         (json!({"Rating":4.5}), StatusCode::NOT_IMPLEMENTED),
         (json!({"UnknownField":false}), StatusCode::NOT_IMPLEMENTED),
         (json!({}), StatusCode::BAD_REQUEST),
@@ -127,10 +134,8 @@ async fn partial_user_data_update_is_transactional_scoped_and_persistent() {
         .await;
         assert_eq!(response.status(), rejected.1);
     }
-    let unchanged = body(
-        call(&router, "GET", &route, Some(&viewer.access_token), None).await,
-    )
-    .await;
+    let unchanged =
+        body(call(&router, "GET", &route, Some(&viewer.access_token), None).await).await;
     assert_eq!(unchanged["PlaybackPositionTicks"], 1234567);
     assert_eq!(unchanged["IsFavorite"], true);
 
@@ -203,10 +208,8 @@ async fn partial_user_data_update_is_transactional_scoped_and_persistent() {
         "server".to_owned(),
         state.clone(),
     )));
-    let persisted = body(
-        call(&restarted, "GET", &route, Some(&viewer.access_token), None).await,
-    )
-    .await;
+    let persisted =
+        body(call(&restarted, "GET", &route, Some(&viewer.access_token), None).await).await;
     assert_eq!(persisted["PlayCount"], 1);
     assert_eq!(persisted["IsFavorite"], true);
     assert_eq!(persisted["Played"], false);
