@@ -8,6 +8,7 @@ pub mod discovery;
 pub mod identity;
 pub mod media;
 pub mod playback;
+pub mod playstate;
 pub mod probe;
 pub(crate) mod query_filters;
 pub mod search;
