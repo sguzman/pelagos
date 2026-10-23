@@ -220,6 +220,9 @@ async fn item_type_and_media_filters_are_consistent_with_search() {
     )
     .await;
     assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
-    let refused = get(&router, "/Items?isSeries=true", Some(&session.access_token)).await;
-    assert_eq!(refused.status(), StatusCode::NOT_IMPLEMENTED);
+    let series = json(
+        get(&router, "/Items?isSeries=true", Some(&session.access_token)).await,
+    )
+    .await;
+    assert_eq!(series["TotalRecordCount"], 0);
 }
