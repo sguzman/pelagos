@@ -85,3 +85,7 @@ The self-scoped `/Users/{userId}` route passes [CI 39997998461](https://github.c
 ## Resume item discovery (synthetic only)
 
 Pelagos now implements preliminary pinned `GET /UserItems/Resume` and legacy `GET /Users/{userId}/Items/Resume` using accessible, indexed audio/video items and independently persisted positive playback ticks. The Rust suite confirms personal state isolation, search/media filtering, paging, grant revocation and activity timestamps ([CI 39999748396](https://github.com/sguzman/pelagos/actions/runs/39999748396)). Full Jellyfin resume ordering, completed playback thresholds, active-session filtering, alternate versions and unmodified client acceptance remain **Not tested or unimplemented**.
+
+## Stable virtual root and item query option subset (synthetic only)
+
+An authenticated virtual user root is now available through Jellyfin's pinned `/Items/Root` and legacy `/Users/{userId}/Items/Root`. Its ID is stable across restarts; its authorized collection children and item ancestor chains are connected, with no source paths exposed. The `/Items` browse subset accepts SortName and descending order, scoped `userId`, and `enableImages=false` / `enableUserData=false` flags; unsupported sort names and unavailable extra DTO field projections explicitly return 501. Permission, paging and identity tests passed [CI 40002822616](https://github.com/sguzman/pelagos/actions/runs/40002822616). No unmodified Jellyfin TV client or full pinned DTO comparison has validated this behavior.
