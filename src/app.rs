@@ -11,7 +11,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{artwork, auth_api, catalog_api, playback, playstate, search, streaming, user_data};
+use crate::{artwork, auth_api, bitrate, catalog_api, playback, playstate, search, streaming, user_data};
 
 #[derive(Debug)]
 pub struct AppState {
@@ -74,6 +74,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(user_data::router())
         .merge(playstate::router())
         .merge(artwork::router())
+        .merge(bitrate::router())
         .with_state(state)
 }
 
