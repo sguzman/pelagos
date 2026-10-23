@@ -374,7 +374,10 @@ async fn query_items(
     if query.user_id.as_deref().is_some_and(|id| id != user.id) {
         return Err(StatusCode::FORBIDDEN);
     }
-    if query.sort_by.as_deref().is_some_and(|key| key != "SortName")
+    if query
+        .sort_by
+        .as_deref()
+        .is_some_and(|key| key != "SortName")
         || query
             .sort_order
             .as_deref()
