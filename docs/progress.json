@@ -2273,6 +2273,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T503",
+              "emoji": "🗂️",
+              "name": "Administrator-only indexed media folders catalog",
+              "checks": [
+                {
+                  "title": "Expose pinned GET /Library/MediaFolders with administrator authorization and visible indexed empty or populated library roots",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/library_media_folders_http.rs — admin-bound read-only CollectionFolder query with no absolute paths"
+                },
+                {
+                  "title": "CI verifies 401 unauthenticated, 403 viewer even after grants, hidden-filter subset, stable parent IDs, and empty roots",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40003332448 — complete Rust CI and HTTP authorization tests passed"
+                },
+                {
+                  "title": "Real admin clients and pinned upstream Library/MediaFolders DTO/configuration semantics are verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
