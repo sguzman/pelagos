@@ -46,7 +46,6 @@ fn validate_query(query: &ShowQuery, episodes: bool) -> Result<(), StatusCode> {
         || query.image_type_limit.is_some()
         || query.enable_image_types.is_some()
         || query.adjacent_to.is_some()
-        || query.start_item_id.is_some()
         || query.is_missing.is_some()
         || query.sort_by.as_deref().is_some_and(|s| s != "SortName")
         || !episodes && (query.season.is_some() || query.season_id.is_some())
@@ -131,6 +130,15 @@ async fn show_items(
         });
     }
 
+    if let Some(start_item_id) = query.start_item_id.as_deref() {
+        if !episodes {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        filtered = filtered
+            .into_iter()
+            .skip_while(|item| item.id != start_item_id)
+            .collect();
+    }
     let total_record_count = filtered.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
