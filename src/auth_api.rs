@@ -31,6 +31,28 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Sessions", get(sessions))
         // Public account listing intentionally discloses no usernames yet.
         .route("/Users/Public", get(public_users))
+        .route("/QuickConnect/Enabled", get(quick_connect_enabled))
+        .route("/QuickConnect/Initiate", post(quick_connect_unavailable))
+        .route("/QuickConnect/Connect", get(quick_connect_unavailable))
+        .route("/QuickConnect/Authorize", post(quick_connect_authorize))
+}
+
+/// Pinned Jellyfin v12.3 Quick Connect is not enabled in this pre-alpha.
+/// Do not manufacture pairing codes, persist requests, or imply TV support.
+async fn quick_connect_enabled() -> Json<bool> {
+    Json(false)
+}
+
+async fn quick_connect_unavailable() -> StatusCode {
+    StatusCode::UNAUTHORIZED
+}
+
+async fn quick_connect_authorize(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<StatusCode, StatusCode> {
+    authenticated(state, headers).await?;
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 async fn public_users() -> Json<Vec<User>> {
