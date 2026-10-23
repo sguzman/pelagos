@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 29%` across 133 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 30%` across 134 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40016204498](https://github.com/sguzman/pelagos/actions/runs/40016204498) — personal watched/favorite browse and search filters, stable latest media, formatting, Clippy, full Rust suite and repository evidence checks.
+**Latest passing CI:** [run 40020602437](https://github.com/sguzman/pelagos/actions/runs/40020602437) — pinned TV Episode-to-Series latest grouping, accurate ChildCount, protected personal state, full tests and source/roadmap checks.
 
 ## 🚀 Current starter
 
@@ -79,6 +79,8 @@ Pelagos now serves pinned `GET /Items/{itemId}/File` and HEAD using its indexed,
 Pelagos now persists a first-indexed timestamp in catalog schema v3, preserving existing items across rescans rather than misrepresenting every refresh as newly added. Pinned `GET /Items/Latest` and legacy user route provide permission-scoped, newest-first **ungrouped** media when callers explicitly use `groupItems=false`. Upstream defaults to grouped shelves; unsupported/default grouping returns 501 until genuine grouping is implemented. Historical v1/v2 data uses the last-seen timestamp as the best available backfill, not a claimed original creation date.
 
 `GET /Items` and `GET /Search/Hints` now honor `isPlayed` and `isFavorite` from the authenticated account's persisted user data. Filtering occurs before limits and pagination; explicit `enableUserData=false` suppresses returned personal state without disabling correct filtering. No parent or series-wide watched-state inference is claimed. Tests verify that library revocation and account isolation apply equally to these filtered views.
+
+The latest-media API now supports Jellyfin's Episode-to-Series grouping when explicitly restricted to `includeItemTypes=Episode` (with default `groupItems=true` or explicit true). A Series replaces its individual episodes when multiple matching episodes exist, with a truthful `ChildCount`; a singleton remains an Episode. Group counts are computed before applying the requested result limit. Other default/mixed latest grouping still returns 501 until audio albums, photo albums, and full collection-type rules are modeled. This is native HTTP-tested, **not** unmodified-client acceptance.
 
 ## 🦀 Architecture and independence
 

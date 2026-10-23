@@ -1720,6 +1720,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T232",
+              "emoji": "📺",
+              "name": "Pinned latest TV Episode-to-Series grouping",
+              "checks": [
+                {
+                  "title": "Group permitted latest episodes under a recognized Series only when two or more matching episodes are visible, report accurate ChildCount before group pagination, and retain single Episodes",
+                  "passed": true,
+                  "evidence": "src/latest.rs; src/catalog_api.rs — actual Series DTO container with optional ChildCount restricted to includeItemTypes=Episode"
+                },
+                {
+                  "title": "CI verifies grouping defaults/type guards, chronological stable groups, played filtering, personal series state, limit boundaries, legacy lookup, restart and library revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40020602437 — full native Rust suite, formatting, Clippy, evidence/contract checks passed"
+                },
+                {
+                  "title": "Jellyfin music/photo album grouping, mixed library latest behavior and unmodified web/Smart TV acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
