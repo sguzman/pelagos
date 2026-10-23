@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 26%` across 121 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 26%` across 122 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40004088369](https://github.com/sguzman/pelagos/actions/runs/40004088369) — safe bound server URL, admin media folders, authenticated catalog, formatting, Clippy, Rust tests and tracking checks.
+**Latest passing CI:** [run 40004888920](https://github.com/sguzman/pelagos/actions/runs/40004888920) — disabled Quick Connect behavior, deterministic resume ordering, formatting, Clippy, Rust tests and tracking checks.
 
 ## 🚀 Current starter
 
@@ -63,6 +63,8 @@ A new authenticated `GET /Items/Root` (and legacy `/Users/{userId}/Items/Root`) 
 The scoped `GET /Library/MediaFolders` exposes indexed collection roots, including empty libraries, to administrators only. Ordinary accounts remain forbidden even with media grants, and physical filesystem paths are not included in these DTOs. Hidden/disabled library configuration and full Jellyfin admin behavior remain unimplemented.
 
 System info now reports `LocalAddress` from a concrete listening IPv4/IPv6 socket, using the actual bound port, never from the incoming HTTP `Host` header. Wildcard binds intentionally return null rather than an invalid `0.0.0.0` or `::` URL. UDP LAN discovery continues to choose its address per requester. This network contract remains synthetic-tested; actual Smart TV connection is not verified.
+
+`GET /QuickConnect/Enabled` now returns `false`, while disabled initiation, secret polling and authorization refuse requests without issuing pairing credentials. This deliberately does **not** implement Jellyfin Quick Connect; manual credentials remain the only preliminary login path. Resume queries now have deterministic automated tests for saved-position newest-first ordering, including when UserData is omitted from display. Both features still require real-client acceptance.
 
 ## 🦀 Architecture and independence
 

@@ -97,3 +97,7 @@ An authenticated virtual user root is now available through Jellyfin's pinned `/
 ## Advertised concrete HTTP identity (synthetic only)
 
 Jellyfin-shaped public and authenticated system information now report the actual configured listener URL when Pelagos binds to a concrete IPv4 or IPv6 address, including its chosen port. Wildcard binds do not advertise unusable `0.0.0.0`/`::` addresses; hostile HTTP `Host` headers cannot affect this value. The auth/public field agreement, network URI shapes and safe fallbacks passed [CI 40004088369](https://github.com/sguzman/pelagos/actions/runs/40004088369). Real LAN discovery, client-selected remote URLs and proxy/multi-interface compatibility remain **Not tested**.
+
+## Explicit disabled Quick Connect contract and resume ordering (synthetic only)
+
+Pelagos reports Quick Connect disabled at the pinned `GET /QuickConnect/Enabled` endpoint and refuses its three pairing operations without generating secrets or codes ([CI 40004753528](https://github.com/sguzman/pelagos/actions/runs/40004753528)). This supports truthful capability signaling, **not** an enabled Quick Connect feature or actual TV pairing. Separately, a deterministic SQLite-fixture test now verifies newest-first resumable items by persisted playback activity, including ordering when UserData is suppressed ([CI 40004888920](https://github.com/sguzman/pelagos/actions/runs/40004888920)). Full client validation, date semantics and session exclusions remain open.

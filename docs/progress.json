@@ -529,6 +529,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T107",
+              "emoji": "🔑",
+              "name": "Explicit disabled Jellyfin Quick Connect signaling",
+              "checks": [
+                {
+                  "title": "Implement public pinned GET /QuickConnect/Enabled returning false and reject Initiate, Connect and authenticated Authorize without creating codes or sessions",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs; tests/quick_connect_http.rs — disabled state and non-issuance of pairing credentials"
+                },
+                {
+                  "title": "CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -981,7 +1003,7 @@
                 {
                   "title": "CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses",
                   "passed": true,
-                  "evidence": "GitHub Actions 39999748396 — formatting, Clippy, complete Rust HTTP/unit tests and project tracking checks passed"
+                  "evidence": "GitHub Actions 40004888920 — full Rust CI and deterministic newest-first resume test with fixed SQLite activity timestamps passed"
                 },
                 {
                   "title": "Unmodified Jellyfin client resume shelves, DatePlayed ordering, active-session exclusions and full metadata parity validated",

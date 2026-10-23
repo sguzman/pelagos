@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 26%` across 121 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 26%` across 122 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,11 +81,11 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 39%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 40%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
-### 🌐 P3 — System and transports — `███░░░░░░░ 29%`
+### 🌐 P3 — System and transports — `███░░░░░░░ 34%`
 
 - 📡 **T100 — Discovery and public server info** — `░░░░░░░░░░ 0%`
   - [ ] Implement Jellyfin discovery, public system info and stable version negotiation
@@ -115,6 +115,10 @@
   - [x] Advertise actual IPv4/IPv6 HTTP listener in System/Info/Public and authorized System/Info, keeping wildcard hosts unadvertised — src/app.rs; src/main.rs; tests/http.rs; tests/system_info_http.rs — concrete bind URL and matching system identity without Host trust
   - [x] CI verifies loopback, LAN IPv4, bracketed IPv6, wildcard suppression, hostile Host input and actual bound port plumbing — GitHub Actions 40004088369 — formatting, Clippy, all Rust tests, roadmap and upstream contract guards passed
   - [ ] Real Jellyfin web/TV app discovery and connection verifies advertised URL, proxy behavior and multi-interface host selection
+- 🔑 **T107 — Explicit disabled Jellyfin Quick Connect signaling** — `███████░░░ 67%`
+  - [x] Implement public pinned GET /QuickConnect/Enabled returning false and reject Initiate, Connect and authenticated Authorize without creating codes or sessions — src/auth_api.rs; tests/quick_connect_http.rs — disabled state and non-issuance of pairing credentials
+  - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
+  - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
 ### 👥 P4 — Authentication and user state — `████░░░░░░ 37%`
 
@@ -203,7 +207,7 @@
   - [ ] Unmodified Jellyfin clients validate full UpdateUserItemDataDto, preference fields, event synchronization and resume semantics
 - ▶️ **T131 — Authorized persisted-position Jellyfin resume item queries** — `███████░░░ 67%`
   - [x] Implement pinned GET /UserItems/Resume and legacy user route from permitted video/audio media with position, filtering, pagination and playback activity timestamps — src/resume.rs; src/user_data.rs; src/app.rs; tests/resume_http.rs — filtered private resume listing and persisted positive-position timestamps
-  - [x] CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses — GitHub Actions 39999748396 — formatting, Clippy, complete Rust HTTP/unit tests and project tracking checks passed
+  - [x] CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses — GitHub Actions 40004888920 — full Rust CI and deterministic newest-first resume test with fixed SQLite activity timestamps passed
   - [ ] Unmodified Jellyfin client resume shelves, DatePlayed ordering, active-session exclusions and full metadata parity validated
 - ↕️ **T133 — Validated item sorting, user scope and optional DTO flags** — `███████░░░ 67%`
   - [x] Accept pinned SortName and Ascending/Descending item queries, enableUserData/enableImages opt-outs, and self-scoped userId; refuse unsupported feature requests — src/catalog_api.rs; tests/items_options_http.rs — deterministic sort, omission flags, user identity and 501 refusals
