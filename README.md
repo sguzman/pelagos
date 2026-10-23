@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 31%` across 138 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 31%` across 139 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40023231676](https://github.com/sguzman/pelagos/actions/runs/40023231676) — NextUp root-level parent scoping, validated inclusive UTC watch cutoffs, revocation, date parser safety, full Rust tests and repository contract checks.
+**Latest passing CI:** [run 40023874352](https://github.com/sguzman/pelagos/actions/runs/40023874352) — admin-only read-only VirtualFolderInfo inventory, stable root IDs, rights checks, Rust unit/HTTP suites, formatting and pinned source gates.
 
 ## 🚀 Current starter
 
@@ -87,6 +87,8 @@ The pinned `GET /Shows/NextUp` has an explicitly **per-series** subset: callers 
 `GET /Shows/NextUp` now implements both selected-Series behavior (`seriesId`) and a conservative general feed that includes only visible recognized series with a recorded watch history. The feed chooses each series' next episode after its highest watched index and ranks by the user's latest recorded playback date. It preserves personal authorization, pagination, and basic resume exclusion. Upstream advanced handling of specials, alternate media versions, rewatching, date cutoffs, and library preference exclusions is still unsupported, and unmodified-client compatibility remains untested.
 
 The general `GET /Shows/NextUp` feed now additionally understands `parentId` for a permitted library root and an inclusive `nextUpDateCutoff` in UTC timestamp format. Parent scoping traverses only indexed authorized media nodes; unsupported nested folder/series intersections are explicit 501 responses and inaccessible roots are 404. The cutoff is applied before paging and its parser rejects malformed UTC dates and invalid calendar days. Offset-aware timestamp variations, nested parent views, and unmodified Jellyfin clients are still open.
+
+Pelagos now also serves a pinned, administrator-only **read-only** `GET /Library/VirtualFolders` inventory from its indexed roots, with stable identifiers shared with `Library/MediaFolders`, actual root paths in the privileged `Locations` field and support for indexed empty libraries. The response omits unmodeled `CollectionType`, `LibraryOptions`, and refresh metadata; administrator library creation/rename/delete and real Jellyfin admin client acceptance remain incomplete.
 
 ## 🦀 Architecture and independence
 

@@ -2691,6 +2691,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T505",
+              "emoji": "🗃️",
+              "name": "Administrator-only read-only Jellyfin virtual media library inventory",
+              "checks": [
+                {
+                  "title": "Serve pinned GET /Library/VirtualFolders as a sparse VirtualFolderInfo array with stable ItemId, actual indexed Name and physical Locations; omit unknown collection/options metadata",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/virtual_folders_http.rs — admin-only read-only inventory with no fabricated library settings"
+                },
+                {
+                  "title": "Full CI covers unauthenticated/non-admin denial, duplicate-free ordered roots, empty library persistence, identity parity with MediaFolders, rescan/restart stability and no ordinary-user path leakage",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40023874352 — full Rust suite, formatting, Clippy, source contract and roadmap evidence checks passed"
+                },
+                {
+                  "title": "Library configuration mutation, CollectionType/LibraryOptions metadata, refresh state, first-run setup privileges and actual Jellyfin admin client acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

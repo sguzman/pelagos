@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 31%` across 138 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 31%` across 139 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -529,11 +529,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `█░░░░░░░░░ 12%`
+## 🛡️ M5 — Administration, extensibility and migration — `██░░░░░░░░ 17%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `███░░░░░░░ 27%`
+### 🛠️ P15 — Admin and accounts — `███░░░░░░░ 34%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -555,6 +555,10 @@
   - [x] Implement pinned GET /Library/PhysicalPaths exposing only indexed source roots after administrator validation, separate from user-safe pathless DTOs — src/catalog_api.rs; tests/library_media_folders_http.rs — privileged root list read with sort/dedup and no ordinary-user path exposure
   - [x] CI verifies unauthenticated 401, nonadmin 403 even with library grants, indexed empty roots, exact source paths and persistent restart behavior — GitHub Actions 40012627288 — formatting, Clippy, native HTTP tests and source/roadmap guards passed
   - [ ] Unmodified Jellyfin administration clients verify exact library options, elevation semantics and end-to-end configuration workflows
+- 🗃️ **T505 — Administrator-only read-only Jellyfin virtual media library inventory** — `███████░░░ 67%`
+  - [x] Serve pinned GET /Library/VirtualFolders as a sparse VirtualFolderInfo array with stable ItemId, actual indexed Name and physical Locations; omit unknown collection/options metadata — src/catalog_api.rs; tests/virtual_folders_http.rs — admin-only read-only inventory with no fabricated library settings
+  - [x] Full CI covers unauthenticated/non-admin denial, duplicate-free ordered roots, empty library persistence, identity parity with MediaFolders, rescan/restart stability and no ordinary-user path leakage — GitHub Actions 40023874352 — full Rust suite, formatting, Clippy, source contract and roadmap evidence checks passed
+  - [ ] Library configuration mutation, CollectionType/LibraryOptions metadata, refresh state, first-run setup privileges and actual Jellyfin admin client acceptance verified
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 
