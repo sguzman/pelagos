@@ -104,16 +104,8 @@ async fn admin_virtual_folder_inventory_uses_only_indexed_roots_and_stable_item_
         let listed = items.iter().find(|item| item["Name"] == name).unwrap();
         assert_eq!(entry["ItemId"], listed["Id"]);
     }
-    let viewer_views = json(
-        call(
-            &router,
-            "GET",
-            "/UserViews",
-            Some(&viewer.access_token),
-        )
-        .await,
-    )
-    .await;
+    let viewer_views =
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token)).await).await;
     assert_eq!(viewer_views["TotalRecordCount"], 1);
     assert!(viewer_views["Items"][0].get("Path").is_none());
 
@@ -126,10 +118,7 @@ async fn admin_virtual_folder_inventory_uses_only_indexed_roots_and_stable_item_
         "server".to_owned(),
         state.clone(),
     )));
-    let after_restart = json(
-        call(&restarted, "GET", route, Some(&admin.access_token)).await,
-    )
-    .await;
+    let after_restart = json(call(&restarted, "GET", route, Some(&admin.access_token)).await).await;
     assert_eq!(after_restart, folders);
     auth::revoke_library(&state, "viewer", &movies).unwrap();
     assert_eq!(
