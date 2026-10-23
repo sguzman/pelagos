@@ -78,6 +78,8 @@ struct ItemQuery {
     media_types: Option<String>,
     is_movie: Option<bool>,
     is_series: Option<bool>,
+    is_played: Option<bool>,
+    is_favorite: Option<bool>,
     user_id: Option<String>,
     sort_by: Option<String>,
     sort_order: Option<String>,
@@ -613,6 +615,28 @@ async fn query_items(
     }
     if let Some(is_series) = query.is_series {
         all.retain(|item| (item.item_type == "Series") == is_series);
+    }
+    if query.is_played.is_some() || query.is_favorite.is_some() {
+        let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        let user_id = user.id.clone();
+        let ids = all.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        let personal = tokio::task::spawn_blocking(move || {
+            user_data::read_many(&dir, &user_id, &ids)
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        all = all
+            .into_iter()
+            .zip(personal)
+            .filter_map(|(item, data)| {
+                (query.is_played.is_none_or(|value| data.played == value)
+                    && query
+                        .is_favorite
+                        .is_none_or(|value| data.is_favorite == value))
+                .then_some(item)
+            })
+            .collect();
     }
     all.sort_by(|a, b| {
         let order = if query.sort_by.as_deref() == Some("SortName") {
