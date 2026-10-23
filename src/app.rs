@@ -1,4 +1,5 @@
 use std::{
+    net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -22,6 +23,7 @@ pub struct AppState {
     server_id: String,
     auth_dir: Option<PathBuf>,
     probe_executable: PathBuf,
+    local_address: Option<String>,
 }
 
 impl AppState {
@@ -30,6 +32,7 @@ impl AppState {
             server_id,
             auth_dir: None,
             probe_executable: PathBuf::from("ffprobe"),
+            local_address: None,
         }
     }
 
@@ -38,6 +41,7 @@ impl AppState {
             server_id,
             auth_dir: Some(auth_dir),
             probe_executable: PathBuf::from("ffprobe"),
+            local_address: None,
         }
     }
 
@@ -45,6 +49,15 @@ impl AppState {
     /// This is local Rust configuration, not user-controlled HTTP input.
     pub fn with_probe_executable(mut self, executable: PathBuf) -> Self {
         self.probe_executable = executable;
+        self
+    }
+
+    /// Advertise only an explicitly bound, concrete HTTP listener address.
+    /// Wildcard binds must never leak an unreachable 0.0.0.0/:: URL or
+    /// reflect an untrusted client-supplied HTTP Host header.
+    pub fn with_listen_addr(mut self, address: SocketAddr) -> Self {
+        self.local_address = (!address.ip().is_unspecified())
+            .then(|| format!("http://{address}"));
         self
     }
 
@@ -177,7 +190,7 @@ fn public_fields(state: &AppState) -> PublicSystemInfo {
         product_name: "Pelagos",
         operating_system: std::env::consts::OS,
         startup_wizard_completed: false,
-        local_address: None,
+        local_address: state.local_address.clone(),
     }
 }
 
