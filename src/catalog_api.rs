@@ -106,6 +106,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/UserViews", get(user_views))
         .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Library/PhysicalPaths", get(library_physical_paths))
+        .route("/Library/VirtualFolders", get(library_virtual_folders))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
 
@@ -763,6 +764,48 @@ async fn library_physical_paths(
     roots.sort();
     roots.dedup();
     Ok(Json(roots))
+}
+
+/// A deliberately sparse pinned Jellyfin v12.3 VirtualFolderInfo.
+/// CollectionType, LibraryOptions, image and refresh status are omitted
+/// because Pelagos has no authoritative configuration for these yet.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct VirtualFolderInfo {
+    name: String,
+    locations: Vec<String>,
+    item_id: String,
+}
+
+/// Only an authenticated administrator can see the indexed physical roots.
+/// This is read-only and does not imply that Jellyfin library configuration
+/// mutations or transcoding/storage settings have been ported.
+async fn library_virtual_folders(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<VirtualFolderInfo>>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut folders = roots
+        .into_iter()
+        .map(|root| VirtualFolderInfo {
+            name: Path::new(&root)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Library".to_owned()),
+            item_id: stable_id(&root, ""),
+            locations: vec![root],
+        })
+        .collect::<Vec<_>>();
+    folders.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.item_id.cmp(&b.item_id)));
+    Ok(Json(folders))
 }
 
 #[derive(Debug, Default, Deserialize)]
