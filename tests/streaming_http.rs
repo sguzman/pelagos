@@ -96,6 +96,59 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
     assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
 }
 
+
+#[tokio::test]
+async fn static_audio_streams_are_range_seekable_with_correct_mime() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Music");
+    let state = dir.path().join("state");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::write(root.join("Track.mp3"), b"AUDIO-DATA").unwrap();
+    catalog::index(&state, &root).unwrap();
+    auth::create_user(&state, "admin", "secure-audio-test-password").unwrap();
+    let token = auth::authenticate(&state, "admin", "secure-audio-test-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let items = call(&app, "GET", "/Items", Some(&token), None).await;
+    let value: Value =
+        serde_json::from_slice(&to_bytes(items.into_body(), 65536).await.unwrap()).unwrap();
+    let id = value["Items"][0]["Id"].as_str().unwrap();
+    let route = format!("/Audio/{id}/stream?static=true");
+    let full = call(&app, "GET", &route, Some(&token), None).await;
+    assert_eq!(full.status(), StatusCode::OK);
+    assert_eq!(full.headers()[header::CONTENT_TYPE], "audio/mpeg");
+    assert_eq!(
+        to_bytes(full.into_body(), 64).await.unwrap().as_ref(),
+        b"AUDIO-DATA"
+    );
+    let partial = call(&app, "GET", &route, Some(&token), Some("bytes=6-9")).await;
+    assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(partial.headers()[header::CONTENT_RANGE], "bytes 6-9/10");
+    assert_eq!(
+        to_bytes(partial.into_body(), 64).await.unwrap().as_ref(),
+        b"DATA"
+    );
+    let head = call(&app, "HEAD", &route, Some(&token), None).await;
+    assert_eq!(head.status(), StatusCode::OK);
+    assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
+    let unauthenticated = call(&app, "GET", &route, None, None).await;
+    assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
+    let unsupported = call(
+        &app,
+        "GET",
+        &format!("/Audio/{id}/stream"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn indexed_file_replaced_by_external_symlink_is_denied() {
