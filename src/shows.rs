@@ -197,8 +197,12 @@ fn utc_date_key(raw: &str) -> Option<(u16, u8, u8, u8, u8, u8, u32)> {
     if !body.is_ascii() {
         return None;
     }
-    if body.len() < 19 || &body[4..5] != "-" || &body[7..8] != "-"
-        || &body[10..11] != "T" || &body[13..14] != ":" || &body[16..17] != ":"
+    if body.len() < 19
+        || &body[4..5] != "-"
+        || &body[7..8] != "-"
+        || &body[10..11] != "T"
+        || &body[13..14] != ":"
+        || &body[16..17] != ":"
     {
         return None;
     }
@@ -279,7 +283,9 @@ async fn next_up(
     // Jellyfin parent views and channel-specific NextUp queries are not yet
     // modeled; reject rather than returning a misleading global feed.
     if let Some(parent) = query.parent_id.as_deref() {
-        let folder = nodes.iter().find(|item| item.id == parent && item.is_folder)
+        let folder = nodes
+            .iter()
+            .find(|item| item.id == parent && item.is_folder)
             .ok_or(StatusCode::NOT_FOUND)?;
         if folder.item_type != "CollectionFolder" {
             return Err(StatusCode::NOT_IMPLEMENTED);
@@ -440,14 +446,18 @@ mod next_up_date_tests {
             utc_date_key("2026-01-02T03:04:05.000Z")
         );
         assert!(
-            utc_date_key("2026-01-02T03:04:05.100Z")
-                < utc_date_key("2026-01-02T03:04:05.200Z")
+            utc_date_key("2026-01-02T03:04:05.100Z") < utc_date_key("2026-01-02T03:04:05.200Z")
         );
         assert!(utc_date_key("2024-02-29T23:59:59.999999999Z").is_some());
         for bad in [
-            "", "2026-02-29T00:00:00Z", "2026-01-01T☃:00:00Z", "2026-13-01T00:00:00Z",
-            "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z",
-            "2026-01-01T00:00:00.1234567890Z", "2026-01-01",
+            "",
+            "2026-02-29T00:00:00Z",
+            "2026-01-01T☃:00:00Z",
+            "2026-13-01T00:00:00Z",
+            "2026-01-01T24:00:00Z",
+            "2026-01-01T00:60:00Z",
+            "2026-01-01T00:00:00.1234567890Z",
+            "2026-01-01",
             "2026-01-01T00:00:00+01:00",
         ] {
             assert!(utc_date_key(bad).is_none(), "{bad}");

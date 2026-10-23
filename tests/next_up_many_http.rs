@@ -147,10 +147,7 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
 
     // The parent scope is a granted library CollectionFolder, not a Series,
     // a hidden library, or an arbitrary inaccessible item.
-    let views = json(
-        call(&router, "GET", "/UserViews", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let views = json(call(&router, "GET", "/UserViews", Some(&viewer.access_token)).await).await;
     let roots = views["Items"].as_array().unwrap();
     assert_eq!(roots.len(), 2);
     let root_id = |name: &str| {
@@ -209,11 +206,7 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
             assert_eq!(filtered["Items"][0]["SeriesName"], "Two");
         }
     }
-    for malformed in [
-        "2026-02-30T00:00:00Z",
-        "2026-01-01",
-        "2026-01-01T24:00:00Z",
-    ] {
+    for malformed in ["2026-02-30T00:00:00Z", "2026-01-01", "2026-01-01T24:00:00Z"] {
         assert_eq!(
             call(
                 &router,
