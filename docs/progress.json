@@ -945,6 +945,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T131",
+              "emoji": "▶️",
+              "name": "Authorized persisted-position Jellyfin resume item queries",
+              "checks": [
+                {
+                  "title": "Implement pinned GET /UserItems/Resume and legacy user route from permitted video/audio media with position, filtering, pagination and playback activity timestamps",
+                  "passed": true,
+                  "evidence": "src/resume.rs; src/user_data.rs; src/app.rs; tests/resume_http.rs — filtered private resume listing and persisted positive-position timestamps"
+                },
+                {
+                  "title": "CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39999748396 — formatting, Clippy, complete Rust HTTP/unit tests and project tracking checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin client resume shelves, DatePlayed ordering, active-session exclusions and full metadata parity validated",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
