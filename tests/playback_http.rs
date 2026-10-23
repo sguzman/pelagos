@@ -202,9 +202,15 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         StatusCode::OK
     );
     assert_eq!(
-        request(&router, "GET", &format!("{route}?userId=someone-else"), Some(&token), "")
-            .await
-            .status(),
+        request(
+            &router,
+            "GET",
+            &format!("{route}?userId=someone-else"),
+            Some(&token),
+            ""
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -257,13 +263,34 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         StatusCode::OK
     );
     for (uri, expected) in [
-        (format!("{route}?startTimeTicks=-1"), StatusCode::BAD_REQUEST),
-        (format!("{route}?startTimeTicks=1000"), StatusCode::NOT_IMPLEMENTED),
-        (format!("{route}?audioStreamIndex=1"), StatusCode::NOT_IMPLEMENTED),
-        (format!("{route}?subtitleStreamIndex=0"), StatusCode::NOT_IMPLEMENTED),
-        (format!("{route}?autoOpenLiveStream=true"), StatusCode::NOT_IMPLEMENTED),
-        (format!("{route}?mediaSourceId=unmatched"), StatusCode::NOT_IMPLEMENTED),
-        (format!("{route}?enableDirectPlay=false"), StatusCode::NOT_IMPLEMENTED),
+        (
+            format!("{route}?startTimeTicks=-1"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("{route}?startTimeTicks=1000"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?audioStreamIndex=1"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?subtitleStreamIndex=0"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?autoOpenLiveStream=true"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?mediaSourceId=unmatched"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?enableDirectPlay=false"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
     ] {
         assert_eq!(
             request(&router, "POST", &uri, Some(&token), "{}")

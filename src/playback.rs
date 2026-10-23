@@ -311,7 +311,10 @@ async fn playback_info(
         || req.audio_stream_index.is_some()
         || req.subtitle_stream_index.is_some()
         || req.auto_open_live_stream == Some(true)
-        || req.media_source_id.as_deref().is_some_and(|id| id != item_id)
+        || req
+            .media_source_id
+            .as_deref()
+            .is_some_and(|id| id != item_id)
     {
         // No timestamp seeks, per-stream selection, or live media sessions yet.
         return Err(StatusCode::NOT_IMPLEMENTED);
@@ -346,7 +349,13 @@ async fn get_playback(
     headers: HeaderMap,
     Query(query): Query<PlaybackQuery>,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
-    playback_info(state, item_id, headers, query.apply(PlaybackRequest::default())).await
+    playback_info(
+        state,
+        item_id,
+        headers,
+        query.apply(PlaybackRequest::default()),
+    )
+    .await
 }
 
 async fn post_playback(
