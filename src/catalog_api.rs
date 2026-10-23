@@ -8,6 +8,7 @@ use std::{
 
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{Path as RoutePath, Query, State},
     http::{HeaderMap, StatusCode},
     routing::get,
@@ -109,7 +110,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/UserViews", get(user_views))
         .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Library/PhysicalPaths", get(library_physical_paths))
-        .route("/Library/VirtualFolders", get(library_virtual_folders))
+        .route("/Library/VirtualFolders", get(library_virtual_folders).post(create_virtual_folder))
         .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
@@ -842,6 +843,71 @@ async fn refresh_library(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Narrow pinned Jellyfin AddVirtualFolder subset: one canonical local path,
+/// an identical basename as its name, default collection type, no options.
+/// This makes a real registered library without implying full virtual folders.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateVirtualFolderQuery {
+    name: Option<String>,
+    paths: Option<String>,
+    collection_type: Option<String>,
+    refresh_library: Option<bool>,
+}
+
+async fn create_virtual_folder(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<CreateVirtualFolderQuery>,
+    body: Bytes,
+) -> Result<StatusCode, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.collection_type.is_some()
+        || query.refresh_library == Some(true)
+        || !body.is_empty()
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let name = query.name.ok_or(StatusCode::BAD_REQUEST)?;
+    let location = query.paths.ok_or(StatusCode::BAD_REQUEST)?;
+    if name.is_empty()
+        || name.trim() != name
+        || location.is_empty()
+        || location.len() > 4096
+        || location.contains(',')
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let path = PathBuf::from(location);
+    if !path.is_absolute() || path.file_name().is_none_or(|leaf| leaf != name.as_str()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    tokio::task::spawn_blocking(move || {
+        let canonical = std::fs::canonicalize(&path).map_err(|_| StatusCode::BAD_REQUEST)?;
+        if canonical != path || !canonical.is_dir() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let existing = catalog::library_roots(&dir)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if existing.iter().any(|root| {
+            Path::new(root)
+                .file_name()
+                .is_some_and(|leaf| leaf == name.as_str())
+        }) {
+            return Err(StatusCode::CONFLICT);
+        }
+        catalog::index(&dir, &canonical).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        Ok(())
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
     Ok(StatusCode::NO_CONTENT)
 }
 
