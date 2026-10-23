@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     app::AppState,
-    artwork, auth_api, catalog,
+    artwork, auth_api, catalog, naming,
     query_filters::{filter_types, media_types},
     user_data,
 };
@@ -39,6 +39,12 @@ pub struct ItemDto {
     pub size: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index_number: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_index_number: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_data: Option<user_data::UserItemData>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -120,6 +126,9 @@ fn virtual_root(server_id: &str) -> ItemDto {
         parent_id: None,
         size: None,
         container: None,
+        series_name: None,
+        index_number: None,
+        parent_index_number: None,
         user_data: None,
         image_tags: None,
     }
@@ -219,12 +228,22 @@ fn map_item(
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or(file.relative_path.clone());
+    let episode = if file.kind == "video" {
+        naming::episode_hint(Path::new(&file.relative_path))
+    } else {
+        None
+    };
     let (item_type, media_type) = match file.kind.as_str() {
+        "video" if episode.is_some() => ("Episode", "Video"),
         "video" => ("Video", "Video"),
         "audio" => ("Audio", "Audio"),
         "image" => ("Photo", "Photo"),
         _ => ("Unknown", "Unknown"),
     };
+    let name = episode
+        .as_ref()
+        .and_then(|hint| hint.episode_title.clone())
+        .unwrap_or(name);
     ItemDto {
         id: stable_id(&file.root, &file.relative_path),
         name,
@@ -237,6 +256,9 @@ fn map_item(
         container: Path::new(&file.relative_path)
             .extension()
             .map(|ext| ext.to_string_lossy().to_ascii_lowercase()),
+        series_name: episode.as_ref().map(|hint| hint.series_name.clone()),
+        index_number: episode.as_ref().map(|hint| hint.episode),
+        parent_index_number: episode.as_ref().map(|hint| hint.season),
         user_data: None,
         image_tags: primary_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -270,6 +292,28 @@ fn catalog_nodes(
 ) -> Vec<ItemDto> {
     let mut result = vec![virtual_root(server_id)];
     let mut seen = HashSet::new();
+    let mut series_folders = HashSet::new();
+    let mut season_folders = HashMap::new();
+    for file in &files {
+        if file.kind != "video" {
+            continue;
+        }
+        let path = Path::new(&file.relative_path);
+        let Some(hint) = naming::episode_hint(path) else {
+            continue;
+        };
+        let Some(season_dir) = path.parent() else {
+            continue;
+        };
+        let Some(series_dir) = season_dir.parent() else {
+            continue;
+        };
+        series_folders.insert((file.root.clone(), series_dir.to_path_buf()));
+        season_folders.insert(
+            (file.root.clone(), season_dir.to_path_buf()),
+            hint.season,
+        );
+    }
     let indexed_images = files
         .iter()
         .filter(|f| f.kind == "image")
@@ -305,16 +349,28 @@ fn catalog_nodes(
                 let path = folder.to_string_lossy();
                 let folder_id = stable_id(&root, &format!("folder:{path}"));
                 if seen.insert(folder_id.clone()) {
+                    let index_number =
+                        season_folders.get(&(root.clone(), folder.clone())).copied();
+                    let folder_type = if index_number.is_some() {
+                        "Season"
+                    } else if series_folders.contains(&(root.clone(), folder.clone())) {
+                        "Series"
+                    } else {
+                        "Folder"
+                    };
                     result.push(ItemDto {
                         id: folder_id.clone(),
                         name: component.as_os_str().to_string_lossy().into_owned(),
-                        item_type: "Folder".to_owned(),
+                        item_type: folder_type.to_owned(),
                         media_type: None,
                         is_folder: true,
                         server_id: server_id.to_owned(),
                         parent_id: Some(parent_id.clone()),
                         size: None,
                         container: None,
+                        series_name: None,
+                        index_number,
+                        parent_index_number: None,
                         user_data: None,
                         image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
                             .and_then(artwork::image_tag)
