@@ -110,7 +110,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/UserViews", get(user_views))
         .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Library/PhysicalPaths", get(library_physical_paths))
-        .route("/Library/VirtualFolders", get(library_virtual_folders).post(create_virtual_folder))
+        .route(
+            "/Library/VirtualFolders",
+            get(library_virtual_folders).post(create_virtual_folder),
+        )
         .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
@@ -868,10 +871,7 @@ async fn create_virtual_folder(
     if !user.policy.is_administrator {
         return Err(StatusCode::FORBIDDEN);
     }
-    if query.collection_type.is_some()
-        || query.refresh_library == Some(true)
-        || !body.is_empty()
-    {
+    if query.collection_type.is_some() || query.refresh_library == Some(true) || !body.is_empty() {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let name = query.name.ok_or(StatusCode::BAD_REQUEST)?;
@@ -894,8 +894,8 @@ async fn create_virtual_folder(
         if canonical != path || !canonical.is_dir() {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let existing = catalog::library_roots(&dir)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let existing =
+            catalog::library_roots(&dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         if existing.iter().any(|root| {
             Path::new(root)
                 .file_name()
