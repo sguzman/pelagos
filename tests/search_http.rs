@@ -161,13 +161,16 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     assert_eq!(rejected.status(), StatusCode::NOT_IMPLEMENTED);
     let missing = get(&router, "/Search/Hints", Some(&viewer.access_token)).await;
     assert_eq!(missing.status(), StatusCode::BAD_REQUEST);
-    let unavailable = get(
-        &router,
-        "/Search/Hints?searchTerm=film&isSeries=true",
-        Some(&viewer.access_token),
+    let no_series = body_json(
+        get(
+            &router,
+            "/Search/Hints?searchTerm=film&isSeries=true",
+            Some(&viewer.access_token),
+        )
+        .await,
     )
     .await;
-    assert_eq!(unavailable.status(), StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(no_series["TotalRecordCount"], 0);
     auth::revoke_library(&state, "viewer", &public).unwrap();
     let after = body_json(
         get(
