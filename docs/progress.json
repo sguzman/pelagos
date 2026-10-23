@@ -1742,6 +1742,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T233",
+              "emoji": "⏭️",
+              "name": "Scoped per-series Jellyfin NextUp watched progression",
+              "checks": [
+                {
+                  "title": "Implement pinned GET /Shows/NextUp for explicit accessible Series: first recognized unplayed episode after highest watched index, with resumable exclusion and paged query result",
+                  "passed": true,
+                  "evidence": "src/shows.rs; tests/next_up_http.rs — strict per-series chronology and refuse unsupported rewatching/cutoff/fields options"
+                },
+                {
+                  "title": "CI verifies initial NextUp, advancing across seasons, skip earlier unplayed gaps, partial resume suppression, user-level permissions, restart persistence and library revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40021221370 — full formatting, Clippy, native HTTP/unit tests and upstream tracking gates passed"
+                },
+                {
+                  "title": "Multi-series automatic suggestions, missing/special episodes, alternate media versions, rewatching, cutoff and unmodified Jellyfin client acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
