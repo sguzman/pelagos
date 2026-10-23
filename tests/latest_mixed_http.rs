@@ -193,7 +193,8 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     )
     .await;
     assert_eq!(legacy, mixed);
-    let default_group = json(call(&router, "/Items/Latest", Some(&viewer.access_token)).await).await;
+    let default_group =
+        json(call(&router, "/Items/Latest", Some(&viewer.access_token)).await).await;
     assert_eq!(default_group, mixed);
     auth::grant_library(&state, "viewer", &private).unwrap();
     assert_eq!(
