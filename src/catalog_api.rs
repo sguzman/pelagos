@@ -152,11 +152,7 @@ fn catalog_nodes(files: Vec<catalog::CatalogFile>, server_id: &str) -> Vec<ItemD
     result
 }
 
-fn is_descendant(
-    id: &str,
-    parent: &str,
-    parents: &HashMap<String, Option<String>>,
-) -> bool {
+fn is_descendant(id: &str, parent: &str, parents: &HashMap<String, Option<String>>) -> bool {
     let mut current = parents.get(id).and_then(|p| p.as_deref());
     for _ in 0..1024 {
         match current {
@@ -316,7 +312,6 @@ async fn user_views_legacy(
 mod tests {
     use super::*;
 
-
     #[test]
     fn generated_folder_hierarchy_is_stable_and_selectable() {
         let files = vec![
@@ -335,14 +330,20 @@ mod tests {
         ];
         let tree = catalog_nodes(files, "server");
         assert_eq!(tree.len(), 5);
-        let root = tree.iter().find(|item| item.item_type == "CollectionFolder").unwrap();
+        let root = tree
+            .iter()
+            .find(|item| item.item_type == "CollectionFolder")
+            .unwrap();
         let series = tree.iter().find(|item| item.name == "Series").unwrap();
         let episode = tree.iter().find(|item| item.name == "Episode").unwrap();
         assert_eq!(series.parent_id.as_deref(), Some(root.id.as_str()));
         assert!(is_descendant(
             &episode.id,
             &root.id,
-            &tree.iter().map(|item| (item.id.clone(), item.parent_id.clone())).collect()
+            &tree
+                .iter()
+                .map(|item| (item.id.clone(), item.parent_id.clone()))
+                .collect()
         ));
     }
 
