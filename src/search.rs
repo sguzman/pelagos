@@ -14,6 +14,7 @@ use crate::{
     app::AppState,
     auth_api, catalog_api,
     query_filters::{filter_types, media_types},
+    user_data,
 };
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +31,8 @@ struct HintQuery {
     include_media: Option<bool>,
     is_movie: Option<bool>,
     is_series: Option<bool>,
+    is_played: Option<bool>,
+    is_favorite: Option<bool>,
     is_news: Option<bool>,
     is_kids: Option<bool>,
     is_sports: Option<bool>,
@@ -74,7 +77,7 @@ async fn hints(
     let included = filter_types(query.include_item_types.as_deref())?;
     let excluded = filter_types(query.exclude_item_types.as_deref())?;
     let media = media_types(query.media_types.as_deref())?;
-    let mut nodes = catalog_api::accessible_nodes(state, headers).await?;
+    let mut nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
     if let Some(parent) = query.parent_id.as_deref() {
         if !nodes.iter().any(|item| item.id == parent && item.is_folder) {
             return Err(StatusCode::NOT_FOUND);
@@ -104,6 +107,27 @@ async fn hints(
                 .is_series
                 .is_none_or(|selected| (item.item_type == "Series") == selected)
     });
+    if query.is_played.is_some() || query.is_favorite.is_some() {
+        let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        let user_id = user.id;
+        let ids = nodes.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        let personal =
+            tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        nodes = nodes
+            .into_iter()
+            .zip(personal)
+            .filter_map(|(item, data)| {
+                (query.is_played.is_none_or(|value| data.played == value)
+                    && query
+                        .is_favorite
+                        .is_none_or(|value| data.is_favorite == value))
+                .then_some(item)
+            })
+            .collect();
+    }
     nodes.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
     let total_record_count = nodes.len();
     let start = query.start_index.unwrap_or(0);
