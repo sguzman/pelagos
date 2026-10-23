@@ -79,10 +79,7 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     );
 
     auth::grant_library(&state, "viewer", &media).unwrap();
-    let initial = body(
-        call(&router, "GET", &user_data, Some(&viewer.access_token)).await,
-    )
-    .await;
+    let initial = body(call(&router, "GET", &user_data, Some(&viewer.access_token)).await).await;
     assert_eq!(initial["Played"], false);
     assert_eq!(initial["PlayCount"], 0);
     assert_eq!(initial["IsFavorite"], false);
@@ -99,10 +96,7 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     let starred = body(call(&router, "POST", &favorite, Some(&viewer.access_token)).await).await;
     assert_eq!(starred["IsFavorite"], true);
     assert_eq!(starred["PlayCount"], 1);
-    let saved = body(
-        call(&router, "GET", &legacy_data, Some(&viewer.access_token)).await,
-    )
-    .await;
+    let saved = body(call(&router, "GET", &legacy_data, Some(&viewer.access_token)).await).await;
     assert_eq!(saved["PlayCount"], 1);
     assert_eq!(saved["IsFavorite"], true);
     assert_eq!(saved["ItemId"], id);
@@ -176,10 +170,7 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     .await;
     assert_eq!(admin_details["UserData"]["PlayCount"], 0);
     assert_eq!(admin_details["UserData"]["IsFavorite"], true);
-    let admin_read = body(
-        call(&router, "GET", &user_data, Some(&admin.access_token)).await,
-    )
-    .await;
+    let admin_read = body(call(&router, "GET", &user_data, Some(&admin.access_token)).await).await;
     assert_eq!(admin_read["PlayCount"], 0);
     assert_eq!(admin_read["IsFavorite"], true);
 
