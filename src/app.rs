@@ -14,8 +14,8 @@ use axum::{
 use serde::Serialize;
 
 use crate::{
-    artwork, auth_api, bitrate, catalog_api, playback, playstate, resume, search, streaming,
-    user_data,
+    artwork, auth_api, bitrate, catalog_api, playback, playstate, resume, search, shows,
+    streaming, user_data,
 };
 
 #[derive(Debug)]
