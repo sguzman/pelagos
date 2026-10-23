@@ -1,6 +1,6 @@
 //! Authenticated Jellyfin v12.3 theme-media response subset.
-//! Recognize only pinned local extra naming rules in already-authorized item folders;
-//! inherited themes, arbitrary metadata providers and sorting are not modeled.
+//! Recognize pinned local extra names from authorized item folders, with
+//! per-kind parent fallback and SortName ordering. Rich provider extras remain open.
 use std::{collections::HashSet, sync::Arc};
 
 use axum::{
