@@ -41,14 +41,16 @@ fn state_dir(state: &AppState) -> Result<PathBuf, StatusCode> {
 
 async fn password_login(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<PasswordLogin>,
 ) -> Result<Json<Login>, StatusCode> {
     let state_dir = state_dir(&state)?;
     let username = payload.username.unwrap_or_default();
     let password = payload.pw.unwrap_or_default();
     let server_id = state.server_id().to_string();
+    let client = client_metadata(&headers);
     let outcome = tokio::task::spawn_blocking(move || {
-        auth::authenticate(&state_dir, &username, &password, &server_id)
+        auth::authenticate_with_client(&state_dir, &username, &password, &server_id, client)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -59,35 +61,106 @@ async fn password_login(
     }
 }
 
-/// Do not accept credentials from query parameters, cookies, or body for read-only
-/// authenticated routes. Header names are case-insensitive per HTTP.
-fn session_token(headers: &HeaderMap) -> Option<String> {
-    for name in ["x-emby-token", "x-mediabrowser-token"] {
-        if let Some(token) = headers.get(name).and_then(|h| h.to_str().ok()) {
-            if token.len() == 64 && token.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Some(token.to_string());
+/// Parse the quoted, comma-delimited MediaBrowser/Emby header without
+/// accidentally splitting a device name that contains a comma.
+fn jellyfin_parameters(headers: &HeaderMap) -> Vec<(String, String)> {
+    let raw = match headers.get(AUTHORIZATION).and_then(|h| h.to_str().ok()) {
+        Some(raw) if raw.len() <= 4096 => raw.trim(),
+        _ => return Vec::new(),
+    };
+    let Some((scheme, rest)) = raw.split_once(' ') else {
+        return Vec::new();
+    };
+    if !scheme.eq_ignore_ascii_case("mediabrowser") && !scheme.eq_ignore_ascii_case("emby") {
+        return Vec::new();
+    }
+    let mut fields = Vec::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut start = 0;
+    for (index, ch) in rest.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' if quoted => escaped = true,
+            '"' => quoted = !quoted,
+            ',' if !quoted => {
+                fields.push(&rest[start..index]);
+                start = index + 1;
             }
+            _ => {}
         }
     }
-    let auth_header = headers.get(AUTHORIZATION)?.to_str().ok()?.trim();
-    if let Some((kind, token)) = auth_header.split_once(' ') {
-        if kind.eq_ignore_ascii_case("bearer")
+    if quoted {
+        return Vec::new();
+    }
+    fields.push(&rest[start..]);
+    fields
+        .into_iter()
+        .filter_map(|field| {
+            let (key, value) = field.trim().split_once('=')?;
+            let key = key.trim();
+            let value = value.trim();
+            let value = value
+                .strip_prefix('"')
+                .and_then(|v| v.strip_suffix('"'))
+                .unwrap_or(value);
+            if value.len() > 256 || value.chars().any(char::is_control) {
+                return None;
+            }
+            Some((
+                key.to_owned(),
+                value.replace("\\\"", "\"").replace("\\\\", "\\"),
+            ))
+        })
+        .collect()
+}
+
+fn client_metadata(headers: &HeaderMap) -> auth::ClientMetadata {
+    let mut metadata = auth::ClientMetadata::default();
+    for (key, value) in jellyfin_parameters(headers) {
+        if value.is_empty() {
+            continue;
+        }
+        if key.eq_ignore_ascii_case("Client") {
+            metadata.client = Some(value);
+        } else if key.eq_ignore_ascii_case("Device") {
+            metadata.device_name = Some(value);
+        } else if key.eq_ignore_ascii_case("DeviceId") {
+            metadata.device_id = Some(value);
+        } else if key.eq_ignore_ascii_case("Version") {
+            metadata.application_version = Some(value);
+        }
+    }
+    metadata
+}
+
+/// Do not accept tokens from URL query parameters or cookies.
+fn session_token(headers: &HeaderMap) -> Option<String> {
+    for name in ["x-emby-token", "x-mediabrowser-token"] {
+        if let Some(token) = headers.get(name).and_then(|h| h.to_str().ok())
             && token.len() == 64
             && token.bytes().all(|b| b.is_ascii_hexdigit())
         {
-            return Some(token.to_string());
+            return Some(token.to_owned());
         }
-        if kind.eq_ignore_ascii_case("mediabrowser") || kind.eq_ignore_ascii_case("emby") {
-            for part in token.split(',') {
-                if let Some((key, value)) = part.trim().split_once('=')
-                    && key.trim().eq_ignore_ascii_case("Token")
-                {
-                    let value = value.trim().trim_matches('"');
-                    if value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit()) {
-                        return Some(value.to_string());
-                    }
-                }
-            }
+    }
+    if let Some(raw) = headers.get(AUTHORIZATION).and_then(|h| h.to_str().ok())
+        && let Some((kind, token)) = raw.trim().split_once(' ')
+        && kind.eq_ignore_ascii_case("bearer")
+        && token.len() == 64
+        && token.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Some(token.to_owned());
+    }
+    for (key, value) in jellyfin_parameters(headers) {
+        if key.eq_ignore_ascii_case("Token")
+            && value.len() == 64
+            && value.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Some(value);
         }
     }
     None
@@ -149,6 +222,23 @@ mod tests {
         );
         assert_eq!(session_token(&headers), Some(token));
         assert!(session_token(&HeaderMap::new()).is_none());
+    }
+
+
+    #[test]
+    fn quoted_device_metadata_preserves_commas_and_sanitizes_controls() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            "MediaBrowser Client=\"Jellyfin Android TV\", Device=\"Living, Room\", DeviceId=\"tv-1\", Version=\"2.0\""
+                .parse()
+                .unwrap(),
+        );
+        let metadata = client_metadata(&headers);
+        assert_eq!(metadata.client.as_deref(), Some("Jellyfin Android TV"));
+        assert_eq!(metadata.device_name.as_deref(), Some("Living, Room"));
+        assert_eq!(metadata.device_id.as_deref(), Some("tv-1"));
+        assert_eq!(metadata.application_version.as_deref(), Some("2.0"));
     }
 
     #[test]
