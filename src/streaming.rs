@@ -58,6 +58,12 @@ fn media_type(path: &Path) -> &'static str {
         "mov" => "video/quicktime",
         "avi" => "video/x-msvideo",
         "mpeg" | "mpg" => "video/mpeg",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "tif" | "tiff" => "image/tiff",
         _ => "application/octet-stream",
     }
 }
@@ -202,7 +208,7 @@ async fn serve_file(
                 .as_ref()
                 .is_none_or(|roots| roots.contains(&row.root));
             can_read
-                && row.kind == kind
+                && (kind == "any" || row.kind == kind)
                 && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -270,6 +276,7 @@ async fn serve_file(
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/Items/{item_id}/File", get(original_file).head(head_original_file))
         .route("/Videos/{item_id}/stream", get(stream).head(head_stream))
         .route(
             "/Videos/{item_id}/{file_name}",
@@ -283,6 +290,42 @@ pub fn router() -> Router<Arc<AppState>> {
             "/Audio/{item_id}/{file_name}",
             get(audio_named).head(head_audio_named),
         )
+}
+
+/// Serve the exact indexed original via the same Linux-confined opened
+/// descriptor used by direct play, without requiring a playback negotiation.
+async fn original_file(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_file(
+        state,
+        item_id,
+        headers,
+        StreamQuery { static_play: Some(true), ..StreamQuery::default() },
+        false,
+        "any",
+        None,
+    )
+    .await
+}
+
+async fn head_original_file(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_file(
+        state,
+        item_id,
+        headers,
+        StreamQuery { static_play: Some(true), ..StreamQuery::default() },
+        true,
+        "any",
+        None,
+    )
+    .await
 }
 
 async fn stream(
