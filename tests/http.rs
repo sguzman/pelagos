@@ -109,3 +109,35 @@ async fn jellyfin_system_ping_accepts_get_and_post() {
         assert_eq!(body.as_ref(), b"Pelagos");
     }
 }
+
+#[tokio::test]
+async fn concrete_listener_address_is_advertised_without_trusting_host_headers() {
+    for (listen, expected) in [
+        ("127.0.0.1:8097", Some("http://127.0.0.1:8097")),
+        ("192.168.1.3:8097", Some("http://192.168.1.3:8097")),
+        ("[::1]:8097", Some("http://[::1]:8097")),
+        ("0.0.0.0:8097", None),
+        ("[::]:8097", None),
+    ] {
+        let state = AppState::new("fixture".to_owned())
+            .with_listen_addr(listen.parse().unwrap());
+        let response = app::router(Arc::new(state))
+            .oneshot(
+                Request::builder()
+                    .uri("/System/Info/Public")
+                    .header("Host", "attacker.example:6666")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        let result: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            result["LocalAddress"].as_str(),
+            expected,
+            "incorrect advertised address for {listen}"
+        );
+    }
+}
