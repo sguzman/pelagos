@@ -166,6 +166,29 @@ fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Resul
     read(state_dir, user_id, item_id)
 }
 
+/// Persist an authorized direct-play resume position without changing the
+/// watched/favorite flags. Completion thresholds need full media runtimes.
+pub fn save_position(
+    state_dir: &Path,
+    user_id: &str,
+    item_id: &str,
+    ticks: i64,
+) -> Result<()> {
+    if ticks < 0 {
+        return Err("negative playback ticks are invalid".into());
+    }
+    let mut db = open_db(state_dir)?;
+    let tx = db.transaction()?;
+    tx.execute(
+        "INSERT INTO item_user_data(user_id,item_id,position_ticks)
+         VALUES(?1,?2,?3)
+         ON CONFLICT(user_id,item_id) DO UPDATE SET position_ticks=excluded.position_ticks",
+        params![user_id, item_id, ticks],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserDataQuery {
@@ -297,6 +320,32 @@ pub fn router() -> Router<Arc<AppState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn resume_position_persists_without_marking_watched() {
+        let dir = tempfile::tempdir().unwrap();
+        save_position(dir.path(), "user", "video", 12_340_000).unwrap();
+        assert_eq!(
+            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            12_340_000
+        );
+        assert!(!read(dir.path(), "user", "video").unwrap().played);
+        assert_eq!(
+            read(dir.path(), "other", "video").unwrap().playback_position_ticks,
+            0
+        );
+        assert!(save_position(dir.path(), "user", "video", -1).is_err());
+        assert_eq!(
+            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            12_340_000
+        );
+        set_flag(dir.path(), "user", "video", Flag::Played(true)).unwrap();
+        assert_eq!(
+            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            0
+        );
+    }
 
     #[test]
     fn flags_persist_separately_per_user_and_play_count_is_idempotent() {
