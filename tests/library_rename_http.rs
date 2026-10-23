@@ -127,12 +127,7 @@ async fn rename_is_administrator_only_and_preserves_ids_grants_and_source_media(
     );
     let result = call(&router, "POST", rename, Some(&admin.access_token)).await;
     assert_eq!(result.status(), StatusCode::NO_CONTENT);
-    assert!(
-        to_bytes(result.into_body(), 1024)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(to_bytes(result.into_body(), 1024).await.unwrap().is_empty());
     let after = json(
         call(
             &router,
@@ -194,8 +189,7 @@ async fn rename_is_administrator_only_and_preserves_ids_grants_and_source_media(
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        json(call(&restarted, "GET", "/UserViews", Some(&viewer.access_token)).await)
-            .await["TotalRecordCount"],
+        json(call(&restarted, "GET", "/UserViews", Some(&viewer.access_token)).await).await["TotalRecordCount"],
         0
     );
     assert_eq!(std::fs::read(movies.join("Film.mkv")).unwrap(), b"film");
