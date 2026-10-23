@@ -433,11 +433,8 @@ mod tests {
             params![canonical],
         )
         .unwrap();
-        db.execute(
-            "INSERT INTO libraries(root) VALUES(?1)",
-            params![canonical],
-        )
-        .unwrap();
+        db.execute("INSERT INTO libraries(root) VALUES(?1)", params![canonical])
+            .unwrap();
         drop(db);
         assert_eq!(latest_file_keys(&state).unwrap().len(), 1);
         let prior: i64 = connect(&state)

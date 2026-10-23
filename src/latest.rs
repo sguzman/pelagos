@@ -13,10 +13,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    app::AppState,
-    auth_api, catalog, catalog_api,
-    query_filters::filter_types,
-    user_data,
+    app::AppState, auth_api, catalog, catalog_api, query_filters::filter_types, user_data,
 };
 
 #[derive(Debug, Default, Deserialize)]
@@ -112,7 +109,10 @@ async fn latest_for_user(
         .into_iter()
         .filter_map(|(root, path)| permitted.remove(&catalog_api::stable_id(&root, &path)))
         .collect::<Vec<_>>();
-    let ids = ordered.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let ids = ordered
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
     let user_id = user.id;
     let saved = tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
         .await

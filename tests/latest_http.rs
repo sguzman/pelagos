@@ -116,7 +116,13 @@ async fn latest_ungrouped_media_is_stable_permission_scoped_and_uses_played_filt
     assert_eq!(latest[0]["Type"], "Photo");
     assert_eq!(latest[1]["Type"], "Episode");
     assert_eq!(latest[3]["Type"], "Movie");
-    assert!(latest.as_array().unwrap().iter().all(|item| item["UserData"].is_object()));
+    assert!(
+        latest
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["UserData"].is_object())
+    );
 
     let only_movies = json(
         call(
@@ -143,8 +149,20 @@ async fn latest_ungrouped_media_is_stable_permission_scoped_and_uses_played_filt
     assert_eq!(hidden.as_array().unwrap().len(), 2);
     assert_eq!(hidden[0]["Name"], "Landscape");
     assert_eq!(hidden[1]["Name"], "Pilot");
-    assert!(hidden.as_array().unwrap().iter().all(|item| item.get("UserData").is_none()));
-    assert!(hidden.as_array().unwrap().iter().all(|item| item.get("ImageTags").is_none()));
+    assert!(
+        hidden
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item.get("UserData").is_none())
+    );
+    assert!(
+        hidden
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item.get("ImageTags").is_none())
+    );
     let zero = json(
         call(
             &router,
@@ -247,16 +265,10 @@ async fn latest_ungrouped_media_is_stable_permission_scoped_and_uses_played_filt
         "server".to_owned(),
         state.clone(),
     )));
-    let persisted = json(
-        call(&restarted, "GET", route, Some(&viewer.access_token)).await,
-    )
-    .await;
+    let persisted = json(call(&restarted, "GET", route, Some(&viewer.access_token)).await).await;
     assert_eq!(persisted[0]["Name"], "Landscape");
     assert_eq!(persisted[3]["Name"], "Film");
     auth::revoke_library(&state, "viewer", &allowed).unwrap();
-    let revoked = json(
-        call(&restarted, "GET", route, Some(&viewer.access_token)).await,
-    )
-    .await;
+    let revoked = json(call(&restarted, "GET", route, Some(&viewer.access_token)).await).await;
     assert!(revoked.as_array().unwrap().is_empty());
 }
