@@ -113,6 +113,43 @@ fn invalid_range(size: u64) -> Response {
     response
 }
 
+/// Verify the exact opened file, not an earlier pathname validation.
+/// The descriptor remains pinned to the checked inode even if a path is swapped.
+#[cfg(target_os = "linux")]
+fn open_confined(
+    root: &Path,
+    relative: &Path,
+) -> Result<(std::fs::File, PathBuf, u64), StatusCode> {
+    use std::os::fd::AsRawFd;
+
+    let canonical_root = std::fs::canonicalize(root).map_err(|_| StatusCode::NOT_FOUND)?;
+    if canonical_root != root {
+        // Indexing stores canonical roots; replacing a root with a symlink is unsafe.
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let opened = std::fs::File::open(root.join(relative))
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let actual = std::fs::canonicalize(format!("/proc/self/fd/{}", opened.as_raw_fd()))
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if !actual.starts_with(&canonical_root) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let metadata = opened.metadata().map_err(|_| StatusCode::NOT_FOUND)?;
+    if !metadata.is_file() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok((opened, actual, metadata.len()))
+}
+
+/// Direct file serving requires the Linux descriptor verification above.
+#[cfg(not(target_os = "linux"))]
+fn open_confined(
+    _root: &Path,
+    _relative: &Path,
+) -> Result<(std::fs::File, PathBuf, u64), StatusCode> {
+    Err(StatusCode::NOT_IMPLEMENTED)
+}
+
 async fn serve_file(
     state: Arc<AppState>,
     item_id: String,
@@ -139,23 +176,14 @@ async fn serve_file(
         })
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    let root = tokio::fs::canonicalize(&matched.root)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    let candidate = PathBuf::from(&matched.root).join(&matched.relative_path);
-    let canonical = tokio::fs::canonicalize(&candidate)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    if !canonical.starts_with(&root) {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    let metadata = tokio::fs::metadata(&canonical)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    if !metadata.is_file() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    let size = metadata.len();
+    let (opened, actual, size) = tokio::task::spawn_blocking(move || {
+        open_confined(
+            Path::new(&matched.root),
+            Path::new(&matched.relative_path),
+        )
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
     let range = headers
         .get(RANGE)
         .and_then(|header| header.to_str().ok())
@@ -176,16 +204,14 @@ async fn serve_file(
     let mut response = if head_only {
         Response::new(Body::empty())
     } else {
-        let mut file = tokio::fs::File::open(&canonical)
-            .await
-            .map_err(|_| StatusCode::NOT_FOUND)?;
+        let mut file = tokio::fs::File::from_std(opened);
         file.seek(io::SeekFrom::Start(start))
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         Response::new(Body::from_stream(ReaderStream::new(file.take(length))))
     };
     *response.status_mut() = status;
-    response_headers(&mut response, length, media_type(&canonical))?;
+    response_headers(&mut response, length, media_type(&actual))?;
     if let Some(range) = range {
         response.headers_mut().insert(
             CONTENT_RANGE,
@@ -221,6 +247,54 @@ async fn head_stream(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn opened_handle_cannot_be_redirected_after_validation() {
+        use std::io::Read;
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("media");
+        std::fs::create_dir(&root).unwrap();
+        let video = root.join("video.mp4");
+        let outside = tmp.path().join("secret.mp4");
+        std::fs::write(&video, b"permitted").unwrap();
+        std::fs::write(&outside, b"restricted").unwrap();
+        let (mut opened, _path, _) =
+            open_confined(&root, Path::new("video.mp4")).unwrap();
+        std::fs::remove_file(&video).unwrap();
+        symlink(&outside, &video).unwrap();
+
+        let mut data = Vec::new();
+        opened.read_to_end(&mut data).unwrap();
+        assert_eq!(data, b"permitted");
+        assert_eq!(
+            open_confined(&root, Path::new("video.mp4")).unwrap_err(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn replaced_library_root_is_rejected() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("media");
+        let original = tmp.path().join("saved");
+        let external = tmp.path().join("external");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::create_dir(&external).unwrap();
+        std::fs::write(external.join("video.mp4"), b"secret").unwrap();
+        std::fs::rename(&root, &original).unwrap();
+        symlink(&external, &root).unwrap();
+        assert_eq!(
+            open_confined(&root, Path::new("video.mp4")).unwrap_err(),
+            StatusCode::FORBIDDEN
+        );
+    }
 
     #[test]
     fn byte_ranges_reject_invalid_and_support_suffix() {
