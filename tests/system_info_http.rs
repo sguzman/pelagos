@@ -84,4 +84,13 @@ async fn authenticated_system_info_matches_public_identity_and_truthful_capabili
     ] {
         assert!(content.get(disallowed).is_none(), "{disallowed}");
     }
+
+    let addressed = app::router(Arc::new(
+        AppState::with_auth_dir("server-id".to_owned(), fixture.path().join("state"))
+            .with_listen_addr("192.168.1.25:8097".parse().unwrap()),
+    ));
+    let public = json(get(&addressed, "/System/Info/Public", None).await).await;
+    let private = json(get(&addressed, "/System/Info", Some(&token)).await).await;
+    assert_eq!(public["LocalAddress"], "http://192.168.1.25:8097");
+    assert_eq!(private["LocalAddress"], public["LocalAddress"]);
 }
