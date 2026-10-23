@@ -120,3 +120,7 @@ Primary artwork responses derive a quoted ETag from the original image's library
 ## Jellyfin bitrate-test HTTP transport
 
 Pinned Jellyfin v12.3's authenticated `GET /Playback/BitrateTest` now responds with `application/octet-stream` and exactly the requested number of random bytes (default 102400; allowed 1 through 100000000), `Cache-Control: no-store` and matching Content-Length. A Rust Tokio AsyncRead produces at most 16 KiB of fresh randomness per poll; the server never allocates the complete response or invokes FFmpeg for a bandwidth probe. Invalid sizes return 400. [CI 39994640474](https://github.com/sguzman/pelagos/actions/runs/39994640474) validates authentication, sizes, streaming and errors. Real client bandwidth estimation remains untested.
+
+## Authenticated system identity and capability reporting
+
+The pinned Jellyfin `GET /System/Info` endpoint now requires a Pelagos session and embeds the same ID, name, version, product and operating system as the public identity route. Its capability flags explicitly report no live WebSockets, library monitor or self-restart yet, and do not expose program-data, cache, metadata or logs filesystem paths. This is a deliberately incomplete SystemInfo model rather than a fabricated full server implementation. The synthetic authorization/DTO contracts and existing public endpoint assertions pass [CI 39995545838](https://github.com/sguzman/pelagos/actions/runs/39995545838). Real unmodified client handshake remains unverified.

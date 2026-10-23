@@ -69,3 +69,7 @@ Primary images now support per-user scoped conditional ETag fetches and empty 30
 ## Bandwidth test API
 
 Authenticated `GET /Playback/BitrateTest?size=N` now returns non-cacheable random data of the exact allowed requested length, without large buffering ([CI 39994640474](https://github.com/sguzman/pelagos/actions/runs/39994640474)). **Smart TV behavior not yet tested**.
+
+## Authenticated system information
+
+`GET /System/Info` now returns a private, authenticated Jellyfin-shaped subset consistent with public server identity, without claiming WebSockets, monitoring or self-restart, and without leaking state directory paths ([CI 39995545838](https://github.com/sguzman/pelagos/actions/runs/39995545838)). Real TV handshake remains **Not tested**.

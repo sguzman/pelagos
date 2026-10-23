@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 22%` across 110 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 22%` across 111 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,11 +81,11 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 29%`
+## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 30%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
-### 🌐 P3 — System and transports — `█░░░░░░░░░ 13%`
+### 🌐 P3 — System and transports — `██░░░░░░░░ 22%`
 
 - 📡 **T100 — Discovery and public server info** — `░░░░░░░░░░ 0%`
   - [ ] Implement Jellyfin discovery, public system info and stable version negotiation
@@ -107,6 +107,10 @@
   - [x] Implement Jellyfin v12.3 UDP 7359 request/response with accurate LAN URL — src/discovery.rs; src/main.rs — opt-in discovery, local-peer checks, stable ID
   - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
   - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
+- 🖥️ **T105 — Authenticated system information with explicit capability flags** — `███████░░░ 67%`
+  - [x] Expose authenticated Jellyfin GET /System/Info consistent with public server ID; omit private filesystem paths and unimplemented runtime claims — src/app.rs — flattened PublicSystemInfo and conservative SystemInfo capabilities with authenticated boundary
+  - [x] CI tests anonymous rejection, public/private identity agreement and honest system flags — GitHub Actions 39995545838 — full Rust system info and pinned controller regression tests passed
+  - [ ] Unmodified Jellyfin Smart TV and administration clients accept the system-info responses
 
 ### 👥 P4 — Authentication and user state — `███░░░░░░░ 34%`
 

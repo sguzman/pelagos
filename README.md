@@ -6,7 +6,7 @@
 
 **Identity:** `#1DB2C0` · `oklch(70% 0.115 205)` ([color decision](docs/COLOR.md)). **Administration appearance:** ◐ System (default) / ☀ Light / ☾ Dark, with the selector at the top right.
 
-> **Pre-alpha, not yet Jellyfin compatible.** Rust login with persistent device-aware session records, scoped `/Sessions` queries, item browsing, virtual folders, read-only scanning, FFprobe and SQLite indexing now exist. FFprobe-backed read-only PlaybackInfo, catalog-v2 persisted empty libraries, permission-scoped Search/Hints, static audio/video byte-range streaming, indexed poster/collection artwork and ImageInfo, personal watched/favorite state and direct-play resume positions are synthetic-test verified. Users/Items responses are incomplete, ordinary accounts require explicit local per-library grants, and there is still no client-accepted authentication, Quick Connect, remux/transcoding, user-data migration or Smart TV playback. Library-authorized **static** video streaming with HTTP byte ranges is available for synthetic test media. Full compatibility is a mandatory acceptance goal, not a current claim.
+> **Pre-alpha, not yet Jellyfin compatible.** Rust login with persistent device-aware session records, authenticated system-info capability reporting, scoped `/Sessions` queries, item browsing, virtual folders, read-only scanning, FFprobe and SQLite indexing now exist. FFprobe-backed read-only PlaybackInfo, catalog-v2 persisted empty libraries, permission-scoped Search/Hints, static audio/video byte-range streaming, indexed poster/collection artwork and ImageInfo, personal watched/favorite state and direct-play resume positions are synthetic-test verified. Users/Items responses are incomplete, ordinary accounts require explicit local per-library grants, and there is still no client-accepted authentication, Quick Connect, remux/transcoding, user-data migration or Smart TV playback. Library-authorized **static** video streaming with HTTP byte ranges is available for synthetic test media. Full compatibility is a mandatory acceptance goal, not a current claim.
 
 ## 🎯 MVP means the COMPLETE Jellyfin Server port
 
@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`██░░░░░░░░ 22%` across 110 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`██░░░░░░░░ 22%` across 111 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39994640474](https://github.com/sguzman/pelagos/actions/runs/39994640474) — authenticated random streaming bitrate probe, playback and artwork, format, Clippy and full tests.
+**Latest passing CI:** [run 39995545838](https://github.com/sguzman/pelagos/actions/runs/39995545838) — authenticated system-info identity, exact bitrate streaming, local artwork, playback request contracts, Clippy and formatting.
 
 ## 🚀 Current starter
 

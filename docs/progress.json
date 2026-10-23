@@ -485,6 +485,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T105",
+              "emoji": "🖥️",
+              "name": "Authenticated system information with explicit capability flags",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Expose authenticated Jellyfin GET /System/Info consistent with public server ID; omit private filesystem paths and unimplemented runtime claims",
+                  "passed": true,
+                  "evidence": "src/app.rs — flattened PublicSystemInfo and conservative SystemInfo capabilities with authenticated boundary"
+                },
+                {
+                  "title": "CI tests anonymous rejection, public/private identity agreement and honest system flags",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39995545838 — full Rust system info and pinned controller regression tests passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV and administration clients accept the system-info responses",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
