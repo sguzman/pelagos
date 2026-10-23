@@ -131,6 +131,33 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
     assert_eq!(videos["TotalRecordCount"], 1);
     assert_eq!(videos["Items"][0]["Name"], "loop");
     assert_eq!(videos["Items"][0]["ExtraType"], "ThemeVideo");
+    let song_id = songs["Items"][0]["Id"].as_str().unwrap();
+    let playable_song = call(
+        &router,
+        &format!("/Audio/{song_id}/stream?static=true"),
+        Some(&viewer.access_token),
+    )
+    .await;
+    assert_eq!(playable_song.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(playable_song.into_body(), 64).await.unwrap().as_ref(),
+        b"media"
+    );
+    let backdrop_id = videos["Items"][0]["Id"].as_str().unwrap();
+    let playable_backdrop = call(
+        &router,
+        &format!("/Videos/{backdrop_id}/stream?static=true"),
+        Some(&viewer.access_token),
+    )
+    .await;
+    assert_eq!(playable_backdrop.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(playable_backdrop.into_body(), 64)
+            .await
+            .unwrap()
+            .as_ref(),
+        b"media"
+    );
 
     let combined = json(
         call(
