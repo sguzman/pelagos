@@ -78,7 +78,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if let Some(Command::Catalog { directory }) = &args.command {
-        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let state_dir = args
+            .state_dir
+            .clone()
+            .unwrap_or_else(identity::default_state_dir);
         let result = pelagos::catalog::list(&state_dir, directory)?;
         println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
