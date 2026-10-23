@@ -6,7 +6,7 @@
 
 **Identity:** `#1DB2C0` · `oklch(70% 0.115 205)` ([color decision](docs/COLOR.md)). **Administration appearance:** ◐ System (default) / ☀ Light / ☾ Dark, with the selector at the top right.
 
-> **Pre-alpha, not yet Jellyfin compatible.** Rust login, item browsing, virtual folders, read-only scanning, FFprobe and SQLite indexing now exist. FFprobe-backed read-only PlaybackInfo and catalog-v2 persisted empty libraries are synthetic-test verified. Users/Items responses are incomplete, catalog browsing is admin-only, and there is still no client-accepted authentication, Quick Connect, remux/transcoding, user-data migration or Smart TV playback. Administrator-authenticated **static** video streaming with HTTP byte ranges is available for synthetic test media. Full compatibility is a mandatory acceptance goal, not a current claim.
+> **Pre-alpha, not yet Jellyfin compatible.** Rust login with persistent device-aware session records, scoped `/Sessions` queries, item browsing, virtual folders, read-only scanning, FFprobe and SQLite indexing now exist. FFprobe-backed read-only PlaybackInfo and catalog-v2 persisted empty libraries are synthetic-test verified. Users/Items responses are incomplete, catalog browsing is admin-only, and there is still no client-accepted authentication, Quick Connect, remux/transcoding, user-data migration or Smart TV playback. Administrator-authenticated **static** video streaming with HTTP byte ranges is available for synthetic test media. Full compatibility is a mandatory acceptance goal, not a current claim.
 
 ## 🎯 MVP means the COMPLETE Jellyfin Server port
 
@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`█░░░░░░░░░ 12%` across 90 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`█░░░░░░░░░ 12%` across 91 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39960935517](https://github.com/sguzman/pelagos/actions/runs/39960935517) — formatting, Clippy, Rust auth/catalog/playback tests, v2 migration, FFprobe mock and source-matrix checks.
+**Latest passing CI:** [run 39962550684](https://github.com/sguzman/pelagos/actions/runs/39962550684) — format, Clippy, Rust auth/session/catalog/playback tests, schema migration and pinned source-matrix checks.
 
 ## 🚀 Current starter
 

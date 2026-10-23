@@ -594,6 +594,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T115",
+              "emoji": "📱",
+              "name": "Persistent device sessions and scoped Jellyfin Sessions API",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Issue persistent session IDs and per-client device metadata tied to hashed tokens; expose authenticated GET /Sessions with owner/admin filtering",
+                  "passed": true,
+                  "evidence": "src/auth.rs; src/auth_api.rs — quotes-aware Jellyfin header metadata, FK-backed session rows, revocation and device scoping"
+                },
+                {
+                  "title": "CI proves device-aware login response, session authorization, unsupported-filter rejection and cascading logout",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39962550684 — full formatting, Clippy, Rust unit/HTTP tests and pinned matrix checks passed"
+                },
+                {
+                  "title": "Unmodified TV clients register devices, maintain WebSocket sessions and resume real playback across reconnects",
+                  "passed": false
+                }
+              ]
             }
           ]
         },

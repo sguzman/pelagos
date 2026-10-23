@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 12%` across 90 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 12%` across 91 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `█░░░░░░░░░ 13%`
+## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 17%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -108,7 +108,7 @@
   - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
   - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
 
-### 👥 P4 — Authentication and user state — `█░░░░░░░░░ 13%`
+### 👥 P4 — Authentication and user state — `██░░░░░░░░ 22%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -130,6 +130,10 @@
   - [x] Rust creates private accounts, hashes passwords with Argon2id and stores only token digests — src/auth.rs; src/main.rs — first local user admin, 256-bit random tokens and revocation
   - [x] CI verifies login, logout, invalid/disabled accounts, token storage and unauthorized HTTP access — GitHub Actions 39956568616 — native HTTP/user/token tests, Clippy and format passed
   - [ ] Unmodified Jellyfin clients and security/abuse audit validate full auth behavior
+- 📱 **T115 — Persistent device sessions and scoped Jellyfin Sessions API** — `███████░░░ 67%`
+  - [x] Issue persistent session IDs and per-client device metadata tied to hashed tokens; expose authenticated GET /Sessions with owner/admin filtering — src/auth.rs; src/auth_api.rs — quotes-aware Jellyfin header metadata, FK-backed session rows, revocation and device scoping
+  - [x] CI proves device-aware login response, session authorization, unsupported-filter rejection and cascading logout — GitHub Actions 39962550684 — full formatting, Clippy, Rust unit/HTTP tests and pinned matrix checks passed
+  - [ ] Unmodified TV clients register devices, maintain WebSocket sessions and resume real playback across reconnects
 
 ### 🧭 P5 — General API contracts — `█░░░░░░░░░ 13%`
 
