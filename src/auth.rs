@@ -100,8 +100,8 @@ fn validate_password(password: &str) -> Result<()> {
 fn password_hash(password: &str) -> Result<String> {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).map_err(|error| std::io::Error::other(error.to_string()))?;
-    let salt = SaltString::encode_b64(&bytes)
-        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    let salt =
+        SaltString::encode_b64(&bytes).map_err(|error| std::io::Error::other(error.to_string()))?;
     let hash = Argon2::default()
         .hash_password(password.as_bytes(), &salt)
         .map_err(|error| std::io::Error::other(error.to_string()))?;
