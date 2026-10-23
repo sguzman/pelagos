@@ -10,6 +10,7 @@ use pelagos::{
     app::{self, AppState},
     auth, catalog, user_data,
 };
+use rusqlite::params;
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -85,6 +86,21 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     user_data::save_position(&state, &viewer.user.id, &picture, 33_000_000).unwrap();
     user_data::save_position(&state, &viewer.user.id, &secret, 44_000_000).unwrap();
     user_data::save_position(&state, &viewer.user.id, &beta, 50_000_000).unwrap();
+    // Force distinct, deterministic fixture timestamps without sleeping or
+    // depending on filesystem creation/modification times.
+    let db = rusqlite::Connection::open(state.join("pelagos-user-data.sqlite3")).unwrap();
+    for (item_id, played_at) in [
+        (&alpha, "2026-10-20T10:00:00.000Z"),
+        (&song, "2026-10-21T10:00:00.000Z"),
+        (&beta, "2026-10-22T10:00:00.000Z"),
+    ] {
+        db.execute(
+            "UPDATE item_user_data SET last_played_utc=?1 WHERE user_id=?2 AND item_id=?3",
+            params![played_at, viewer.user.id, item_id],
+        )
+        .unwrap();
+    }
+
     // A fully watched item with a nonzero legacy position cannot reappear in resume.
     let state_before = user_data::read(&state, &viewer.user.id, &beta).unwrap();
     assert_eq!(state_before.playback_position_ticks, 50_000_000);
@@ -95,6 +111,9 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     assert!(items.iter().any(|item| item["Id"] == alpha));
     assert!(items.iter().any(|item| item["Id"] == beta));
     assert!(items.iter().any(|item| item["Id"] == song));
+    assert_eq!(items[0]["Name"], "Beta");
+    assert_eq!(items[1]["Name"], "Song");
+    assert_eq!(items[2]["Name"], "Alpha");
     assert!(
         !items
             .iter()
@@ -157,6 +176,7 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     )
     .await;
     assert!(without_user_data["Items"][0].get("UserData").is_none());
+    assert_eq!(without_user_data["Items"][0]["Name"], "Beta");
     assert!(without_user_data["Items"][0].get("ImageTags").is_none());
 
     let legacy = format!("/Users/{}/Items/Resume", viewer.user.id);
@@ -215,6 +235,7 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     assert_eq!(marked.status(), StatusCode::OK);
     let remaining = json(get(&router, uri, Some(&viewer.access_token)).await).await;
     assert_eq!(remaining["TotalRecordCount"], 2);
+    assert_eq!(remaining["Items"][0]["Name"], "Song");
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
