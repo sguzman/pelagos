@@ -134,9 +134,18 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     assert_eq!(info["MediaSources"][0]["Container"], "mp4");
     assert_eq!(info["MediaSources"][0]["RunTimeTicks"], 612_500_000);
     assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Codec"], "h264");
-    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Profile"], "High");
-    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["PixelFormat"], "yuv420p");
-    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["ColorPrimaries"], "bt709");
+    assert_eq!(
+        info["MediaSources"][0]["MediaStreams"][0]["Profile"],
+        "High"
+    );
+    assert_eq!(
+        info["MediaSources"][0]["MediaStreams"][0]["PixelFormat"],
+        "yuv420p"
+    );
+    assert_eq!(
+        info["MediaSources"][0]["MediaStreams"][0]["ColorPrimaries"],
+        "bt709"
+    );
     let fps = info["MediaSources"][0]["MediaStreams"][0]["AverageFrameRate"]
         .as_f64()
         .unwrap();

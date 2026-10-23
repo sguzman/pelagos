@@ -343,7 +343,6 @@ mod tests {
         assert_eq!(media.media_streams[0].codec.as_deref(), Some("flac"));
     }
 
-
     #[test]
     fn media_stream_profiles_and_fps_only_report_probed_values() {
         let stream = json!({
