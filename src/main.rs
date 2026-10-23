@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use pelagos::{app, identity};
 use tracing::info;
 
@@ -18,6 +18,18 @@ struct Args {
     /// Private state directory (defaults to XDG_STATE_HOME/pelagos).
     #[arg(long)]
     state_dir: Option<PathBuf>,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Read-only inventory of a local media folder (does not start the HTTP server).
+    Scan {
+        /// Directory to inspect recursively. Symlinks are not followed.
+        directory: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -30,6 +42,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     let args = Args::parse();
+    if let Some(Command::Scan { directory }) = &args.command {
+        let report = pelagos::media::scan(directory)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);
     let id = identity::load_or_create(&state_dir)?;
     let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
