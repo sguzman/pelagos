@@ -82,10 +82,11 @@ async fn ancestors_follow_immediate_parent_first_without_exposing_other_librarie
         .iter()
         .map(|item| item["Name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["Season One", "Show", "Allowed"]);
+    assert_eq!(names, ["Season One", "Show", "Allowed", "Media"]);
     assert_eq!(parents[0]["ParentId"], parents[1]["Id"]);
     assert_eq!(parents[1]["ParentId"], parents[2]["Id"]);
-    assert!(parents[2].get("ParentId").is_none());
+    assert_eq!(parents[2]["ParentId"], parents[3]["Id"]);
+    assert!(parents[3].get("ParentId").is_none());
     assert_eq!(parents[2]["Type"], "CollectionFolder");
     assert_eq!(parents[0]["UserData"]["Played"], false);
     for parent in parents {
@@ -103,7 +104,8 @@ async fn ancestors_follow_immediate_parent_first_without_exposing_other_librarie
         .await,
     )
     .await;
-    assert!(root_parents.as_array().unwrap().is_empty());
+    assert_eq!(root_parents.as_array().unwrap().len(), 1);
+    assert_eq!(root_parents[0]["Name"], "Media");
 
     assert_eq!(
         get(
