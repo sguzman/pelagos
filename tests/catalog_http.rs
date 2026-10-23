@@ -82,7 +82,6 @@ async fn query_results_are_administrator_only_and_deterministically_paged() {
     assert!(views["Items"][0].get("Path").is_none());
 }
 
-
 #[tokio::test]
 async fn folder_views_and_recursive_browse_match_parent_chain() {
     let fixture = tempfile::tempdir().unwrap();
@@ -103,16 +102,11 @@ async fn folder_views_and_recursive_browse_match_parent_chain() {
     )));
     let views = json(get(&router, "/UserViews", Some(&token)).await).await;
     let root_id = views["Items"][0]["Id"].as_str().unwrap();
-    let direct = json(
-        get(&router, &format!("/Items?parentId={root_id}"), Some(&token)).await,
-    )
-    .await;
+    let direct =
+        json(get(&router, &format!("/Items?parentId={root_id}"), Some(&token)).await).await;
     assert_eq!(direct["TotalRecordCount"], 2);
     let items = direct["Items"].as_array().unwrap();
-    let folder_id = items
-        .iter()
-        .find(|item| item["Name"] == "Series")
-        .unwrap()["Id"]
+    let folder_id = items.iter().find(|item| item["Name"] == "Series").unwrap()["Id"]
         .as_str()
         .unwrap();
     let nested = json(
@@ -127,11 +121,13 @@ async fn folder_views_and_recursive_browse_match_parent_chain() {
     assert_eq!(nested["TotalRecordCount"], 1);
     assert_eq!(nested["Items"][0]["Name"], "Pilot");
     let id = nested["Items"][0]["Id"].as_str().unwrap();
-    let direct_by_id = json(
-        get(&router, &format!("/Items/{id}"), Some(&token)).await,
+    let direct_by_id = json(get(&router, &format!("/Items/{id}"), Some(&token)).await).await;
+    assert_eq!(direct_by_id["Id"], id);
+    let missing = get(
+        &router,
+        "/Items?parentId=00000000000000000000000000000000",
+        Some(&token),
     )
     .await;
-    assert_eq!(direct_by_id["Id"], id);
-    let missing = get(&router, "/Items?parentId=00000000000000000000000000000000", Some(&token)).await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }
