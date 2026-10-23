@@ -65,4 +65,6 @@ This is **not a fully audited or implemented API inventory** and **not** accepte
 - **VideosController** — `Videos` — 7 method attributes
 - **YearsController** — `Years` — 2 method attributes
 
+**Validation:** `cargo run --bin pelagos-api-matrix -- --check` enforces pinned SHA, all 60 source controllers, 419 recorded HTTP attributes, source identities and basic route/verb structure. GitHub CI runs this automatically.
+
 **Next:** cross-check routes against v12.3 OpenAPI, audit class-level route composition and cross-reference HTTP contracts to Rust handlers and differential tests before crediting a port.

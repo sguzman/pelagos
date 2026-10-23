@@ -28,3 +28,5 @@ jobs:
         run: cargo run --quiet --bin pelagos-roadmap -- --check
       - name: Pinned upstream source matrix
         run: cargo run --quiet --bin pelagos-matrix -- --check
+      - name: Pinned controller route attributes
+        run: cargo run --quiet --bin pelagos-api-matrix -- --check
