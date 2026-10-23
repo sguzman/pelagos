@@ -309,7 +309,15 @@ fn write_update(
              last_played_utc=CASE WHEN ?7 THEN strftime('%Y-%m-%dT%H:%M:%SZ','now')
                                   ELSE last_played_utc END
          WHERE user_id=?1 AND item_id=?2",
-        params![user_id, item_id, played, count, ticks, favorite, newly_played],
+        params![
+            user_id,
+            item_id,
+            played,
+            count,
+            ticks,
+            favorite,
+            newly_played
+        ],
     )?;
     tx.commit()?;
     read(state_dir, user_id, item_id)
@@ -336,12 +344,11 @@ async fn update_authorized(
     update.validate(&item_id)?;
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let user_id = user.id;
-    let updated = tokio::task::spawn_blocking(move || {
-        write_update(&dir, &user_id, &item_id, update)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let updated =
+        tokio::task::spawn_blocking(move || write_update(&dir, &user_id, &item_id, update))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(updated))
 }
 
@@ -493,7 +500,10 @@ legacy_handler!(unfavorite_legacy, Flag::Favorite(false));
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/UserItems/{item_id}/UserData", get(read_item).post(update_item))
+        .route(
+            "/UserItems/{item_id}/UserData",
+            get(read_item).post(update_item),
+        )
         .route(
             "/Users/{user_id}/Items/{item_id}/UserData",
             get(read_item_legacy).post(update_item_legacy),
