@@ -2,21 +2,21 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `░░░░░░░░░░ 2%` across 79 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `░░░░░░░░░░ 4%` across 79 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `█░░░░░░░░░ 13%`
+## 🧱 M0 — Foundation and project controls — `██░░░░░░░░ 23%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
-### 🧭 P0 — Identity and scope — `███░░░░░░░ 33%`
+### 🧭 P0 — Identity and scope — `█████░░░░░ 47%`
 
-- 🦀 **T001 — Standalone Rust server bootstrap** — `███░░░░░░░ 33%`
+- 🦀 **T001 — Standalone Rust server bootstrap** — `███████░░░ 67%`
   - [x] Implement standalone Rust daemon and HTTP routes — Cargo.toml; src/main.rs; src/app.rs
-  - [ ] Automated tests and Jellyfin baseline fixture verify standalone Rust daemon and HTTP routes
+  - [x] CI compiles server and passes native HTTP route tests — GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded
   - [ ] Production or real-client acceptance validates standalone Rust daemon and HTTP routes
-- 🪪 **T002 — Persistent server identity** — `███░░░░░░░ 33%`
+- 🪪 **T002 — Persistent server identity** — `███████░░░ 67%`
   - [x] Implement restart-stable local server ID — src/identity.rs
-  - [ ] Automated tests and Jellyfin baseline fixture verify restart-stable local server ID
+  - [x] CI validates restart-persistent server identity and corrupt-ID rejection — GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded
   - [ ] Production or real-client acceptance validates restart-stable local server ID
 - 🌗 **T003 — Admin web appearance** — `███░░░░░░░ 33%`
   - [x] Implement top-right System/Light/Dark selection with System default — web/index.html
@@ -50,12 +50,12 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals
   - [ ] Production or real-client acceptance validates structured diagnostics, graceful shutdown and signals
 
-### 🧪 P2 — Test framework — `░░░░░░░░░░ 0%`
+### 🧪 P2 — Test framework — `██░░░░░░░░ 17%`
 
-- 📊 **T010 — Ledger generator and CI guard** — `░░░░░░░░░░ 0%`
-  - [ ] Implement machine ledger, calculated percentages and acceptance evidence
-  - [ ] Automated tests and Jellyfin baseline fixture verify machine ledger, calculated percentages and acceptance evidence
-  - [ ] Production or real-client acceptance validates machine ledger, calculated percentages and acceptance evidence
+- 📊 **T010 — Ledger generator and CI guard** — `███████░░░ 67%`
+  - [x] Implement machine ledger, calculated percentages and acceptance evidence — src/bin/pelagos-roadmap.rs; docs/progress.json; docs/ROADMAP.md
+  - [x] Automated CI verifies ledger evidence, task percentages and generated roadmap are in sync — GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded
+  - [ ] Review and prove milestone gate and acceptance evidence completeness
 - 🧰 **T011 — Protocol fixtures and mock clients** — `░░░░░░░░░░ 0%`
   - [ ] Implement contract replay harness without private user data
   - [ ] Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data

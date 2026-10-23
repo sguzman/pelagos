@@ -31,15 +31,16 @@
                   "evidence": "Cargo.toml; src/main.rs; src/app.rs"
                 },
                 {
-                  "title": "Automated tests and Jellyfin baseline fixture verify standalone Rust daemon and HTTP routes",
-                  "passed": false
+                  "title": "CI compiles server and passes native HTTP route tests",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded"
                 },
                 {
                   "title": "Production or real-client acceptance validates standalone Rust daemon and HTTP routes",
                   "passed": false
                 }
               ],
-              "progress": 33
+              "progress": 67
             },
             {
               "id": "T002",
@@ -52,15 +53,16 @@
                   "evidence": "src/identity.rs"
                 },
                 {
-                  "title": "Automated tests and Jellyfin baseline fixture verify restart-stable local server ID",
-                  "passed": false
+                  "title": "CI validates restart-persistent server identity and corrupt-ID rejection",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded"
                 },
                 {
                   "title": "Production or real-client acceptance validates restart-stable local server ID",
                   "passed": false
                 }
               ],
-              "progress": 33
+              "progress": 67
             },
             {
               "id": "T003",
@@ -226,18 +228,20 @@
               "checks": [
                 {
                   "title": "Implement machine ledger, calculated percentages and acceptance evidence",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/bin/pelagos-roadmap.rs; docs/progress.json; docs/ROADMAP.md"
                 },
                 {
-                  "title": "Automated tests and Jellyfin baseline fixture verify machine ledger, calculated percentages and acceptance evidence",
-                  "passed": false
+                  "title": "Automated CI verifies ledger evidence, task percentages and generated roadmap are in sync",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded"
                 },
                 {
-                  "title": "Production or real-client acceptance validates machine ledger, calculated percentages and acceptance evidence",
+                  "title": "Review and prove milestone gate and acceptance evidence completeness",
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 67
             },
             {
               "id": "T011",
