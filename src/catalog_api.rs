@@ -38,6 +38,8 @@ pub struct ItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub container: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_data: Option<user_data::UserItemData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_tags: Option<std::collections::BTreeMap<String, String>>,
@@ -159,6 +161,9 @@ fn map_item(
         server_id: server_id.to_owned(),
         parent_id: Some(parent_id),
         size: Some(file.size_bytes),
+        container: Path::new(&file.relative_path)
+            .extension()
+            .map(|ext| ext.to_string_lossy().to_ascii_lowercase()),
         user_data: None,
         image_tags: primary_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -177,6 +182,7 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         server_id: server_id.to_owned(),
         parent_id: None,
         size: None,
+        container: None,
         user_data: None,
         image_tags: image_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -235,6 +241,7 @@ fn catalog_nodes(
                         server_id: server_id.to_owned(),
                         parent_id: Some(parent_id.clone()),
                         size: None,
+        container: None,
                         user_data: None,
                         image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
                             .and_then(artwork::image_tag)
