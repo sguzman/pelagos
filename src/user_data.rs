@@ -85,8 +85,7 @@ fn user_item(item_id: &str) -> UserItemData {
     }
 }
 
-pub fn read(state_dir: &Path, user_id: &str, item_id: &str) -> Result<UserItemData> {
-    let db = open_db(state_dir)?;
+fn load(db: &Connection, user_id: &str, item_id: &str) -> Result<UserItemData> {
     let row = db
         .query_row(
             "SELECT played,play_count,position_ticks,favorite,last_played_utc
@@ -112,6 +111,24 @@ pub fn read(state_dir: &Path, user_id: &str, item_id: &str) -> Result<UserItemDa
         data.last_played_date = last_played;
     }
     Ok(data)
+}
+
+pub fn read(state_dir: &Path, user_id: &str, item_id: &str) -> Result<UserItemData> {
+    let db = open_db(state_dir)?;
+    load(&db, user_id, item_id)
+}
+
+/// One private database connection for a paginated Jellyfin library response.
+pub fn read_many(
+    state_dir: &Path,
+    user_id: &str,
+    item_ids: &[String],
+) -> Result<Vec<UserItemData>> {
+    let db = open_db(state_dir)?;
+    item_ids
+        .iter()
+        .map(|id| load(&db, user_id, id))
+        .collect()
 }
 
 fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Result<UserItemData> {
