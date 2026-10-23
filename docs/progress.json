@@ -1083,6 +1083,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T216",
+              "emoji": "🧩",
+              "name": "Separate indexed media sidecars from independent photo items",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Classify title/cover/poster/folder sidecars using media-root and directory matching; leave independent photo items visible and originals indexed",
+                  "passed": true,
+                  "evidence": "src/artwork.rs sidecar_keys; src/catalog_api.rs catalog_nodes — scoped separation of display items and indexed image assets"
+                },
+                {
+                  "title": "CI verifies photo browse/search semantics, album artwork retention and unrelated photo libraries",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39989870345 — Rust artwork, catalog HTTP, search and security regression suites passed"
+                },
+                {
+                  "title": "Unmodified TV and photo clients validate cover classification across diverse real library layouts",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -1504,6 +1526,50 @@
                 },
                 {
                   "title": "Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T333",
+              "emoji": "🎚️",
+              "name": "Enriched Jellyfin media stream metadata from bounded FFprobe fields",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Populate codec profile, frame rates, bit depth, pixel/color/audio layouts, text tags and subtitle dispositions only from supported FFprobe observations",
+                  "passed": true,
+                  "evidence": "src/playback.rs mapped_stream — bounded metadata strings and finite rational frame-rate checks"
+                },
+                {
+                  "title": "CI validates HTTP MediaStream DTO mapping, invalid frame-rates and audio/subtitle synthetic fixtures",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39990374327 — stream metadata HTTP tests, Rust formatting, Clippy and pinned parity inventory passed"
+                },
+                {
+                  "title": "Real Jellyfin TV codec negotiation and subtitle rendering conform across representative devices",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T334",
+              "emoji": "🔐",
+              "name": "Jellyfin PlaybackInfo authenticated ownership and legacy query precedence",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Enforce current user's ID in playback queries/body, apply deprecated query overrides, and reject nonzero seeks/unsupported stream selections explicitly",
+                  "passed": true,
+                  "evidence": "src/playback.rs — typed PascalCase request and camelCase query merge with identity and unsupported-mode guards"
+                },
+                {
+                  "title": "CI verifies GET/POST user isolation, query override order, direct-play defaults, source selection and error status contracts",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39992775206 — authenticated Rust HTTP integration, tests, Clippy and formatting passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients verify playback negotiation across real capability profiles",
                   "passed": false
                 }
               ]

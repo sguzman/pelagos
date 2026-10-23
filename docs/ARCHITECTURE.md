@@ -104,3 +104,11 @@ The initial authenticated `GET /Items/{id}/Images` lists a `Primary` ImageInfo w
 ## Audio media source negotiation
 
 Audio files are now eligible for FFprobe-backed `GET/POST /Items/{id}/PlaybackInfo`, with conservative audio stream fields and `DirectStreamUrl` using `/Audio/{id}/stream?static=true`. Upstream `EnableDirectStream` and `EnableTranscoding` booleans express fallback permissions, so Pelagos no longer rejects a request solely because a client permits those modes; the returned MediaSource **still** reports `SupportsDirectStream=false` and `SupportsTranscoding=false` until implemented. [CI 39986043745](https://github.com/sguzman/pelagos/actions/runs/39986043745) covers scope, audio metadata and honest capabilities. Direct-play TV acceptance remains untested.
+
+## Media sidecar separation and detailed playback information
+
+Indexed covers and posters stay in the **private SQLite catalog** as source image assets but no longer appear as independent `Photo` DTOs or `Search/Hints` entries when a recognized video/audio sidecar relationship exists. Matching uses explicit directory, media stem and library-root constraints; unrelated photographs remain browsable, and standalone photo libraries do not disappear. CI [39989870345](https://github.com/sguzman/pelagos/actions/runs/39989870345) exercises item and search separation.
+
+FFprobe `MediaStreams` now expose a conservative larger Jellyfin-compatible subset: profile, bit depth, aspect, pixel format, channel layout, color range/space/transfer/primaries, subtitle dispositions, title, and finite positive rational frame rates without inferring unknown fields. [CI 39990374327](https://github.com/sguzman/pelagos/actions/runs/39990374327) validates synthetic metadata contracts, not codec capability negotiation.
+
+`/Items/{id}/PlaybackInfo` accepts upstream GET/POST `userId` identity constraints and legacy query-over-POST-body precedence (Jellyfin v12.3), including selected source identity, direct-play options and explicit refusal for unsupported tick seeks, stream selections and auto-open live streams. Requests for another user's id receive 403. Negative ticks receive 400; unsupported modes return 501. [CI 39992775206](https://github.com/sguzman/pelagos/actions/runs/39992775206). Device-profile-backed transcoding capability remains unimplemented.

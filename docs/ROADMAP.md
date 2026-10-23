@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 19%` across 105 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 21%` across 108 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -178,7 +178,7 @@
   - [x] CI verifies per-user playback/favorite DTO fields and access isolation — GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed
   - [ ] Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views
 
-## 📚 M2 — Full media library and metadata — `██░░░░░░░░ 20%`
+## 📚 M2 — Full media library and metadata — `██░░░░░░░░ 22%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -205,7 +205,7 @@
   - [x] CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation — GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed
   - [ ] Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades
 
-### 🧩 P7 — Metadata systems — `██░░░░░░░░ 22%`
+### 🧩 P7 — Metadata systems — `███░░░░░░░ 29%`
 
 - 📝 **T210 — Metadata readers** — `░░░░░░░░░░ 0%`
   - [ ] Implement NFO, tags, EXIF, chapters and sidecar parsing
@@ -231,6 +231,10 @@
   - [x] Resolve indexed poster/folder/cover art for collection roots and nested album folders through Primary and Primary/0 URLs — src/artwork.rs; src/catalog_api.rs — virtual folder image tags, guarded nested-folder resolution and empty-library views
   - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39988010040 — album/root media artwork, indexed /0, user grants/revocation, formatter and Clippy passed
   - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
+- 🧩 **T216 — Separate indexed media sidecars from independent photo items** — `███████░░░ 67%`
+  - [x] Classify title/cover/poster/folder sidecars using media-root and directory matching; leave independent photo items visible and originals indexed — src/artwork.rs sidecar_keys; src/catalog_api.rs catalog_nodes — scoped separation of display items and indexed image assets
+  - [x] CI verifies photo browse/search semantics, album artwork retention and unrelated photo libraries — GitHub Actions 39989870345 — Rust artwork, catalog HTTP, search and security regression suites passed
+  - [ ] Unmodified TV and photo clients validate cover classification across diverse real library layouts
 
 ### 🎼 P8 — Library feature APIs — `██░░░░░░░░ 22%`
 
@@ -259,11 +263,11 @@
   - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39988687987 — scoped ImageInfo listing, privacy, HTTP and Rust validation passed
   - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 29%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 32%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█████░░░░░ 46%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 49%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -317,6 +321,14 @@
   - [x] Expose audio PlaybackInfo and a local direct-play URL; treat fallback flags as client permissions without falsely advertising transcode/remux support — src/playback.rs — audio files now return bounded FFprobe media streams, runtime, and the static audio route; direct-play-only capability truth
   - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39986043745 — audio source, device fallback flags, permission grants, revocation and Clippy tests passed
   - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
+- 🎚️ **T333 — Enriched Jellyfin media stream metadata from bounded FFprobe fields** — `███████░░░ 67%`
+  - [x] Populate codec profile, frame rates, bit depth, pixel/color/audio layouts, text tags and subtitle dispositions only from supported FFprobe observations — src/playback.rs mapped_stream — bounded metadata strings and finite rational frame-rate checks
+  - [x] CI validates HTTP MediaStream DTO mapping, invalid frame-rates and audio/subtitle synthetic fixtures — GitHub Actions 39990374327 — stream metadata HTTP tests, Rust formatting, Clippy and pinned parity inventory passed
+  - [ ] Real Jellyfin TV codec negotiation and subtitle rendering conform across representative devices
+- 🔐 **T334 — Jellyfin PlaybackInfo authenticated ownership and legacy query precedence** — `███████░░░ 67%`
+  - [x] Enforce current user's ID in playback queries/body, apply deprecated query overrides, and reject nonzero seeks/unsupported stream selections explicitly — src/playback.rs — typed PascalCase request and camelCase query merge with identity and unsupported-mode guards
+  - [x] CI verifies GET/POST user isolation, query override order, direct-play defaults, source selection and error status contracts — GitHub Actions 39992775206 — authenticated Rust HTTP integration, tests, Clippy and formatting passed
+  - [ ] Unmodified Jellyfin clients verify playback negotiation across real capability profiles
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 
