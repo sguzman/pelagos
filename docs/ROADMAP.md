@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 14%` across 95 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 15%` across 96 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 22%`
+## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 25%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -139,7 +139,7 @@
   - [x] CI proves cross-library isolation, no file-ID disclosure, dynamic grant/revoke and administrator access — GitHub Actions 39965370233 — format, Clippy, Rust permission and HTTP integration tests passed
   - [ ] Real Jellyfin users and unmodified TV apps validate library permission and parental policy parity
 
-### 🧭 P5 — General API contracts — `██░░░░░░░░ 22%`
+### 🧭 P5 — General API contracts — `███░░░░░░░ 29%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -165,6 +165,10 @@
   - [x] Serve Jellyfin v12.3 SearchHints DTO from indexed file names with filters, pagination and user scoping — src/search.rs; src/catalog_api.rs — shared accessible catalog graph and bounded media-name hints
   - [x] CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure — GitHub Actions 39967003914 — Rust Search/Hints HTTP integration plus format and Clippy passed
   - [ ] Unmodified Jellyfin clients exercise full title/artist/genre/people and metadata-aware search
+- 🧰 **T126 — Consistent recognized Items and Search media filters** — `███████░░░ 67%`
+  - [x] Apply recognized include/exclude item kinds and media types before pagination across Items endpoints — src/query_filters.rs; src/catalog_api.rs; src/search.rs — shared strict type filters and unsupported Movie/Series refusal
+  - [x] CI verifies audio/video item filters, pagination, invalid kinds and search-contract consistency — GitHub Actions 39968255232 — formatting, Clippy, filter HTTP tests and source ledger validations passed
+  - [ ] Real Jellyfin client pagination, library filtering and full upstream query semantics verified
 
 ## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 10%`
 

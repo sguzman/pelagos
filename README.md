@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`█░░░░░░░░░ 14%` across 95 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`██░░░░░░░░ 15%` across 96 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39967422588](https://github.com/sguzman/pelagos/actions/runs/39967422588) — formatting, Clippy, Rust search/audio/video, auth/permissions, SQLite migration and pinned compatibility inventory.
+**Latest passing CI:** [run 39968255232](https://github.com/sguzman/pelagos/actions/runs/39968255232) — formatting, Clippy, Rust item-filter/search/audio/authorization tests and pinned source-matrix validation.
 
 ## 🚀 Current starter
 
@@ -50,7 +50,7 @@ cargo test --all-targets
 
 Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/status`. The partially authenticated prototype deliberately defaults to **loopback-only** and port 8097, avoiding the usual Jellyfin port 8096. UDP discovery is opt-in, on port 7359, only responds to LAN/loopback peers and cannot run alongside another service already bound to that UDP port. Do not expose this build to untrusted networks. Requires a normal Rust toolchain; no Python tooling is required.
 
-The provisional HTTP routes include `GET /Search/Hints`, `GET/HEAD /Audio/{id}/stream?static=true`, and `POST /Users/AuthenticateByName`, `GET /Users/Me`, `POST /Sessions/Logout`, `GET /UserViews`, `GET /Items`, `GET /Items/{id}` and `GET /Users/{user_id}/Items`. The catalog routes require authentication; administrators can see all indexed libraries, while non-administrators have default-deny access with explicit root grants. A user with library access may request `GET /Videos/{id}/stream?static=true` or `HEAD` for a previously indexed, unchanged video file, including a single HTTP `Range` header. Non-static/transcoding requests explicitly return 501. Audio and video static direct play share the same authorization, byte-range and checked-file implementation. On Linux the opened file descriptor is checked against its canonical indexed root before media bytes are sent, guarding the tested symlink-swap race. This is a narrow synthetic-tested direct-file stream, not proof an unmodified TV client works.
+The provisional HTTP routes include `GET /Search/Hints`, `GET/HEAD /Audio/{id}/stream?static=true`, and `POST /Users/AuthenticateByName`, `GET /Users/Me`, `POST /Sessions/Logout`, `GET /UserViews`, `GET /Items`, `GET /Items/{id}` and `GET /Users/{user_id}/Items`. The catalog and search routes support recognized type/media filters and require authentication; administrators can see all indexed libraries, while non-administrators have default-deny access with explicit root grants. A user with library access may request `GET /Videos/{id}/stream?static=true` or `HEAD` for a previously indexed, unchanged video file, including a single HTTP `Range` header. Non-static/transcoding requests explicitly return 501. Audio and video static direct play share the same authorization, byte-range and checked-file implementation. On Linux the opened file descriptor is checked against its canonical indexed root before media bytes are sent, guarding the tested symlink-swap race. This is a narrow synthetic-tested direct-file stream, not proof an unmodified TV client works.
 
 ## 🦀 Architecture and independence
 

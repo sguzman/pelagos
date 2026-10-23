@@ -769,6 +769,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T126",
+              "emoji": "🧰",
+              "name": "Consistent recognized Items and Search media filters",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Apply recognized include/exclude item kinds and media types before pagination across Items endpoints",
+                  "passed": true,
+                  "evidence": "src/query_filters.rs; src/catalog_api.rs; src/search.rs — shared strict type filters and unsupported Movie/Series refusal"
+                },
+                {
+                  "title": "CI verifies audio/video item filters, pagination, invalid kinds and search-contract consistency",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39968255232 — formatting, Clippy, filter HTTP tests and source ledger validations passed"
+                },
+                {
+                  "title": "Real Jellyfin client pagination, library filtering and full upstream query semantics verified",
+                  "passed": false
+                }
+              ]
             }
           ]
         }

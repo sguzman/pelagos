@@ -41,3 +41,7 @@ Pelagos supports explicit root-level media read grants for ordinary accounts, wh
 ## Filename search and direct audio
 
 Jellyfin-shaped `/Search/Hints` results now provide read-permission-scoped basic name search, recognized item/media filters and pagination ([CI 39967003914](https://github.com/sguzman/pelagos/actions/runs/39967003914)). Authenticated `/Audio/{id}/stream?static=true` adds raw audio GET/HEAD and byte ranges ([CI 39967422588](https://github.com/sguzman/pelagos/actions/runs/39967422588)). These are contract-shaped diagnostic tests, **not** verified behavior in an unmodified Jellyfin Smart TV client. All real-client acceptance gates remain **Not tested**.
+
+## Shared item/media filters
+
+The initial `/Items` and `/Search/Hints` implementations share a recognized media/item type filter layer ([CI 39968255232](https://github.com/sguzman/pelagos/actions/runs/39968255232)). This is synthetic HTTP evidence only; advanced Jellyfin filters and actual TV browsing remain **Not tested**.
