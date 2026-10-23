@@ -4,7 +4,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Path as RoutePath, Query, State},
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     routing::{get, post},
 };
@@ -26,6 +26,7 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Users/AuthenticateByName", post(password_login))
         .route("/Users/Me", get(me))
+        .route("/Users/{user_id}", get(user_by_id))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         // Public account listing intentionally discloses no usernames yet.
@@ -208,6 +209,21 @@ async fn me(
     headers: HeaderMap,
 ) -> Result<Json<User>, StatusCode> {
     let (user, _) = authenticated(state, headers).await?;
+    Ok(Json(user))
+}
+
+/// Read the current account through Jellyfin's ID-based user route without
+/// publishing other account identities. Full administrator directory access
+/// and broader UserDto parity remain unimplemented.
+async fn user_by_id(
+    State(state): State<Arc<AppState>>,
+    RoutePath(user_id): RoutePath<String>,
+    headers: HeaderMap,
+) -> Result<Json<User>, StatusCode> {
+    let (user, _) = authenticated(state, headers).await?;
+    if user.id != user_id {
+        return Err(StatusCode::NOT_FOUND);
+    }
     Ok(Json(user))
 }
 
