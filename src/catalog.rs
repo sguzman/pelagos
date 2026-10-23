@@ -357,7 +357,6 @@ pub fn latest_file_keys(state_dir: &Path) -> Result<Vec<(String, String)>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LibraryEntry {
     pub root: String,

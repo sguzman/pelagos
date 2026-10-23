@@ -116,7 +116,10 @@ pub fn router() -> Router<Arc<AppState>> {
                 .post(create_virtual_folder)
                 .delete(remove_virtual_folder),
         )
-        .route("/Library/VirtualFolders/Name", axum::routing::post(rename_virtual_folder))
+        .route(
+            "/Library/VirtualFolders/Name",
+            axum::routing::post(rename_virtual_folder),
+        )
         .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
@@ -915,7 +918,10 @@ async fn create_virtual_folder(
         }
         let existing =
             catalog::library_entries(&dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        if existing.iter().any(|entry| entry.name.eq_ignore_ascii_case(&name)) {
+        if existing
+            .iter()
+            .any(|entry| entry.name.eq_ignore_ascii_case(&name))
+        {
             return Err(StatusCode::CONFLICT);
         }
         catalog::index(&dir, &canonical).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
