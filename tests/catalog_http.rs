@@ -160,7 +160,6 @@ async fn indexed_empty_library_remains_browsable_without_phantom_files() {
     assert_eq!(root_item["Name"], "EmptyMovies");
 }
 
-
 #[tokio::test]
 async fn item_type_and_media_filters_are_consistent_with_search() {
     let fixture = tempfile::tempdir().unwrap();
@@ -217,11 +216,6 @@ async fn item_type_and_media_filters_are_consistent_with_search() {
     )
     .await;
     assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
-    let refused = get(
-        &router,
-        "/Items?isSeries=true",
-        Some(&session.access_token),
-    )
-    .await;
+    let refused = get(&router, "/Items?isSeries=true", Some(&session.access_token)).await;
     assert_eq!(refused.status(), StatusCode::NOT_IMPLEMENTED);
 }

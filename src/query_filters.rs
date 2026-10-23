@@ -40,4 +40,3 @@ pub(crate) fn media_types(value: Option<&str>) -> Result<Option<Vec<String>>, St
     }
     Ok(Some(parsed))
 }
-

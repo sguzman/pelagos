@@ -249,9 +249,11 @@ async fn query_items(
             && excluded
                 .as_ref()
                 .is_none_or(|types| !types.contains(&item.item_type))
-            && media
-                .as_ref()
-                .is_none_or(|types| item.media_type.as_ref().is_some_and(|kind| types.contains(kind)))
+            && media.as_ref().is_none_or(|types| {
+                item.media_type
+                    .as_ref()
+                    .is_some_and(|kind| types.contains(kind))
+            })
     });
     all.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
     let total_record_count = all.len();
