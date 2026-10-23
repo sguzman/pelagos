@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 10%` across 88 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 12%` across 90 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -154,11 +154,11 @@
   - [x] CI passes synthetic HTTP catalog pagination and account isolation tests — GitHub Actions 39957337582 — library HTTP and credential integration tests passed
   - [ ] Real Jellyfin clients validate full BaseItemDto, authorization and item query coverage
 
-## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 5%`
+## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 10%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
-### 📂 P6 — Filesystem and items — `░░░░░░░░░░ 0%`
+### 📂 P6 — Filesystem and items — `█░░░░░░░░░ 13%`
 
 - 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
   - [ ] Implement multi-root libraries, watcher updates and rescan correctness
@@ -176,6 +176,10 @@
   - [ ] Implement refreshes, scheduled tasks, deletion safety and retention
   - [ ] Automated tests and Jellyfin baseline fixture verify refreshes, scheduled tasks, deletion safety and retention
   - [ ] Production or real-client acceptance validates refreshes, scheduled tasks, deletion safety and retention
+- 🗃️ **T204 — Persistent empty libraries and v1→v2 catalog migration** — `███████░░░ 67%`
+  - [x] V2 SQLite schema registers empty media libraries independently from file rows and migrates old roots — src/catalog.rs — transaction-preserving catalog migration, explicit library roots, stale-row cleanup
+  - [x] CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation — GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed
+  - [ ] Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades
 
 ### 🧩 P7 — Metadata systems — `░░░░░░░░░░ 0%`
 
@@ -219,11 +223,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 10%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 13%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `██░░░░░░░░ 22%`
+### ▶️ P9 — Streaming engine — `███░░░░░░░ 29%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -249,6 +253,10 @@
   - [x] Implement admin-gated GET/HEAD static video route, MIME, byte ranges and source-root confinement — src/streaming.rs; src/app.rs — direct file streaming via tokio-util; no remux/transcode claim
   - [x] CI tests full/partial/HEAD, 416 ranges, authorization, indexed symlink escape and CLI/API consistency — GitHub Actions 39958988196: formatting, Clippy, Rust HTTP range and symlink regression tests, roadmap/matrix checks passed
   - [ ] Real Jellyfin TV apps direct-play, seek and resume across tested codecs and devices
+- 🎛️ **T306 — Conservative FFprobe media-source and playback information API** — `███████░░░ 67%`
+  - [x] Rust GET/POST playback information maps FFprobe streams and duration, gates auth and refuses unsupported transcoding requests — src/playback.rs; src/app.rs — bounded probe, direct-source DTO with no absolute host paths
+  - [x] CI validates authenticated synthetic GET/POST playback responses and media stream mapping using a fake FFprobe binary — GitHub Actions 39960435059 — full integration suite, format, Clippy and contracts passed
+  - [ ] Unmodified Jellyfin clients accept media-source negotiation, codec selection and actual playback sessions
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

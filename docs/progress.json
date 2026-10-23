@@ -798,6 +798,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T204",
+              "emoji": "🗃️",
+              "name": "Persistent empty libraries and v1→v2 catalog migration",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "V2 SQLite schema registers empty media libraries independently from file rows and migrates old roots",
+                  "passed": true,
+                  "evidence": "src/catalog.rs — transaction-preserving catalog migration, explicit library roots, stale-row cleanup"
+                },
+                {
+                  "title": "CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed"
+                },
+                {
+                  "title": "Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -1130,6 +1152,28 @@
                 },
                 {
                   "title": "Real Jellyfin TV apps direct-play, seek and resume across tested codecs and devices",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T306",
+              "emoji": "🎛️",
+              "name": "Conservative FFprobe media-source and playback information API",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Rust GET/POST playback information maps FFprobe streams and duration, gates auth and refuses unsupported transcoding requests",
+                  "passed": true,
+                  "evidence": "src/playback.rs; src/app.rs — bounded probe, direct-source DTO with no absolute host paths"
+                },
+                {
+                  "title": "CI validates authenticated synthetic GET/POST playback responses and media stream mapping using a fake FFprobe binary",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39960435059 — full integration suite, format, Clippy and contracts passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients accept media-source negotiation, codec selection and actual playback sessions",
                   "passed": false
                 }
               ]
