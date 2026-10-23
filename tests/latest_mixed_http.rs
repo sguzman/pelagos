@@ -94,11 +94,13 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
         call(&router, movie_route, None).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    assert!(json(call(&router, movie_route, Some(&viewer.access_token)).await)
-        .await
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        json(call(&router, movie_route, Some(&viewer.access_token)).await)
+            .await
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     auth::grant_library(&state, "viewer", &root).unwrap();
 
     let movies = json(call(&router, movie_route, Some(&viewer.access_token)).await).await;
@@ -170,7 +172,10 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     assert_eq!(
         call(
             &router,
-            &format!("/Items/Latest?includeItemTypes=Movie&userId={}", admin.user.id),
+            &format!(
+                "/Items/Latest?includeItemTypes=Movie&userId={}",
+                admin.user.id
+            ),
             Some(&viewer.access_token),
         )
         .await
@@ -191,9 +196,11 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     .await;
     assert_eq!(legacy, mixed);
     auth::revoke_library(&state, "viewer", &root).unwrap();
-    assert!(json(call(&router, mixed_route, Some(&viewer.access_token)).await)
-        .await
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        json(call(&router, mixed_route, Some(&viewer.access_token)).await)
+            .await
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 }
