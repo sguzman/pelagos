@@ -315,6 +315,10 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert!(identify(dir.path(), &session.access_token, "server").unwrap().is_none());
+        assert!(
+            identify(dir.path(), &session.access_token, "server")
+                .unwrap()
+                .is_none()
+        );
     }
 }
