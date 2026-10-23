@@ -21,9 +21,7 @@ fn validate(matrix: &Value) -> Result<(usize, usize, usize), String> {
     let mut accepted = 0;
     let mut references = 0;
     for entry in entries {
-        let path = entry["source_path"]
-            .as_str()
-            .ok_or("missing source_path")?;
+        let path = entry["source_path"].as_str().ok_or("missing source_path")?;
         let sha = entry["upstream_blob_sha"]
             .as_str()
             .ok_or("missing upstream blob SHA")?;
@@ -68,7 +66,9 @@ fn validate(matrix: &Value) -> Result<(usize, usize, usize), String> {
                         let evidence = entry["evidence"].as_array().ok_or("missing evidence")?;
                         if replacements.is_empty()
                             || evidence.len() < 2
-                            || evidence.iter().any(|e| e.as_str().is_none_or(str::is_empty))
+                            || evidence
+                                .iter()
+                                .any(|e| e.as_str().is_none_or(str::is_empty))
                         {
                             return Err(format!("{path}: unverified accepted parity"));
                         }
