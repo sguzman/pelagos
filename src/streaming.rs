@@ -220,8 +220,9 @@ async fn serve_file(
     };
     if download {
         let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
-        if !user.policy.is_administrator {
-            // Policies.Download and CanDownload are not modeled yet.
+        if !user.policy.enable_content_downloading {
+            // Permission is independent of per-library access and is always
+            // read from durable state, including for existing sessions.
             return Err(StatusCode::FORBIDDEN);
         }
     }

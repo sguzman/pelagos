@@ -53,6 +53,10 @@ enum Command {
         username: String,
         directory: PathBuf,
     },
+    /// Enable downloading indexed audio/video for an existing account.
+    DownloadGrant { username: String },
+    /// Revoke the download privilege from a non-administrator account.
+    DownloadRevoke { username: String },
     /// List items in an already indexed library.
     Catalog { directory: PathBuf },
     /// Inspect one media file with the installed FFprobe executable.
@@ -144,6 +148,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             .unwrap_or_else(identity::default_state_dir);
         let revoked = pelagos::auth::revoke_library(&state_dir, username, directory)?;
         println!("library grant revoked: {revoked}");
+        return Ok(());
+    }
+    if let Some(Command::DownloadGrant { username }) = &args.command {
+        let state_dir = args
+            .state_dir
+            .clone()
+            .unwrap_or_else(identity::default_state_dir);
+        let changed = pelagos::auth::set_content_download_permission(&state_dir, username, true)?;
+        println!("download privilege created: {changed}");
+        return Ok(());
+    }
+    if let Some(Command::DownloadRevoke { username }) = &args.command {
+        let state_dir = args
+            .state_dir
+            .clone()
+            .unwrap_or_else(identity::default_state_dir);
+        let changed = pelagos::auth::set_content_download_permission(&state_dir, username, false)?;
+        println!("download privilege revoked: {changed}");
         return Ok(());
     }
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);

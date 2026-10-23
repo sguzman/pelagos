@@ -86,6 +86,20 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
             .status(),
         StatusCode::NOT_FOUND
     );
+    assert!(auth::set_content_download_permission(&state, "viewer", true).unwrap());
+    let granted = request(&router, &video, Some(&viewer.access_token), None).await;
+    assert_eq!(granted.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(granted.into_body(), 64).await.unwrap().as_ref(),
+        b"VIDEO012345"
+    );
+    assert!(auth::set_content_download_permission(&state, "viewer", false).unwrap());
+    assert_eq!(
+        request(&router, &video, Some(&viewer.access_token), None)
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
 
     let full = request(&router, &video, Some(&admin.access_token), None).await;
     assert_eq!(full.status(), StatusCode::OK);

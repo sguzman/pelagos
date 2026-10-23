@@ -33,6 +33,7 @@ pub struct User {
 pub struct UserPolicy {
     pub is_administrator: bool,
     pub is_disabled: bool,
+    pub enable_content_downloading: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -118,6 +119,9 @@ fn database(state_dir: &Path) -> Result<Connection> {
              user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
              root TEXT NOT NULL,
              PRIMARY KEY(user_id, root)
+         );
+         CREATE TABLE IF NOT EXISTS pelagos_download_grants(
+             user_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE
          );",
     )?;
     Ok(db)
@@ -156,6 +160,7 @@ fn user_from_row(row: &rusqlite::Row<'_>, server_id: &str) -> rusqlite::Result<U
         policy: UserPolicy {
             is_administrator: row.get::<_, bool>(2)?,
             is_disabled: row.get::<_, bool>(3)?,
+            enable_content_downloading: row.get::<_, bool>(4)?,
         },
     })
 }
@@ -184,6 +189,7 @@ pub fn create_user(state_dir: &Path, name: &str, password: &str) -> Result<User>
         policy: UserPolicy {
             is_administrator: existing == 0,
             is_disabled: false,
+            enable_content_downloading: existing == 0,
         },
     })
 }
@@ -246,7 +252,11 @@ pub fn authenticate_with_client(
         params![digest.as_slice(), id],
     )?;
     let user = tx.query_row(
-        "SELECT id,username,is_admin,disabled FROM pelagos_users WHERE id=?1",
+        "SELECT u.id,u.username,u.is_admin,u.disabled,
+                (u.is_admin=1 OR EXISTS(
+                   SELECT 1 FROM pelagos_download_grants d WHERE d.user_id=u.id
+                ))
+         FROM pelagos_users u WHERE u.id=?1",
         params![id],
         |row| user_from_row(row, server_id),
     )?;
@@ -296,7 +306,11 @@ pub fn identify(state_dir: &Path, token: &str, server_id: &str) -> Result<Option
     let digest = digest_token(token);
     let user = db
         .query_row(
-            "SELECT u.id,u.username,u.is_admin,u.disabled FROM pelagos_tokens t
+            "SELECT u.id,u.username,u.is_admin,u.disabled,
+                (u.is_admin=1 OR EXISTS(
+                   SELECT 1 FROM pelagos_download_grants d WHERE d.user_id=u.id
+                ))
+         FROM pelagos_tokens t
              JOIN pelagos_users u ON u.id=t.user_id
              WHERE t.digest=?1 AND u.disabled=0",
             params![digest.as_slice()],
@@ -358,6 +372,46 @@ pub fn list_sessions(
         },
     )?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Persist a separate download permission. A readable library alone never
+/// authorizes downloading; the administrator role always retains its implicit
+/// local download grant. Changes apply to already-issued tokens immediately.
+pub fn set_content_download_permission(
+    state_dir: &Path,
+    username: &str,
+    enabled: bool,
+) -> Result<bool> {
+    if !valid_username(username) {
+        return Err("invalid username".into());
+    }
+    let db = database(state_dir)?;
+    let (user_id, is_admin): (String, bool) = db
+        .query_row(
+            "SELECT id,is_admin FROM pelagos_users WHERE username_key=?1 AND disabled=0",
+            params![username.to_lowercase()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .ok_or("user does not exist or is disabled")?;
+    if is_admin {
+        if !enabled {
+            return Err("administrator's implicit download permission cannot be revoked".into());
+        }
+        return Ok(false);
+    }
+    let changed = if enabled {
+        db.execute(
+            "INSERT OR IGNORE INTO pelagos_download_grants(user_id) VALUES (?1)",
+            params![user_id],
+        )?
+    } else {
+        db.execute(
+            "DELETE FROM pelagos_download_grants WHERE user_id=?1",
+            params![user_id],
+        )?
+    };
+    Ok(changed != 0)
 }
 
 /// Local CLI administration: grant one explicitly named user read access to one
