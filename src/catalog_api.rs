@@ -121,13 +121,15 @@ async fn root_for_user(
     query_user: Option<String>,
     path_user: Option<String>,
 ) -> Result<Json<ItemDto>, StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     if query_user.as_deref().is_some_and(|id| id != user.id)
         || path_user.as_deref().is_some_and(|id| id != user.id)
     {
         return Err(StatusCode::FORBIDDEN);
     }
-    Ok(Json(virtual_root(state.server_id())))
+    let mut root = virtual_root(state.server_id());
+    attach_user_data(&state, headers, std::slice::from_mut(&mut root)).await?;
+    Ok(Json(root))
 }
 
 async fn items_root(
