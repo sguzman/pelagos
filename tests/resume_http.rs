@@ -96,7 +96,7 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     assert!(items.iter().any(|item| item["Id"] == beta));
     assert!(items.iter().any(|item| item["Id"] == song));
     assert!(!items.iter().any(|item| item["Id"] == picture || item["Id"] == secret));
-    assert!(items.iter().all(|item| item["UserData"]["PlaybackPositionTicks"] > 0));
+    assert!(items.iter().all(|item| item["UserData"]["PlaybackPositionTicks"].as_i64().unwrap() > 0));
     assert!(items.iter().all(|item| item["UserData"]["LastPlayedDate"].is_string()));
 
     let only_audio = json(
@@ -188,7 +188,7 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(&played_url)
+                .uri(played_url.as_str())
                 .header("X-Emby-Token", &viewer.access_token)
                 .body(Body::empty())
                 .unwrap(),
