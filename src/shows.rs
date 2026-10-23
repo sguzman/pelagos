@@ -194,6 +194,9 @@ struct NextUpQuery {
 /// A structured key avoids incorrect text ordering between ".500Z" and "Z".
 fn utc_date_key(raw: &str) -> Option<(u16, u8, u8, u8, u8, u8, u32)> {
     let body = raw.strip_suffix('Z')?;
+    if !body.is_ascii() {
+        return None;
+    }
     if body.len() < 19 || &body[4..5] != "-" || &body[7..8] != "-"
         || &body[10..11] != "T" || &body[13..14] != ":" || &body[16..17] != ":"
     {
@@ -442,7 +445,7 @@ mod next_up_date_tests {
         );
         assert!(utc_date_key("2024-02-29T23:59:59.999999999Z").is_some());
         for bad in [
-            "", "2026-02-29T00:00:00Z", "2026-13-01T00:00:00Z",
+            "", "2026-02-29T00:00:00Z", "2026-01-01T☃:00:00Z", "2026-13-01T00:00:00Z",
             "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z",
             "2026-01-01T00:00:00.1234567890Z", "2026-01-01",
             "2026-01-01T00:00:00+01:00",
