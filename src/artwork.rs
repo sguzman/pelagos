@@ -13,7 +13,7 @@ use axum::{
     extract::{Path as RoutePath, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE},
+        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, IF_NONE_MATCH},
     },
     response::Response,
     routing::get,
@@ -175,10 +175,9 @@ fn supported_mime(path: &Path) -> Option<&'static str> {
     }
 }
 
-/// A change of size or mtime invalidates the advertised artwork tag.
-pub(crate) fn image_tag(image: &catalog::CatalogFile) -> Option<String> {
-    let path = Path::new(&image.root).join(&image.relative_path);
-    let metadata = std::fs::symlink_metadata(&path).ok()?;
+/// Derive a validator from an actual file's metadata. Reuse this for both
+/// catalog tags and the descriptor-backed image response.
+fn tag_from_metadata(image: &catalog::CatalogFile, metadata: &std::fs::Metadata) -> Option<String> {
     if !metadata.file_type().is_file() || metadata.len() > MAX_ARTWORK_BYTES {
         return None;
     }
@@ -196,6 +195,13 @@ pub(crate) fn image_tag(image: &catalog::CatalogFile) -> Option<String> {
             metadata.len()
         ),
     ))
+}
+
+/// A change of size or mtime invalidates the advertised artwork tag.
+pub(crate) fn image_tag(image: &catalog::CatalogFile) -> Option<String> {
+    let path = Path::new(&image.root).join(&image.relative_path);
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    tag_from_metadata(image, &metadata)
 }
 
 async fn selected_image(
@@ -230,12 +236,20 @@ async fn image_response(
     if image_type != "Primary" {
         return Err(StatusCode::NOT_FOUND);
     }
+    let conditional = headers
+        .get(IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
     let selected = selected_image(state, headers, item_id).await?;
-    let (opened, path, size) = tokio::task::spawn_blocking(move || {
-        streaming::open_confined(
+    let (opened, path, size, etag) = tokio::task::spawn_blocking(move || {
+        let (opened, path, size) = streaming::open_confined(
             Path::new(&selected.root),
             Path::new(&selected.relative_path),
-        )
+        )?;
+        // Validate against the already opened confined descriptor, never an
+        // unverified path after an image was swapped or symlinked.
+        let tag = opened.metadata().ok().and_then(|meta| tag_from_metadata(&selected, &meta));
+        Ok::<_, StatusCode>((opened, path, size, tag.map(|tag| format!("\"{tag}\""))))
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
@@ -243,6 +257,21 @@ async fn image_response(
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
     }
     let mime = supported_mime(&path).ok_or(StatusCode::UNSUPPORTED_MEDIA_TYPE)?;
+    if let (Some(request), Some(etag)) = (conditional.as_deref(), etag.as_deref())
+        && request.split(',').any(|candidate| candidate.trim() == etag)
+    {
+        let mut response = Response::new(Body::empty());
+        *response.status_mut() = StatusCode::NOT_MODIFIED;
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("private, no-cache"),
+        );
+        response.headers_mut().insert(
+            ETAG,
+            HeaderValue::from_str(etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+        return Ok(response);
+    }
     let mut response = if head_only {
         Response::new(Body::empty())
     } else {
@@ -259,8 +288,14 @@ async fn image_response(
     // Keep image validators honest if a user edits the original artwork.
     response.headers_mut().insert(
         CACHE_CONTROL,
-        HeaderValue::from_static("private, max-age=0"),
+        HeaderValue::from_static("private, no-cache"),
     );
+    if let Some(etag) = etag {
+        response.headers_mut().insert(
+            ETAG,
+            HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+    }
     Ok(response)
 }
 
