@@ -4,7 +4,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     routing::{get, post},
 };
@@ -27,6 +27,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/AuthenticateByName", post(password_login))
         .route("/Users/Me", get(me))
         .route("/Sessions/Logout", post(logout))
+        .route("/Sessions", get(sessions))
         // Public account listing intentionally discloses no usernames yet.
         .route("/Users/Public", get(public_users))
 }
@@ -204,6 +205,37 @@ async fn logout(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionQuery {
+    device_id: Option<String>,
+    active_within_seconds: Option<u32>,
+    controllable_by_user_id: Option<String>,
+}
+
+/// The current session index is persistent, not yet Jellyfin's activity/remote
+/// control model. Refuse those unimplemented filters instead of pretending parity.
+async fn sessions(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<SessionQuery>,
+) -> Result<Json<Vec<auth::SessionInfo>>, StatusCode> {
+    let (user, _) = authenticated(state.clone(), headers).await?;
+    if query.active_within_seconds.is_some() || query.controllable_by_user_id.is_some() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let dir = state_dir(&state)?;
+    let server_id = state.server_id().to_owned();
+    let device = query.device_id;
+    let found = tokio::task::spawn_blocking(move || {
+        auth::list_sessions(&dir, &user, &server_id, device.as_deref())
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(found))
 }
 
 #[cfg(test)]
