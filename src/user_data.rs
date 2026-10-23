@@ -1,0 +1,296 @@
+//! Pelagos-owned, per-user playback flags. No access to Jellyfin's database.
+//! This is an initial Jellyfin v12.3 user-data subset, not a complete sync engine.
+use std::{path::{Path, PathBuf}, sync::Arc};
+
+use axum::{
+    Json, Router,
+    extract::{Path as RoutePath, Query, State},
+    http::{HeaderMap, StatusCode},
+    routing::{delete, post},
+};
+use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
+
+use crate::{app::AppState, auth_api, catalog_api};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct UserItemData {
+    pub key: String,
+    pub item_id: String,
+    pub played: bool,
+    pub play_count: i64,
+    pub playback_position_ticks: i64,
+    pub is_favorite: bool,
+    pub played_percentage: Option<f64>,
+    pub unplayed_item_count: Option<i64>,
+    pub likes: Option<bool>,
+    pub rating: Option<f64>,
+    pub last_played_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Flag {
+    Played(bool),
+    Favorite(bool),
+}
+
+fn open_db(state_dir: &Path) -> Result<Connection> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700).create(state_dir)?;
+    }
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(state_dir)?;
+    let path = state_dir.join("pelagos-user-data.sqlite3");
+    let db = Connection::open(&path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    db.execute_batch(
+        "PRAGMA busy_timeout=5000;
+         CREATE TABLE IF NOT EXISTS item_user_data (
+            user_id TEXT NOT NULL,
+            item_id TEXT NOT NULL,
+            played INTEGER NOT NULL DEFAULT 0 CHECK(played IN (0,1)),
+            play_count INTEGER NOT NULL DEFAULT 0 CHECK(play_count >= 0),
+            position_ticks INTEGER NOT NULL DEFAULT 0 CHECK(position_ticks >= 0),
+            favorite INTEGER NOT NULL DEFAULT 0 CHECK(favorite IN (0,1)),
+            last_played_utc TEXT,
+            PRIMARY KEY(user_id, item_id)
+         );",
+    )?;
+    Ok(db)
+}
+
+fn user_item(item_id: &str) -> UserItemData {
+    UserItemData {
+        key: item_id.to_owned(),
+        item_id: item_id.to_owned(),
+        played: false,
+        play_count: 0,
+        playback_position_ticks: 0,
+        is_favorite: false,
+        played_percentage: None,
+        unplayed_item_count: None,
+        likes: None,
+        rating: None,
+        last_played_date: None,
+    }
+}
+
+pub fn read(state_dir: &Path, user_id: &str, item_id: &str) -> Result<UserItemData> {
+    let db = open_db(state_dir)?;
+    let row = db
+        .query_row(
+            "SELECT played,play_count,position_ticks,favorite,last_played_utc
+             FROM item_user_data WHERE user_id=?1 AND item_id=?2",
+            params![user_id, item_id],
+            |r| {
+                Ok((
+                    r.get::<_, bool>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, bool>(3)?,
+                    r.get::<_, Option<String>>(4)?,
+                ))
+            },
+        )
+        .optional()?;
+    let mut data = user_item(item_id);
+    if let Some((played, count, ticks, favorite, last_played)) = row {
+        data.played = played;
+        data.play_count = count;
+        data.playback_position_ticks = ticks;
+        data.is_favorite = favorite;
+        data.last_played_date = last_played;
+    }
+    Ok(data)
+}
+
+fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Result<UserItemData> {
+    let mut db = open_db(state_dir)?;
+    let tx = db.transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO item_user_data(user_id,item_id) VALUES(?1,?2)",
+        params![user_id, item_id],
+    )?;
+    match flag {
+        Flag::Played(true) => {
+            tx.execute(
+                "UPDATE item_user_data SET
+                 play_count = CASE WHEN played = 0 THEN play_count + 1 ELSE play_count END,
+                 played = 1,
+                 position_ticks = 0,
+                 last_played_utc = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                 WHERE user_id=?1 AND item_id=?2",
+                params![user_id, item_id],
+            )?;
+        }
+        Flag::Played(false) => {
+            tx.execute(
+                "UPDATE item_user_data SET played=0,position_ticks=0
+                 WHERE user_id=?1 AND item_id=?2",
+                params![user_id, item_id],
+            )?;
+        }
+        Flag::Favorite(value) => {
+            tx.execute(
+                "UPDATE item_user_data SET favorite=?3
+                 WHERE user_id=?1 AND item_id=?2",
+                params![user_id, item_id, value],
+            )?;
+        }
+    }
+    tx.commit()?;
+    read(state_dir, user_id, item_id)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UserDataQuery {
+    user_id: Option<String>,
+    date_played: Option<String>,
+}
+
+async fn change(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    item_id: String,
+    query: UserDataQuery,
+    flag: Flag,
+    legacy_user: Option<String>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id)
+        || legacy_user.as_deref().is_some_and(|id| id != user.id)
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.date_played.is_some() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    // Authorize the indexed node before creating persistent personal state.
+    if !catalog_api::accessible_nodes(state.clone(), headers)
+        .await?
+        .iter()
+        .any(|item| item.id == item_id)
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let user_id = user.id;
+    let result = tokio::task::spawn_blocking(move || set_flag(&dir, &user_id, &item_id, flag))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(result))
+}
+
+async fn played(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataQuery>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    change(state, headers, item_id, query, Flag::Played(true), None).await
+}
+
+async fn unplayed(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataQuery>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    change(state, headers, item_id, query, Flag::Played(false), None).await
+}
+
+async fn favorite(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataQuery>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    change(state, headers, item_id, query, Flag::Favorite(true), None).await
+}
+
+async fn unfavorite(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataQuery>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    change(state, headers, item_id, query, Flag::Favorite(false), None).await
+}
+
+async fn legacy(
+    State(state): State<Arc<AppState>>,
+    RoutePath((user_id, item_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataQuery>,
+    operation: Flag,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    change(state, headers, item_id, query, operation, Some(user_id)).await
+}
+
+macro_rules! legacy_handler {
+    ($name:ident, $flag:expr) => {
+        async fn $name(
+            State(state): State<Arc<AppState>>,
+            RoutePath((user_id, item_id)): RoutePath<(String, String)>,
+            headers: HeaderMap,
+            Query(query): Query<UserDataQuery>,
+        ) -> std::result::Result<Json<UserItemData>, StatusCode> {
+            legacy(State(state), RoutePath((user_id, item_id)), headers, Query(query), $flag).await
+        }
+    };
+}
+legacy_handler!(played_legacy, Flag::Played(true));
+legacy_handler!(unplayed_legacy, Flag::Played(false));
+legacy_handler!(favorite_legacy, Flag::Favorite(true));
+legacy_handler!(unfavorite_legacy, Flag::Favorite(false));
+
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/UserPlayedItems/{item_id}", post(played).delete(unplayed))
+        .route(
+            "/Users/{user_id}/PlayedItems/{item_id}",
+            post(played_legacy).delete(unplayed_legacy),
+        )
+        .route(
+            "/UserFavoriteItems/{item_id}",
+            post(favorite).delete(unfavorite),
+        )
+        .route(
+            "/Users/{user_id}/FavoriteItems/{item_id}",
+            post(favorite_legacy).delete(unfavorite_legacy),
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flags_persist_separately_per_user_and_play_count_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap();
+        assert!(a.played);
+        assert_eq!(a.play_count, 1);
+        assert_eq!(read(dir.path(), "a", "item").unwrap().play_count, 1);
+        assert_eq!(set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap().play_count, 1);
+        assert!(set_flag(dir.path(), "a", "item", Flag::Favorite(true)).unwrap().is_favorite);
+        assert_eq!(read(dir.path(), "b", "item").unwrap().play_count, 0);
+        assert!(!read(dir.path(), "b", "item").unwrap().is_favorite);
+        let b = set_flag(dir.path(), "a", "item", Flag::Played(false)).unwrap();
+        assert!(!b.played);
+        assert_eq!(b.play_count, 1);
+        assert_eq!(set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap().play_count, 2);
+    }
+}

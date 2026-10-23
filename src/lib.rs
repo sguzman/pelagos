@@ -12,3 +12,4 @@ pub mod probe;
 pub(crate) mod query_filters;
 pub mod search;
 pub mod streaming;
+pub mod user_data;
