@@ -1476,6 +1476,87 @@
       ]
     },
     {
+      "controller": "PersonsController",
+      "source_path": "Jellyfin.Api/Controllers/PersonsController.cs",
+      "upstream_blob_sha": "51d4081ecfc167188da50ddddea25845480d3ee6",
+      "route_prefix": "Persons",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Persons",
+          "source_line": 72
+        },
+        {
+          "method": "GET",
+          "path": "/Persons/{name}",
+          "source_line": 151
+        }
+      ]
+    },
+    {
+      "controller": "PlaylistsController",
+      "source_path": "Jellyfin.Api/Controllers/PlaylistsController.cs",
+      "upstream_blob_sha": "9bfe0f2570d551b3f5b2702564daa46f5bc30324",
+      "route_prefix": "Playlists",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/Playlists",
+          "source_line": 76
+        },
+        {
+          "method": "POST",
+          "path": "/Playlists/{playlistId}",
+          "source_line": 117
+        },
+        {
+          "method": "GET",
+          "path": "/Playlists/{playlistId}",
+          "source_line": 163
+        },
+        {
+          "method": "GET",
+          "path": "/Playlists/{playlistId}/Users",
+          "source_line": 195
+        },
+        {
+          "method": "GET",
+          "path": "/Playlists/{playlistId}/Users/{userId}",
+          "source_line": 226
+        },
+        {
+          "method": "POST",
+          "path": "/Playlists/{playlistId}/Users/{userId}",
+          "source_line": 277
+        },
+        {
+          "method": "DELETE",
+          "path": "/Playlists/{playlistId}/Users/{userId}",
+          "source_line": 323
+        },
+        {
+          "method": "POST",
+          "path": "/Playlists/{playlistId}/Items",
+          "source_line": 369
+        },
+        {
+          "method": "POST",
+          "path": "/Playlists/{playlistId}/Items/{itemId}/Move/{newIndex}",
+          "source_line": 408
+        },
+        {
+          "method": "DELETE",
+          "path": "/Playlists/{playlistId}/Items",
+          "source_line": 446
+        },
+        {
+          "method": "GET",
+          "path": "/Playlists/{playlistId}/Items",
+          "source_line": 509
+        }
+      ]
+    },
+    {
       "controller": "PlaystateController",
       "source_path": "Jellyfin.Api/Controllers/PlaystateController.cs",
       "upstream_blob_sha": "4ff1eef4131d786ac709402e5df8b5d43e12406b",
@@ -1554,6 +1635,59 @@
       ]
     },
     {
+      "controller": "PluginsController",
+      "source_path": "Jellyfin.Api/Controllers/PluginsController.cs",
+      "upstream_blob_sha": "79b8b60cb76afa2a8b55a1cf31743bfd51fde9d0",
+      "route_prefix": "Plugins",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Plugins",
+          "source_line": 52
+        },
+        {
+          "method": "POST",
+          "path": "/Plugins/{pluginId}/{version}/Enable",
+          "source_line": 69
+        },
+        {
+          "method": "POST",
+          "path": "/Plugins/{pluginId}/{version}/Disable",
+          "source_line": 92
+        },
+        {
+          "method": "DELETE",
+          "path": "/Plugins/{pluginId}/{version}",
+          "source_line": 115
+        },
+        {
+          "method": "DELETE",
+          "path": "/Plugins/{pluginId}",
+          "source_line": 137
+        },
+        {
+          "method": "GET",
+          "path": "/Plugins/{pluginId}/Configuration",
+          "source_line": 164
+        },
+        {
+          "method": "POST",
+          "path": "/Plugins/{pluginId}/Configuration",
+          "source_line": 188
+        },
+        {
+          "method": "GET",
+          "path": "/Plugins/{pluginId}/{version}/Image",
+          "source_line": 217
+        },
+        {
+          "method": "POST",
+          "path": "/Plugins/{pluginId}/Manifest",
+          "source_line": 268
+        }
+      ]
+    },
+    {
       "controller": "QuickConnectController",
       "source_path": "Jellyfin.Api/Controllers/QuickConnectController.cs",
       "upstream_blob_sha": "5c7b38e137a4d5741df82a98d253880b68a642ee",
@@ -1578,6 +1712,75 @@
           "method": "POST",
           "path": "/QuickConnect/Authorize",
           "source_line": 104
+        }
+      ]
+    },
+    {
+      "controller": "RemoteImageController",
+      "source_path": "Jellyfin.Api/Controllers/RemoteImageController.cs",
+      "upstream_blob_sha": "a476005cbc6745bb5eba70733bff5dcec20551f6",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/RemoteImages",
+          "source_line": 62
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/RemoteImages/Providers",
+          "source_line": 127
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/RemoteImages/Download",
+          "source_line": 151
+        }
+      ]
+    },
+    {
+      "controller": "ScheduledTasksController",
+      "source_path": "Jellyfin.Api/Controllers/ScheduledTasksController.cs",
+      "upstream_blob_sha": "f122d0f5e5a07cc04788990dfe69ea2b8c3c40b1",
+      "route_prefix": "ScheduledTasks",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/ScheduledTasks",
+          "source_line": 38
+        },
+        {
+          "method": "GET",
+          "path": "/ScheduledTasks/{taskId}",
+          "source_line": 72
+        },
+        {
+          "method": "POST",
+          "path": "/ScheduledTasks/Running/{taskId}",
+          "source_line": 95
+        },
+        {
+          "method": "DELETE",
+          "path": "/ScheduledTasks/Running/{taskId}",
+          "source_line": 119
+        },
+        {
+          "method": "POST",
+          "path": "/ScheduledTasks/{taskId}/Triggers",
+          "source_line": 144
+        }
+      ]
+    },
+    {
+      "controller": "SearchController",
+      "source_path": "Jellyfin.Api/Controllers/SearchController.cs",
+      "upstream_blob_sha": "b03cb88e758c42016da431edfae28e2f33a4c07f",
+      "route_prefix": "Search/Hints",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Search/Hints",
+          "source_line": 80
         }
       ]
     },
@@ -1666,6 +1869,143 @@
           "method": "GET",
           "path": "/Auth/PasswordResetProviders",
           "source_line": 455
+        }
+      ]
+    },
+    {
+      "controller": "StartupController",
+      "source_path": "Jellyfin.Api/Controllers/StartupController.cs",
+      "upstream_blob_sha": "47c8f2124140409f894fdcee370dc3672f29d0a7",
+      "route_prefix": "Startup",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/Startup/Complete",
+          "source_line": 40
+        },
+        {
+          "method": "GET",
+          "path": "/Startup/Configuration",
+          "source_line": 54
+        },
+        {
+          "method": "POST",
+          "path": "/Startup/Configuration",
+          "source_line": 74
+        },
+        {
+          "method": "POST",
+          "path": "/Startup/RemoteAccess",
+          "source_line": 93
+        },
+        {
+          "method": "GET",
+          "path": "/Startup/User",
+          "source_line": 109
+        },
+        {
+          "method": "GET",
+          "path": "/Startup/FirstUser",
+          "source_line": 110
+        },
+        {
+          "method": "POST",
+          "path": "/Startup/User",
+          "source_line": 133
+        }
+      ]
+    },
+    {
+      "controller": "StudiosController",
+      "source_path": "Jellyfin.Api/Controllers/StudiosController.cs",
+      "upstream_blob_sha": "5bac85085917abd09069dc0c83290f5236a06c36",
+      "route_prefix": "Studios",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Studios",
+          "source_line": 70
+        },
+        {
+          "method": "GET",
+          "path": "/Studios/{name}",
+          "source_line": 145
+        }
+      ]
+    },
+    {
+      "controller": "SubtitleController",
+      "source_path": "Jellyfin.Api/Controllers/SubtitleController.cs",
+      "upstream_blob_sha": "6721cd6c7e21454934b5161713e6b56ed8c8fdd2",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "DELETE",
+          "path": "/Videos/{itemId}/Subtitles/{index}",
+          "source_line": 91
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/RemoteSearch/Subtitles/{language}",
+          "source_line": 118
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/RemoteSearch/Subtitles/{subtitleId}",
+          "source_line": 144
+        },
+        {
+          "method": "GET",
+          "path": "/Providers/Subtitles/Subtitles/{subtitleId}",
+          "source_line": 179
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{routeItemId}/{routeMediaSourceId}/Subtitles/{routeIndex}/Stream.{routeFormat}",
+          "source_line": 208
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{routeItemId}/{routeMediaSourceId}/Subtitles/{routeIndex}/{routeStartPositionTicks}/Stream.{routeFormat}",
+          "source_line": 294
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/subtitles.m3u8",
+          "source_line": 337
+        },
+        {
+          "method": "POST",
+          "path": "/Videos/{itemId}/Subtitles",
+          "source_line": 419
+        },
+        {
+          "method": "GET",
+          "path": "/FallbackFont/Fonts",
+          "source_line": 536
+        },
+        {
+          "method": "GET",
+          "path": "/FallbackFont/Fonts/{name}",
+          "source_line": 587
+        }
+      ]
+    },
+    {
+      "controller": "SuggestionsController",
+      "source_path": "Jellyfin.Api/Controllers/SuggestionsController.cs",
+      "upstream_blob_sha": "9c5515dd9239c192836c4dbbf77f0bd8660456ff",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/Suggestions",
+          "source_line": 60
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Suggestions",
+          "source_line": 114
         }
       ]
     },
