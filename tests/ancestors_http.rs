@@ -65,7 +65,10 @@ async fn ancestors_follow_immediate_parent_first_without_exposing_other_librarie
         .unwrap();
     let path = format!("/Items/{episode_id}/Ancestors");
 
-    assert_eq!(get(&router, &path, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        get(&router, &path, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         get(&router, &path, Some(&viewer.access_token))
             .await
@@ -75,7 +78,10 @@ async fn ancestors_follow_immediate_parent_first_without_exposing_other_librarie
     assert!(auth::grant_library(&state, "viewer", &allowed).unwrap());
     let parents = json(get(&router, &path, Some(&viewer.access_token)).await).await;
     let parents = parents.as_array().unwrap();
-    let names: Vec<_> = parents.iter().map(|item| item["Name"].as_str().unwrap()).collect();
+    let names: Vec<_> = parents
+        .iter()
+        .map(|item| item["Name"].as_str().unwrap())
+        .collect();
     assert_eq!(names, ["Season One", "Show", "Allowed"]);
     assert_eq!(parents[0]["ParentId"], parents[1]["Id"]);
     assert_eq!(parents[1]["ParentId"], parents[2]["Id"]);
