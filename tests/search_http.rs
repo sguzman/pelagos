@@ -40,7 +40,8 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     std::fs::create_dir(&private).unwrap();
     std::fs::write(public.join("Film A.mp4"), b"film").unwrap();
     std::fs::write(public.join("Film B.mkv"), b"film").unwrap();
-    std::fs::write(public.join("Cover.jpg"), b"image").unwrap();
+    std::fs::create_dir(public.join("Photos")).unwrap();
+    std::fs::write(public.join("Photos/Cover.jpg"), b"image").unwrap();
     std::fs::write(private.join("Secret Film.mp4"), b"private").unwrap();
     catalog::index(&state, &public).unwrap();
     catalog::index(&state, &private).unwrap();
