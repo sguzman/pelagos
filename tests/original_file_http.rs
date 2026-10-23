@@ -68,10 +68,7 @@ async fn original_file_is_private_seekable_and_keeps_original_media_bytes() {
     let all = json(call(&router, "GET", "/Items", Some(&admin.access_token), None).await).await;
     let items = all["Items"].as_array().unwrap();
     let item_id = |name: &str| {
-        items
-            .iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        items.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
@@ -105,7 +102,10 @@ async fn original_file_is_private_seekable_and_keeps_original_media_bytes() {
         assert_eq!(full.headers()[header::CONTENT_LENGTH], "11");
         assert_eq!(full.headers()[header::ACCEPT_RANGES], "bytes");
         assert!(full.headers().get(header::CONTENT_DISPOSITION).is_none());
-        assert_eq!(to_bytes(full.into_body(), 64).await.unwrap().as_ref(), bytes);
+        assert_eq!(
+            to_bytes(full.into_body(), 64).await.unwrap().as_ref(),
+            bytes
+        );
 
         let partial = call(
             &router,
