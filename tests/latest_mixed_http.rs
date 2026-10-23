@@ -51,7 +51,11 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     ] {
         std::fs::write(root.join(path), content).unwrap();
     }
-    std::fs::write(private.join("Hidden (2025)/Hidden (2025).mkv"), b"secret").unwrap();
+    std::fs::write(
+        private.join("Hidden (2025)/Hidden (2025).mkv"),
+        b"secret",
+    )
+    .unwrap();
     catalog::index(&state, &root).unwrap();
     catalog::index(&state, &private).unwrap();
     let db = rusqlite::Connection::open(state.join("pelagos.sqlite3")).unwrap();
@@ -115,7 +119,11 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     assert!(mixed[2].get("ChildCount").is_none());
     assert_eq!(mixed[3]["Name"], "Loose");
     assert_eq!(mixed[3]["Type"], "Video");
-    assert!(mixed.iter().all(|item| item["Name"] != "Hidden"));
+    assert!(mixed
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|item| item["Name"] != "Hidden"));
 
     let only_two = json(
         call(
