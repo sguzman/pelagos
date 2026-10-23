@@ -83,7 +83,10 @@ async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     let token = authenticated["AccessToken"].as_str().unwrap().to_owned();
     assert_eq!(token.len(), 64);
     assert_eq!(authenticated["SessionInfo"]["UserName"], "viewer");
-    assert_eq!(authenticated["SessionInfo"]["UserId"], authenticated["User"]["Id"]);
+    assert_eq!(
+        authenticated["SessionInfo"]["UserId"],
+        authenticated["User"]["Id"]
+    );
     assert_eq!(authenticated["SessionInfo"]["IsActive"], true);
     assert_eq!(authenticated["SessionInfo"]["SupportsRemoteControl"], false);
 
@@ -115,8 +118,7 @@ async fn jellyfin_client_header_survives_login_session_response() {
         "server".to_owned(),
         state.path().to_path_buf(),
     )));
-    let header =
-        r#"MediaBrowser Client="Jellyfin Android TV", Device="Living, Room", DeviceId="tv-test", Version="2.0""#;
+    let header = r#"MediaBrowser Client="Jellyfin Android TV", Device="Living, Room", DeviceId="tv-test", Version="2.0""#;
     let response = router
         .oneshot(
             Request::builder()
