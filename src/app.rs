@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::{
     Json, Router,
@@ -14,6 +17,7 @@ use crate::{auth_api, catalog_api, playback, streaming};
 pub struct AppState {
     server_id: String,
     auth_dir: Option<PathBuf>,
+    probe_executable: PathBuf,
 }
 
 impl AppState {
@@ -21,6 +25,7 @@ impl AppState {
         Self {
             server_id,
             auth_dir: None,
+            probe_executable: PathBuf::from("ffprobe"),
         }
     }
 
@@ -28,7 +33,19 @@ impl AppState {
         Self {
             server_id,
             auth_dir: Some(auth_dir),
+            probe_executable: PathBuf::from("ffprobe"),
         }
+    }
+
+    /// Override the external probe binary for integration fixtures or deployments.
+    /// This is local Rust configuration, not user-controlled HTTP input.
+    pub fn with_probe_executable(mut self, executable: PathBuf) -> Self {
+        self.probe_executable = executable;
+        self
+    }
+
+    pub fn probe_executable(&self) -> &Path {
+        &self.probe_executable
     }
 
     pub fn auth_dir(&self) -> Option<PathBuf> {

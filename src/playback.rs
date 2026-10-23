@@ -176,7 +176,7 @@ async fn playback_info(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let file = media_file(&state, item_id.clone()).await?;
-    let probed = probe::probe(&file, Path::new("ffprobe"), probe::DEFAULT_TIMEOUT)
+    let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(PlaybackInfo {
