@@ -1935,7 +1935,29 @@
                   "evidence": "GitHub Actions 40037734907: complete Rust unit/integration suite, formatting, Clippy, evidence-backed roadmap and pinned contract guards passed"
                 },
                 {
-                  "title": "Full inherited theme handling, expanded extras and unmodified Jellyfin clients pass differential and production acceptance",
+                  "title": "Full pinned Jellyfin extras matching, provider metadata and unmodified client acceptance are demonstrated",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T241",
+              "emoji": "🧬",
+              "name": "Permission-scoped inherited theme song and backdrop owner traversal",
+              "checks": [
+                {
+                  "title": "Implement per-kind pinned inheritFromParent traversal through authorized indexed parents with truthful separate ThemeSongs/ThemeVideos OwnerIds and loop protection",
+                  "passed": true,
+                  "evidence": "src/theme.rs; Jellyfin v12.3 LibraryController.GetThemeSongs/GetThemeVideos parent fallback"
+                },
+                {
+                  "title": "Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations",
                   "passed": false
                 }
               ],

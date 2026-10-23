@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 33%` across 145 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 33%` across 146 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -389,7 +389,11 @@
 - 🎵 **T240 — Scoped Jellyfin theme-media responses with pinned named local extras** — `███████░░░ 67%`
   - [x] Implement permission-scoped ThemeSongs, ThemeVideos, and ThemeMedia DTOs with recognized direct theme audio, theme-music and backdrops and pinned SortName ordering — src/theme.rs; src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController, BaseItem.GetThemeSongs/GetThemeVideos and Emby.Naming NamingOptions.VideoExtraRules
   - [x] Rust HTTP CI covers empty and real theme-media DTOs, indexed audio/video playback, sort order, cross-user checks, library grants/revocation, restart and unsupported inheritance — GitHub Actions 40037734907: complete Rust unit/integration suite, formatting, Clippy, evidence-backed roadmap and pinned contract guards passed
-  - [ ] Full inherited theme handling, expanded extras and unmodified Jellyfin clients pass differential and production acceptance
+  - [ ] Full pinned Jellyfin extras matching, provider metadata and unmodified client acceptance are demonstrated
+- 🧬 **T241 — Permission-scoped inherited theme song and backdrop owner traversal** — `███████░░░ 67%`
+  - [x] Implement per-kind pinned inheritFromParent traversal through authorized indexed parents with truthful separate ThemeSongs/ThemeVideos OwnerIds and loop protection — src/theme.rs; Jellyfin v12.3 LibraryController.GetThemeSongs/GetThemeVideos parent fallback
+  - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
+  - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 35%`
 
