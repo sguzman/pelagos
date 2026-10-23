@@ -13,12 +13,7 @@ use pelagos::{
 use serde_json::Value;
 use tower::ServiceExt;
 
-async fn call(
-    router: &Router,
-    method: &str,
-    path: &str,
-    token: Option<&str>,
-) -> Response {
+async fn call(router: &Router, method: &str, path: &str, token: Option<&str>) -> Response {
     let mut request = Request::builder().method(method).uri(path);
     if let Some(token) = token {
         request = request.header("X-Emby-Token", token);
