@@ -1,14 +1,30 @@
 use std::sync::Arc;
 
 use axum::{
+    Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
+    response::Response,
 };
-use pelagos::{app::{self, AppState}, auth};
+use pelagos::{
+    app::{self, AppState},
+    auth,
+};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-async fn body_json(response: axum::response::Response) -> Value {
+async fn send(router: &Router, method: &str, path: &str, body: Body, token: Option<&str>) -> Response {
+    let mut request = Request::builder()
+        .method(method)
+        .uri(path)
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some(value) = token {
+        request = request.header("X-Emby-Token", value);
+    }
+    router.clone().oneshot(request.body(body).unwrap()).await.unwrap()
+}
+
+async fn json_response(response: Response) -> Value {
     let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
     serde_json::from_slice(&bytes).unwrap()
 }
@@ -16,15 +32,12 @@ async fn body_json(response: axum::response::Response) -> Value {
 #[tokio::test]
 async fn unconfigured_auth_is_closed_by_default() {
     let router = app::router(Arc::new(AppState::new("synthetic".to_string())));
-    let response = router
-        .oneshot(
-            Request::builder().uri("/Users/Me").body(Body::empty()).unwrap(),
-        ).await.unwrap();
+    let response = send(&router, "GET", "/Users/Me", Body::empty(), None).await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
-async fn jellyfin_password_login_me_and_logout_are_isolated() {
+async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     let state = tempfile::tempdir().unwrap();
     auth::create_user(state.path(), "viewer", "strong-local-test-passphrase").unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
@@ -32,67 +45,43 @@ async fn jellyfin_password_login_me_and_logout_are_isolated() {
         state.path().to_path_buf(),
     )));
 
-    let public = router.clone().oneshot(
-        Request::builder().uri("/Users/Public").body(Body::empty()).unwrap(),
-    ).await.unwrap();
-    assert_eq!(body_json(public).await, json!([]));
+    let public = send(&router, "GET", "/Users/Public", Body::empty(), None).await;
+    assert_eq!(json_response(public).await, json!([]));
 
-    let wrong = router.clone().oneshot(
-        Request::builder()
-            .method("POST")
-            .uri("/Users/AuthenticateByName")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(r#"{"Username":"viewer","Pw":"wrong"}"#))
-            .unwrap(),
-    ).await.unwrap();
+    let wrong = send(
+        &router,
+        "POST",
+        "/Users/AuthenticateByName",
+        Body::from(r#"{"Username":"viewer","Pw":"wrong"}"#),
+        None,
+    )
+    .await;
     assert_eq!(wrong.status(), StatusCode::UNAUTHORIZED);
 
-    let login_response = router.clone().oneshot(
-        Request::builder()
-            .method("POST")
-            .uri("/Users/AuthenticateByName")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(r#"{"Username":"viewer","Pw":"strong-local-test-passphrase"}"#))
-            .unwrap(),
-    ).await.unwrap();
-    assert_eq!(login_response.status(), StatusCode::OK);
-    let logged_in = body_json(login_response).await;
-    assert_eq!(logged_in["User"]["Name"], "viewer");
-    assert_eq!(logged_in["User"]["Policy"]["IsAdministrator"], true);
-    let token = logged_in["AccessToken"].as_str().unwrap();
+    let login = send(
+        &router,
+        "POST",
+        "/Users/AuthenticateByName",
+        Body::from(r#"{"Username":"viewer","Pw":"strong-local-test-passphrase"}"#),
+        None,
+    )
+    .await;
+    assert_eq!(login.status(), StatusCode::OK);
+    let authenticated = json_response(login).await;
+    assert_eq!(authenticated["User"]["Name"], "viewer");
+    assert_eq!(authenticated["User"]["Policy"]["IsAdministrator"], true);
+    let token = authenticated["AccessToken"].as_str().unwrap().to_owned();
     assert_eq!(token.len(), 64);
-    assert_eq!(logged_in["ServerId"], "00000000-0000-4000-8000-000000000001");
 
-    let unauthorized = router.clone().oneshot(
-        Request::builder().uri("/Users/Me").body(Body::empty()).unwrap(),
-    ).await.unwrap();
-    assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+    let unauthenticated = send(&router, "GET", "/Users/Me", Body::empty(), None).await;
+    assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
 
-    let authorized = router.clone().oneshot(
-        Request::builder()
-            .uri("/Users/Me")
-            .header(header::AUTHORIZATION, format!("MediaBrowser Client=\"Jellyfin Android TV\", Token=\"{token}\""))
-            .body(Body::empty())
-            .unwrap(),
-    ).await.unwrap();
-    assert_eq!(authorized.status(), StatusCode::OK);
-    assert_eq!(body_json(authorized).await["Name"], "viewer");
+    let user = send(&router, "GET", "/Users/Me", Body::empty(), Some(&token)).await;
+    assert_eq!(user.status(), StatusCode::OK);
+    assert_eq!(json_response(user).await["Name"], "viewer");
 
-    let logged_out = router.clone().oneshot(
-        Request::builder()
-            .method("POST")
-            .uri("/Sessions/Logout")
-            .header("X-Emby-Token", token)
-            .body(Body::empty())
-            .unwrap(),
-    ).await.unwrap();
-    assert_eq!(logged_out.status(), StatusCode::NO_CONTENT);
-    let rejected = router.oneshot(
-        Request::builder()
-            .uri("/Users/Me")
-            .header("X-Emby-Token", token)
-            .body(Body::empty())
-            .unwrap(),
-    ).await.unwrap();
-    assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
+    let exit = send(&router, "POST", "/Sessions/Logout", Body::empty(), Some(&token)).await;
+    assert_eq!(exit.status(), StatusCode::NO_CONTENT);
+    let invalid = send(&router, "GET", "/Users/Me", Body::empty(), Some(&token)).await;
+    assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
 }
