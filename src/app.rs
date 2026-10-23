@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use crate::{
     artwork, auth_api, bitrate, catalog_api, latest, playback, playstate, resume, search, shows,
-    streaming, user_data,
+    streaming, theme, user_data,
 };
 
 #[derive(Debug)]
@@ -86,6 +86,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(auth_api::router())
         .merge(catalog_api::router())
         .merge(latest::router())
+        .merge(theme::router())
         .merge(streaming::router())
         .merge(playback::router())
         .merge(search::router())
