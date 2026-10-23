@@ -160,7 +160,7 @@ async fn selected_image(
     item_id: String,
 ) -> Result<catalog::CatalogFile, StatusCode> {
     let (dir, allowed) = auth_api::library_scope(state, headers).await?;
-    let selected = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut files = catalog::all_files(&dir)?;
         let mut roots = catalog::library_roots(&dir)?;
         if let Some(allowed) = allowed {
