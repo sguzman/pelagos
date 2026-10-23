@@ -120,7 +120,7 @@ fn map_item(
     }
 }
 
-fn root_item(root: &str, server_id: &str) -> ItemDto {
+fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto {
     ItemDto {
         id: stable_id(root, ""),
         name: Path::new(root)
@@ -134,7 +134,7 @@ fn root_item(root: &str, server_id: &str) -> ItemDto {
         parent_id: None,
         size: None,
         user_data: None,
-        image_tags: None,
+        image_tags: image_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
 }
 
@@ -155,14 +155,18 @@ fn catalog_nodes(
     for root in roots {
         let root_id = stable_id(&root, "");
         if seen.insert(root_id) {
-            result.push(root_item(&root, server_id));
+            let image_tag = artwork::primary_for_folder(&indexed_images, &root, Path::new(""))
+                .and_then(artwork::image_tag);
+            result.push(root_item(&root, server_id, image_tag));
         }
     }
     for file in files {
         let root = file.root.clone();
         let root_id = stable_id(&root, "");
         if seen.insert(root_id.clone()) {
-            result.push(root_item(&root, server_id));
+            let image_tag = artwork::primary_for_folder(&indexed_images, &root, Path::new(""))
+                .and_then(artwork::image_tag);
+            result.push(root_item(&root, server_id, image_tag));
         }
         let mut parent_id = root_id;
         let mut folder = PathBuf::new();
@@ -182,7 +186,9 @@ fn catalog_nodes(
                         parent_id: Some(parent_id.clone()),
                         size: None,
                         user_data: None,
-                        image_tags: None,
+                        image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
+                            .and_then(artwork::image_tag)
+                            .map(|tag| [("Primary".to_owned(), tag)].into()),
                     });
                 }
                 parent_id = folder_id;
@@ -367,31 +373,10 @@ async fn user_views(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<QueryResult>, StatusCode> {
-    let (dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
-    let mut roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if let Some(granted) = allowed {
-        roots.retain(|root| granted.contains(root));
-    }
-    let items = roots
+    let items = accessible_nodes(state, headers)
+        .await?
         .into_iter()
-        .map(|root| ItemDto {
-            id: stable_id(&root, ""),
-            name: Path::new(&root)
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Library".to_owned()),
-            item_type: "CollectionFolder".to_owned(),
-            media_type: None,
-            is_folder: true,
-            server_id: state.server_id().to_owned(),
-            parent_id: None,
-            size: None,
-            user_data: None,
-            image_tags: None,
-        })
+        .filter(|item| item.item_type == "CollectionFolder")
         .collect::<Vec<_>>();
     Ok(Json(QueryResult {
         total_record_count: items.len(),

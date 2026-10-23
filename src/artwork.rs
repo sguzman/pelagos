@@ -1,6 +1,6 @@
 //! Authenticated, read-only primary artwork from already indexed sidecar files.
 //! No external image providers, image resizing, metadata rewrites or source writes.
-use std::{path::Path, sync::Arc, time::UNIX_EPOCH};
+use std::{path::{Path, PathBuf}, sync::Arc, time::UNIX_EPOCH};
 
 use axum::{
     Router,
@@ -55,6 +55,67 @@ pub(crate) fn primary_for_file<'a>(
     })
 }
 
+/// Folder-level artwork is distinct from media-specific artwork and never
+/// escapes its exact indexed directory.
+pub(crate) fn primary_for_folder<'a>(
+    images: &'a [catalog::CatalogFile],
+    root: &str,
+    directory: &Path,
+) -> Option<&'a catalog::CatalogFile> {
+    for label in ["poster", "folder", "cover"] {
+        if let Some(image) = images.iter().find(|image| {
+            let path = Path::new(&image.relative_path);
+            image.root == root
+                && image.kind == "image"
+                && path.parent().unwrap_or_else(|| Path::new("")) == directory
+                && path
+                    .file_stem()
+                    .is_some_and(|stem| stem.to_string_lossy().eq_ignore_ascii_case(label))
+                && supported_mime(path).is_some()
+        }) {
+            return Some(image);
+        }
+    }
+    None
+}
+
+/// Resolve media, collection, or nested-folder artwork from explicitly indexed
+/// paths. The caller must first apply its authenticated library-root scope.
+fn primary_for_id<'a>(
+    files: &'a [catalog::CatalogFile],
+    roots: &[String],
+    item_id: &str,
+) -> Option<&'a catalog::CatalogFile> {
+    for file in files {
+        if matches!(file.kind.as_str(), "video" | "audio")
+            && catalog_api::stable_id(&file.root, &file.relative_path) == item_id
+        {
+            return primary_for_file(files, file);
+        }
+    }
+    for root in roots {
+        if catalog_api::stable_id(root, "") == item_id {
+            return primary_for_folder(files, root, Path::new(""));
+        }
+    }
+    for file in files {
+        let mut folder = PathBuf::new();
+        if let Some(parent) = Path::new(&file.relative_path).parent() {
+            for component in parent.components() {
+                folder.push(component.as_os_str());
+                if catalog_api::stable_id(
+                    &file.root,
+                    &format!("folder:{}", folder.to_string_lossy()),
+                ) == item_id
+                {
+                    return primary_for_folder(files, &file.root, &folder);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn supported_mime(path: &Path) -> Option<&'static str> {
     match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
         "jpg" | "jpeg" => Some("image/jpeg"),
@@ -100,15 +161,13 @@ async fn image_response(
     }
     let (dir, allowed) = auth_api::library_scope(state, headers).await?;
     let selected = tokio::task::spawn_blocking(move || {
-        let files = catalog::all_files(&dir)?;
-        let media = files.iter().find(|file| {
-            matches!(file.kind.as_str(), "video" | "audio")
-                && allowed
-                    .as_ref()
-                    .is_none_or(|roots| roots.contains(&file.root))
-                && catalog_api::stable_id(&file.root, &file.relative_path) == item_id
-        });
-        let image = media.and_then(|media| primary_for_file(&files, media));
+        let mut files = catalog::all_files(&dir)?;
+        let mut roots = catalog::library_roots(&dir)?;
+        if let Some(allowed) = allowed {
+            files.retain(|file| allowed.contains(&file.root));
+            roots.retain(|root| allowed.contains(root));
+        }
+        let image = primary_for_id(&files, &roots, &item_id);
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(image.cloned())
     })
     .await
@@ -164,11 +223,38 @@ async fn head_primary(
     image_response(state, headers, item_id, image_type, true).await
 }
 
+async fn indexed_primary(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, image_type, index)): RoutePath<(String, String, usize)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    if index != 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    image_response(state, headers, item_id, image_type, false).await
+}
+
+async fn indexed_head_primary(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, image_type, index)): RoutePath<(String, String, usize)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    if index != 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    image_response(state, headers, item_id, image_type, true).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route(
-        "/Items/{item_id}/Images/{image_type}",
-        get(primary).head(head_primary),
-    )
+    Router::new()
+        .route(
+            "/Items/{item_id}/Images/{image_type}",
+            get(primary).head(head_primary),
+        )
+        .route(
+            "/Items/{item_id}/Images/{image_type}/{index}",
+            get(indexed_primary).head(indexed_head_primary),
+        )
 }
 
 #[cfg(test)]
