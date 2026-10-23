@@ -72,7 +72,7 @@
   - [ ] Implement keyboard, responsive, contrast and three-mode browser screenshots
   - [ ] Automated tests and Jellyfin baseline fixture verify keyboard, responsive, contrast and three-mode browser screenshots
   - [ ] Production or real-client acceptance validates keyboard, responsive, contrast and three-mode browser screenshots
-- 📡 **T014 — Pinned HTTP controller attribute inventory** — `███████░░░ 67%`
+- 📡 **T015 — Pinned HTTP controller attribute inventory** — `███████░░░ 67%`
   - [x] Inventory every Jellyfin v12.3 root API controller and HTTP attribute with source SHA — docs/api-contracts.json; docs/API_CONTRACTS.md — 60 pinned controllers, 419 method attributes
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
