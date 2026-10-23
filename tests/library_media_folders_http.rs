@@ -55,30 +55,20 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
         state.clone(),
     )));
     assert_eq!(
-        get(&router, "/Library/MediaFolders", None)
-            .await
-            .status(),
+        get(&router, "/Library/MediaFolders", None).await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        get(
-            &router,
-            "/Library/MediaFolders",
-            Some(&viewer.access_token),
-        )
-        .await
-        .status(),
+        get(&router, "/Library/MediaFolders", Some(&viewer.access_token),)
+            .await
+            .status(),
         StatusCode::FORBIDDEN
     );
     auth::grant_library(&state, "viewer", &movies).unwrap();
     assert_eq!(
-        get(
-            &router,
-            "/Library/MediaFolders",
-            Some(&viewer.access_token),
-        )
-        .await
-        .status(),
+        get(&router, "/Library/MediaFolders", Some(&viewer.access_token),)
+            .await
+            .status(),
         StatusCode::FORBIDDEN
     );
     let folders = json(
@@ -119,13 +109,9 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
     // Admin sees indexed libraries; library grants do not elevate the viewer.
     auth::revoke_library(&state, "viewer", &movies).unwrap();
     assert_eq!(
-        get(
-            &router,
-            "/Library/MediaFolders",
-            Some(&viewer.access_token),
-        )
-        .await
-        .status(),
+        get(&router, "/Library/MediaFolders", Some(&viewer.access_token),)
+            .await
+            .status(),
         StatusCode::FORBIDDEN
     );
 }
