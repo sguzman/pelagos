@@ -159,3 +159,69 @@ async fn indexed_empty_library_remains_browsable_without_phantom_files() {
     let root_item = json(get(&router, &format!("/Items/{id}"), Some(&token)).await).await;
     assert_eq!(root_item["Name"], "EmptyMovies");
 }
+
+
+#[tokio::test]
+async fn item_type_and_media_filters_are_consistent_with_search() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().join("Mixed");
+    let state = fixture.path().join("state");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::write(root.join("Movie.mp4"), b"video").unwrap();
+    std::fs::write(root.join("Song.flac"), b"audio").unwrap();
+    catalog::index(&state, &root).unwrap();
+    auth::create_user(&state, "admin", "secure-mixed-test-password").unwrap();
+    let session = auth::authenticate(&state, "admin", "secure-mixed-test-password", "server")
+        .unwrap()
+        .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let audio = json(
+        get(
+            &router,
+            "/Items?includeItemTypes=Audio",
+            Some(&session.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(audio["TotalRecordCount"], 1);
+    assert_eq!(audio["Items"][0]["Name"], "Song");
+    let video = json(
+        get(
+            &router,
+            "/Items?mediaTypes=Video",
+            Some(&session.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(video["TotalRecordCount"], 1);
+    assert_eq!(video["Items"][0]["Name"], "Movie");
+    let excluded = json(
+        get(
+            &router,
+            "/Items?excludeItemTypes=Video",
+            Some(&session.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(excluded["TotalRecordCount"], 1);
+    let unsupported = get(
+        &router,
+        "/Items?includeItemTypes=Movie",
+        Some(&session.access_token),
+    )
+    .await;
+    assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
+    let refused = get(
+        &router,
+        "/Items?isSeries=true",
+        Some(&session.access_token),
+    )
+    .await;
+    assert_eq!(refused.status(), StatusCode::NOT_IMPLEMENTED);
+}
