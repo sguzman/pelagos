@@ -119,8 +119,7 @@ async fn concrete_listener_address_is_advertised_without_trusting_host_headers()
         ("0.0.0.0:8097", None),
         ("[::]:8097", None),
     ] {
-        let state = AppState::new("fixture".to_owned())
-            .with_listen_addr(listen.parse().unwrap());
+        let state = AppState::new("fixture".to_owned()).with_listen_addr(listen.parse().unwrap());
         let response = app::router(Arc::new(state))
             .oneshot(
                 Request::builder()
