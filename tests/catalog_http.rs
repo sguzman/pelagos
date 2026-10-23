@@ -215,7 +215,7 @@ async fn item_type_and_media_filters_are_consistent_with_search() {
     assert_eq!(excluded["TotalRecordCount"], 1);
     let unsupported = get(
         &router,
-        "/Items?includeItemTypes=Movie",
+        "/Items?includeItemTypes=Book",
         Some(&session.access_token),
     )
     .await;
