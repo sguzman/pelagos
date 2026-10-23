@@ -66,19 +66,28 @@ async fn latest_for_user(
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let included = filter_types(query.include_item_types.as_deref())?;
-    // Pinned Jellyfin v12.3: only Episode has a LatestItemsIndexContainer
-    // among the item types we currently recognize without album metadata.
-    // Movie and generic Video remain their own items, even with groupItems=true.
-    // Audio and Photo need genuine MusicAlbum/PhotoAlbum entities, so grouped
-    // requests involving those kinds (or an unscoped catalog) stay unsupported.
+    let included = filter_types(query.include_item_types.as_deref())?
+        .filter(|types| !types.is_empty());
+    // Pinned Jellyfin v12.3: Episodes group under Series; Movies and generic
+    // Videos have no LatestItemsIndexContainer. We can also honor default
+    // grouping when *all accessible media* are video, even without an explicit
+    // type filter. We cannot invent MusicAlbum/PhotoAlbum from Audio/Photo.
     let grouped = query.group_items != Some(false);
     if grouped
-        && !included.as_ref().is_some_and(|types| {
-            !types.is_empty()
-                && types
-                    .iter()
-                    .all(|kind| matches!(kind.as_str(), "Episode" | "Movie" | "Video"))
+        && included.as_ref().is_some_and(|types| {
+            !types
+                .iter()
+                .all(|kind| matches!(kind.as_str(), "Episode" | "Movie" | "Video"))
+        })
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
+    if grouped
+        && included.is_none()
+        && nodes.iter().any(|item| {
+            !item.is_folder
+                && matches!(item.media_type.as_deref(), Some("Audio" | "Photo"))
         })
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
@@ -86,8 +95,7 @@ async fn latest_for_user(
     let group_episodes = grouped
         && included
             .as_ref()
-            .is_some_and(|types| types.iter().any(|kind| kind == "Episode"));
-    let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
+            .is_none_or(|types| types.iter().any(|kind| kind == "Episode"));
     let series = if group_episodes {
         nodes
             .iter()
