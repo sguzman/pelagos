@@ -20,6 +20,7 @@ use crate::{
     app::AppState,
     auth_api, catalog,
     query_filters::{filter_types, media_types},
+    user_data,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -36,6 +37,8 @@ pub struct ItemDto {
     pub parent_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_data: Option<user_data::UserItemData>,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,6 +69,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Items", get(items))
         .route("/Items/{item_id}", get(item))
         .route("/Users/{user_id}/Items", get(user_items))
+        .route("/Users/{user_id}/Items/{item_id}", get(user_item))
         .route("/UserViews", get(user_views))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
@@ -104,6 +108,7 @@ fn map_item(file: catalog::CatalogFile, server_id: &str, parent_id: String) -> I
         server_id: server_id.to_owned(),
         parent_id: Some(parent_id),
         size: Some(file.size_bytes),
+        user_data: None,
     }
 }
 
@@ -120,6 +125,7 @@ fn root_item(root: &str, server_id: &str) -> ItemDto {
         server_id: server_id.to_owned(),
         parent_id: None,
         size: None,
+        user_data: None,
     }
 }
 
@@ -161,6 +167,8 @@ fn catalog_nodes(
                         server_id: server_id.to_owned(),
                         parent_id: Some(parent_id.clone()),
                         size: None,
+                        user_data: None,
+        user_data: None,
                     });
                 }
                 parent_id = folder_id;
@@ -211,7 +219,7 @@ async fn query_items(
     headers: HeaderMap,
     query: ItemQuery,
 ) -> Result<Json<QueryResult>, StatusCode> {
-    let mut all = accessible_nodes(state, headers).await?;
+    let mut all = accessible_nodes(state.clone(), headers.clone()).await?;
     match query.parent_id.as_deref() {
         Some(parent) => {
             let parents: HashMap<String, Option<String>> = all
@@ -259,7 +267,8 @@ async fn query_items(
     let total_record_count = all.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
-    let page = all.into_iter().skip(start_index).take(limit).collect();
+    let mut page: Vec<ItemDto> = all.into_iter().skip(start_index).take(limit).collect();
+    attach_user_data(&state, headers, &mut page).await?;
     Ok(Json(QueryResult {
         items: page,
         total_record_count,
@@ -288,17 +297,55 @@ async fn user_items(
     query_items(state, headers, query).await
 }
 
+/// Attach the correct authenticated user's persistent state, not an admin's
+/// view of another user's preferences.
+async fn attach_user_data(
+    state: &Arc<AppState>,
+    headers: HeaderMap,
+    items: &mut [ItemDto],
+) -> Result<(), StatusCode> {
+    if items.is_empty() {
+        return Ok(());
+    }
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    let state_dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let personal = tokio::task::spawn_blocking(move || {
+        user_data::read_many(&state_dir, &user.id, &ids)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    for (item, data) in items.iter_mut().zip(personal) {
+        item.user_data = Some(data);
+    }
+    Ok(())
+}
+
 async fn item(
     State(state): State<Arc<AppState>>,
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
 ) -> Result<Json<ItemDto>, StatusCode> {
-    accessible_nodes(state, headers)
+    let mut found = accessible_nodes(state.clone(), headers.clone())
         .await?
         .into_iter()
         .find(|item| item.id == item_id)
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    attach_user_data(&state, headers, std::slice::from_mut(&mut found)).await?;
+    Ok(Json(found))
+}
+
+async fn user_item(
+    State(state): State<Arc<AppState>>,
+    RoutePath((user_id, item_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Json<ItemDto>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if user.id != user_id {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    item(State(state), RoutePath(item_id), headers).await
 }
 
 async fn user_views(
@@ -327,6 +374,7 @@ async fn user_views(
             server_id: state.server_id().to_owned(),
             parent_id: None,
             size: None,
+        user_data: None,
         })
         .collect::<Vec<_>>();
     Ok(Json(QueryResult {
