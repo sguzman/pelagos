@@ -747,6 +747,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T125",
+              "emoji": "🔎",
+              "name": "Authorized initial Jellyfin Search/Hints API",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Serve Jellyfin v12.3 SearchHints DTO from indexed file names with filters, pagination and user scoping",
+                  "passed": true,
+                  "evidence": "src/search.rs; src/catalog_api.rs — shared accessible catalog graph and bounded media-name hints"
+                },
+                {
+                  "title": "CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39967003914 — Rust Search/Hints HTTP integration plus format and Clippy passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients exercise full title/artist/genre/people and metadata-aware search",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -1240,6 +1262,28 @@
                 },
                 {
                   "title": "Linux production stress and adversarial multi-user filesystem security audit",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T308",
+              "emoji": "🎵",
+              "name": "Authenticated static audio with HTTP byte ranges",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Add Jellyfin-shaped Audio/{id}/stream GET and HEAD using validated direct-file handler and audio MIME",
+                  "passed": true,
+                  "evidence": "src/streaming.rs — video/audio shared descriptor-confined stream path and static-play restriction"
+                },
+                {
+                  "title": "CI tests audio GET, HEAD, byte ranges, MIME, authentication and unsupported transcoding modes",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39967422588 — full Rust audio/video HTTP tests, formatter, Clippy and ledger validators passed"
+                },
+                {
+                  "title": "Unmodified TV and mobile Jellyfin clients direct-play/seek real music and audiobook libraries",
                   "passed": false
                 }
               ]

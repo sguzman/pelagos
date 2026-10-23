@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 13%` across 93 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 14%` across 95 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 20%`
+## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 22%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -139,7 +139,7 @@
   - [x] CI proves cross-library isolation, no file-ID disclosure, dynamic grant/revoke and administrator access — GitHub Actions 39965370233 — format, Clippy, Rust permission and HTTP integration tests passed
   - [ ] Real Jellyfin users and unmodified TV apps validate library permission and parental policy parity
 
-### 🧭 P5 — General API contracts — `█░░░░░░░░░ 13%`
+### 🧭 P5 — General API contracts — `██░░░░░░░░ 22%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -161,6 +161,10 @@
   - [x] Implement administrator-only Items/ID and user views from Pelagos SQLite — src/catalog_api.rs; src/app.rs — items, paging, search and library views; absolute paths withheld
   - [x] CI passes synthetic HTTP catalog pagination and account isolation tests — GitHub Actions 39957337582 — library HTTP and credential integration tests passed
   - [ ] Real Jellyfin clients validate full BaseItemDto, authorization and item query coverage
+- 🔎 **T125 — Authorized initial Jellyfin Search/Hints API** — `███████░░░ 67%`
+  - [x] Serve Jellyfin v12.3 SearchHints DTO from indexed file names with filters, pagination and user scoping — src/search.rs; src/catalog_api.rs — shared accessible catalog graph and bounded media-name hints
+  - [x] CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure — GitHub Actions 39967003914 — Rust Search/Hints HTTP integration plus format and Clippy passed
+  - [ ] Unmodified Jellyfin clients exercise full title/artist/genre/people and metadata-aware search
 
 ## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 10%`
 
@@ -231,11 +235,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 17%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 20%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `███░░░░░░░ 34%`
+### ▶️ P9 — Streaming engine — `████░░░░░░ 37%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -269,6 +273,10 @@
   - [x] Validate Linux opened descriptor target inside canonical indexed root before streaming bytes — src/streaming.rs — file-handle confinement, Linux fd canonicalization and explicit non-Linux refusal
   - [x] CI proves symlink swapping, replaced library root and retained descriptor content invariants — GitHub Actions 39965980868 — format, Clippy, Rust streaming security regressions and contract checks passed
   - [ ] Linux production stress and adversarial multi-user filesystem security audit
+- 🎵 **T308 — Authenticated static audio with HTTP byte ranges** — `███████░░░ 67%`
+  - [x] Add Jellyfin-shaped Audio/{id}/stream GET and HEAD using validated direct-file handler and audio MIME — src/streaming.rs — video/audio shared descriptor-confined stream path and static-play restriction
+  - [x] CI tests audio GET, HEAD, byte ranges, MIME, authentication and unsupported transcoding modes — GitHub Actions 39967422588 — full Rust audio/video HTTP tests, formatter, Clippy and ledger validators passed
+  - [ ] Unmodified TV and mobile Jellyfin clients direct-play/seek real music and audiobook libraries
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

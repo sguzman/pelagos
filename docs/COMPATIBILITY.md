@@ -37,3 +37,7 @@ Token issuance creates a real persistent session record and login returns `Sessi
 ## Root permission scope and descriptor confinement
 
 Pelagos supports explicit root-level media read grants for ordinary accounts, while administrators see all indexed libraries. Routes for library views, item discovery, PlaybackInfo and direct-file streaming enforce the same deny-by-default permission set, with synthetic authorization coverage ([CI 39965370233](https://github.com/sguzman/pelagos/actions/runs/39965370233)). The Linux stream handler verifies the opened file descriptor to avoid symlink-swap redirection ([CI 39965980868](https://github.com/sguzman/pelagos/actions/runs/39965980868)). Real Jellyfin TV-client access-control and codec acceptance tests remain **Not tested**.
+
+## Filename search and direct audio
+
+Jellyfin-shaped `/Search/Hints` results now provide read-permission-scoped basic name search, recognized item/media filters and pagination ([CI 39967003914](https://github.com/sguzman/pelagos/actions/runs/39967003914)). Authenticated `/Audio/{id}/stream?static=true` adds raw audio GET/HEAD and byte ranges ([CI 39967422588](https://github.com/sguzman/pelagos/actions/runs/39967422588)). These are contract-shaped diagnostic tests, **not** verified behavior in an unmodified Jellyfin Smart TV client. All real-client acceptance gates remain **Not tested**.
