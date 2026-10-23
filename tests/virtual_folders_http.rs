@@ -69,7 +69,7 @@ async fn admin_virtual_folder_inventory_uses_only_indexed_roots_and_stable_item_
         call(&router, "POST", route, Some(&admin.access_token))
             .await
             .status(),
-        StatusCode::METHOD_NOT_ALLOWED
+        StatusCode::BAD_REQUEST
     );
     let folders = json(call(&router, "GET", route, Some(&admin.access_token)).await).await;
     let array = folders.as_array().unwrap();
