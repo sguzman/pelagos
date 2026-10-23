@@ -96,7 +96,6 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
     assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
 }
 
-
 #[tokio::test]
 async fn static_audio_streams_are_range_seekable_with_correct_mime() {
     let dir = tempfile::tempdir().unwrap();
