@@ -8,7 +8,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::{Path as RoutePath, State},
+    extract::{Path as RoutePath, Query, State},
     http::{HeaderMap, StatusCode},
     routing::get,
 };
@@ -20,9 +20,64 @@ use crate::{app::AppState, auth_api, catalog, catalog_api, probe};
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub struct PlaybackRequest {
+    user_id: Option<String>,
+    media_source_id: Option<String>,
+    start_time_ticks: Option<i64>,
+    audio_stream_index: Option<i64>,
+    subtitle_stream_index: Option<i64>,
+    auto_open_live_stream: Option<bool>,
     enable_direct_play: Option<bool>,
     enable_direct_stream: Option<bool>,
     enable_transcoding: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PlaybackQuery {
+    user_id: Option<String>,
+    media_source_id: Option<String>,
+    start_time_ticks: Option<i64>,
+    audio_stream_index: Option<i64>,
+    subtitle_stream_index: Option<i64>,
+    auto_open_live_stream: Option<bool>,
+    enable_direct_play: Option<bool>,
+    enable_direct_stream: Option<bool>,
+    enable_transcoding: Option<bool>,
+}
+
+impl PlaybackQuery {
+    // Jellyfin v12.3 permits both POST body and deprecated query fields,
+    // with the query taking precedence when explicitly provided.
+    fn apply(self, mut request: PlaybackRequest) -> PlaybackRequest {
+        if self.user_id.is_some() {
+            request.user_id = self.user_id;
+        }
+        if self.media_source_id.is_some() {
+            request.media_source_id = self.media_source_id;
+        }
+        if self.start_time_ticks.is_some() {
+            request.start_time_ticks = self.start_time_ticks;
+        }
+        if self.audio_stream_index.is_some() {
+            request.audio_stream_index = self.audio_stream_index;
+        }
+        if self.subtitle_stream_index.is_some() {
+            request.subtitle_stream_index = self.subtitle_stream_index;
+        }
+        if self.auto_open_live_stream.is_some() {
+            request.auto_open_live_stream = self.auto_open_live_stream;
+        }
+        if self.enable_direct_play.is_some() {
+            request.enable_direct_play = self.enable_direct_play;
+        }
+        if self.enable_direct_stream.is_some() {
+            request.enable_direct_stream = self.enable_direct_stream;
+        }
+        if self.enable_transcoding.is_some() {
+            request.enable_transcoding = self.enable_transcoding;
+        }
+        request
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -245,6 +300,22 @@ async fn playback_info(
     headers: HeaderMap,
     req: PlaybackRequest,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if req.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if req.start_time_ticks.is_some_and(|ticks| ticks < 0) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if req.start_time_ticks.is_some_and(|ticks| ticks > 0)
+        || req.audio_stream_index.is_some()
+        || req.subtitle_stream_index.is_some()
+        || req.auto_open_live_stream == Some(true)
+        || req.media_source_id.as_deref().is_some_and(|id| id != item_id)
+    {
+        // No timestamp seeks, per-stream selection, or live media sessions yet.
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let (_, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     // Unknown negotiation criteria cannot be promised as implemented.
     // Jellyfin's fallback booleans describe allowed capabilities, not
@@ -273,17 +344,19 @@ async fn get_playback(
     State(state): State<Arc<AppState>>,
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
+    Query(query): Query<PlaybackQuery>,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
-    playback_info(state, item_id, headers, PlaybackRequest::default()).await
+    playback_info(state, item_id, headers, query.apply(PlaybackRequest::default())).await
 }
 
 async fn post_playback(
     State(state): State<Arc<AppState>>,
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
-    Json(query): Json<PlaybackRequest>,
+    Query(query): Query<PlaybackQuery>,
+    Json(body): Json<PlaybackRequest>,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
-    playback_info(state, item_id, headers, query).await
+    playback_info(state, item_id, headers, query.apply(body)).await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -297,6 +370,26 @@ pub fn router() -> Router<Arc<AppState>> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn legacy_playback_query_overrides_posted_options() {
+        let body: PlaybackRequest = serde_json::from_value(json!({
+            "UserId": "u1", "EnableDirectPlay": false,
+            "StartTimeTicks": 100,
+            "MediaSourceId": "source-a"
+        }))
+        .unwrap();
+        let query: PlaybackQuery = serde_json::from_value(json!({
+            "userId": "u2", "enableDirectPlay": true,
+            "startTimeTicks": 0
+        }))
+        .unwrap();
+        let merged = query.apply(body);
+        assert_eq!(merged.user_id.as_deref(), Some("u2"));
+        assert_eq!(merged.enable_direct_play, Some(true));
+        assert_eq!(merged.start_time_ticks, Some(0));
+        assert_eq!(merged.media_source_id.as_deref(), Some("source-a"));
+    }
 
     #[test]
     fn maps_probe_to_conservative_jellyfin_stream_fields() {
