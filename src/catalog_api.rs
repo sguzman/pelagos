@@ -174,27 +174,14 @@ fn is_descendant(id: &str, parent: &str, parents: &HashMap<String, Option<String
     false
 }
 
-/// Until per-library policies exist, catalog access is administrator-only.
-/// This intentionally does not claim ordinary client browsing support.
-async fn admin_state(
-    state: Arc<AppState>,
-    headers: HeaderMap,
-) -> Result<std::path::PathBuf, StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
-    if !user.policy.is_administrator {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)
-}
-
 async fn query_items(
     state: Arc<AppState>,
     headers: HeaderMap,
     query: ItemQuery,
 ) -> Result<Json<QueryResult>, StatusCode> {
-    let state_dir = admin_state(state.clone(), headers).await?;
+    let (state_dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let (files, roots) = tokio::task::spawn_blocking(move || {
+    let (mut files, mut roots) = tokio::task::spawn_blocking(move || {
         let files = catalog::all_files(&state_dir)?;
         let roots = catalog::library_roots(&state_dir)?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
@@ -202,6 +189,10 @@ async fn query_items(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(granted) = allowed {
+        files.retain(|file| granted.contains(&file.root));
+        roots.retain(|root| granted.contains(root));
+    }
     let mut all = catalog_nodes(files, roots, &server_id);
     match query.parent_id.as_deref() {
         Some(parent) => {
@@ -265,9 +256,9 @@ async fn item(
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
 ) -> Result<Json<ItemDto>, StatusCode> {
-    let dir = admin_state(state.clone(), headers).await?;
+    let (dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let (candidates, roots) = tokio::task::spawn_blocking(move || {
+    let (mut candidates, mut roots) = tokio::task::spawn_blocking(move || {
         let files = catalog::all_files(&dir)?;
         let roots = catalog::library_roots(&dir)?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
@@ -275,6 +266,10 @@ async fn item(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(granted) = allowed {
+        candidates.retain(|file| granted.contains(&file.root));
+        roots.retain(|root| granted.contains(root));
+    }
     catalog_nodes(candidates, roots, &server_id)
         .into_iter()
         .find(|item| item.id == item_id)
@@ -287,10 +282,13 @@ async fn user_views(
     headers: HeaderMap,
 ) -> Result<Json<QueryResult>, StatusCode> {
     let dir = admin_state(state.clone(), headers).await?;
-    let roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
+    let mut roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(granted) = allowed {
+        roots.retain(|root| granted.contains(root));
+    }
     let items = roots
         .into_iter()
         .map(|root| ItemDto {

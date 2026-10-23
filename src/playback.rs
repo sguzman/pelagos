@@ -1,6 +1,7 @@
 //! Conservative Jellyfin-shaped playback metadata, derived from FFprobe.
 //! This is not playback negotiation parity: only static file sources are offered.
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -134,7 +135,11 @@ fn source_from_probe(item_id: &str, file: &Path, result: &probe::ProbeReport) ->
 }
 
 /// Lookup only catalog-indexed video files and resolve them under the configured root.
-async fn media_file(state: &AppState, item_id: String) -> Result<PathBuf, StatusCode> {
+async fn media_file(
+    state: &AppState,
+    item_id: String,
+    allowed: Option<HashSet<String>>,
+) -> Result<PathBuf, StatusCode> {
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let found = tokio::task::spawn_blocking(move || catalog::all_files(&dir))
         .await
@@ -142,7 +147,11 @@ async fn media_file(state: &AppState, item_id: String) -> Result<PathBuf, Status
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .into_iter()
         .find(|file| {
-            file.kind == "video"
+            let can_read = allowed
+                .as_ref()
+                .is_none_or(|roots| roots.contains(&file.root));
+            can_read
+                && file.kind == "video"
                 && catalog_api::stable_id(&file.root, &file.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -164,10 +173,7 @@ async fn playback_info(
     headers: HeaderMap,
     req: PlaybackRequest,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
-    if !user.policy.is_administrator {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    let (_, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     // Unknown negotiation criteria cannot be promised as implemented.
     if req.enable_direct_play == Some(false)
         || req.enable_direct_stream == Some(true)
@@ -175,7 +181,7 @@ async fn playback_info(
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let file = media_file(&state, item_id.clone()).await?;
+    let file = media_file(&state, item_id.clone(), allowed).await?;
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;

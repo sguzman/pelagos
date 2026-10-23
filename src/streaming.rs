@@ -120,21 +120,22 @@ async fn serve_file(
     query: StreamQuery,
     head_only: bool,
 ) -> Result<Response, StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
-    if !user.policy.is_administrator {
-        return Err(StatusCode::FORBIDDEN);
-    }
     if query.static_play != Some(true) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let directory = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let (directory, allowed) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     let matched = tokio::task::spawn_blocking(move || catalog::all_files(&directory))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .into_iter()
         .find(|row| {
-            row.kind == "video" && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
+            let can_read = allowed
+                .as_ref()
+                .is_none_or(|roots| roots.contains(&row.root));
+            can_read
+                && row.kind == "video"
+                && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
 

@@ -1,6 +1,6 @@
 //! First Jellyfin-compatible password-login and authenticated user boundary.
 //! Device/session DTO parity, Quick Connect and broader user policies are still pending.
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -184,6 +184,25 @@ pub(crate) async fn authenticated(
         Ok(None) => Err(StatusCode::UNAUTHORIZED),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
+}
+
+
+/// Resolve the authenticated user's readable roots without exposing grants to
+/// unauthenticated callers. None means administrator access to all indexed roots.
+pub(crate) async fn library_scope(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+) -> Result<(PathBuf, Option<HashSet<String>>), StatusCode> {
+    let (user, _) = authenticated(state.clone(), headers).await?;
+    let dir = state_dir(&state)?;
+    let state_dir = dir.clone();
+    let allowed = tokio::task::spawn_blocking(move || {
+        auth::visible_library_roots(&state_dir, &user)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok((dir, allowed))
 }
 
 async fn me(
