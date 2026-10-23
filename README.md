@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`██░░░░░░░░ 24%` across 117 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 25%` across 119 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39999748396](https://github.com/sguzman/pelagos/actions/runs/39999748396) — permission-scoped resume queries, playback position timestamps, formatting, Clippy, complete Rust tests and source/roadmap guards.
+**Latest passing CI:** [run 40002822616](https://github.com/sguzman/pelagos/actions/runs/40002822616) — virtual library root, authorized ancestor graph, item sorting/options, formatting, Clippy, Rust HTTP tests and ledger checks.
 
 ## 🚀 Current starter
 
@@ -57,6 +57,8 @@ Jellyfin's pinned `GET /Items/{id}/Ancestors` now returns a private immediate-pa
 The current authenticated `GET /Users/{userId}` only resolves the current account; it does not implement administrator enumeration. Indexed media item DTOs now expose a filename-derived `Container`, but no inferred movie or series classification. The pinned UserData POST route and its legacy URL accept transactional, authorized updates to Played, IsFavorite, PlayCount and PlaybackPositionTicks. Unsupported non-null metadata fields return an explicit error rather than being dropped. These subsets have synthetic CI evidence only; full Jellyfin client behavior is not established.
 
 `GET /UserItems/Resume` and legacy `GET /Users/{userId}/Items/Resume` now return permission-scoped video/audio items with positive saved resume ticks, filters, pagination and personal UserData. Positive direct-play progress records an activity timestamp for sorting; unsupported active-session exclusions and unsupported metadata options are rejected. This is not a full Jellyfin resumable-item engine or a real client-tested resume shelf.
+
+A new authenticated `GET /Items/Root` (and legacy `/Users/{userId}/Items/Root`) provides a stable virtual user root. `GET /Items?parentId=<rootId>` navigates only permission-granted collection folders, including empty libraries; ancestor chains connect them to the virtual root. `/Items` now validates supported `SortName`, ascending/descending order, user ownership and image/UserData suppression; unsupported sort and field projections return 501. These are synthetic-tested subsets, not full upstream query or real-client parity.
 
 ## 🦀 Architecture and independence
 
