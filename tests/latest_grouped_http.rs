@@ -41,7 +41,10 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
     std::fs::create_dir_all(library.join("Orbit/Season 01")).unwrap();
     std::fs::create_dir_all(private.join("Hidden/Season 01")).unwrap();
     for (path, value) in [
-        ("Signal/Season 01/Signal - S01E01 - First.mp4", b"one".as_slice()),
+        (
+            "Signal/Season 01/Signal - S01E01 - First.mp4",
+            b"one".as_slice(),
+        ),
         ("Signal/Season 01/Signal - S01E02 - Second.mp4", b"two"),
         ("Orbit/Season 01/Orbit - S01E01 - Only.mp4", b"three"),
     ] {
@@ -213,7 +216,10 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
         call(
             &router,
             "GET",
-            &format!("/Items/Latest?includeItemTypes=Episode&userId={}", admin.user.id),
+            &format!(
+                "/Items/Latest?includeItemTypes=Episode&userId={}",
+                admin.user.id
+            ),
             Some(&viewer.access_token),
         )
         .await
@@ -224,7 +230,10 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
         call(
             &router,
             "GET",
-            &format!("/Users/{}/Items/Latest?includeItemTypes=Episode", viewer.user.id),
+            &format!(
+                "/Users/{}/Items/Latest?includeItemTypes=Episode",
+                viewer.user.id
+            ),
             Some(&viewer.access_token),
         )
         .await,

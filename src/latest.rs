@@ -176,7 +176,10 @@ async fn latest_for_user(
         }
     }
     if query.enable_user_data != Some(false) && !result.is_empty() {
-        let ids = result.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        let ids = result
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
         let state_dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
         let user_id = user.id;
         let user_states =
