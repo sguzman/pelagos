@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 27%` across 125 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 28%` across 127 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 40%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 42%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -159,7 +159,7 @@
   - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
   - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
 
-### 🧭 P5 — General API contracts — `█████░░░░░ 46%`
+### 🧭 P5 — General API contracts — `█████░░░░░ 49%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -213,6 +213,14 @@
   - [x] Accept pinned SortName and Ascending/Descending item queries, enableUserData/enableImages opt-outs, and self-scoped userId; refuse unsupported feature requests — src/catalog_api.rs; tests/items_options_http.rs — deterministic sort, omission flags, user identity and 501 refusals
   - [x] CI verifies descending pagination, user data/image opt-out, 401/403 account isolation and unimplemented sort/metadata rejection — GitHub Actions 40002822616 — full Rust CI and test suite green
   - [ ] Real Jellyfin clients validate multi-key sort/filter options, full DTO field semantics and query metadata parity
+- 🔢 **T132 — Permission-scoped Jellyfin item counts with personal favorite filtering** — `███████░░░ 67%`
+  - [x] Expose pinned GET /Items/Counts, recognized Movie/Series/Episode counts and indexed-media ItemCount without fabricating unsupported song/provider categories — src/catalog_api.rs — authenticated counts, physical indexed media, and deliberate zero values for nonclassified item kinds
+  - [x] CI verifies unauthorized denial, cross-user 403, library grants/revocations, personal favorites, restart persistence, zero unsupported categories and admin scope — GitHub Actions 40010743895 — formatting, Clippy, full Rust HTTP/unit and tracking checks passed
+  - [ ] Full Jellyfin ItemCounts category semantics, provider classifications, performance parity and unmodified-client acceptance verified
+- 🎚️ **T134 — Recognized Movie and Series boolean filtering in catalog and search** — `███████░░░ 67%`
+  - [x] Implement isSeries/isMovie in Items and Search/Hints, retain file-only default browse, expose explicit Series list while refusing unrelated classification flags — src/catalog_api.rs; src/search.rs; tests/classified_flags_http.rs — recognized categories remain tied to authorized catalog
+  - [x] CI verifies mixed filter exclusion, explicit Series discovery, scoped Search/Hints, cross-user 403, unsupported flags and grant revocation — GitHub Actions 40011417762 — complete Rust tests, formatting, Clippy and contract/roadmap guards passed
+  - [ ] Upstream boolean-filter combinations and actual unmodified Jellyfin TV clients validate full search/browse parity
 
 ## 📚 M2 — Full media library and metadata — `███░░░░░░░ 34%`
 

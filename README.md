@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 27%` across 125 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 28%` across 127 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40008846700](https://github.com/sguzman/pelagos/actions/runs/40008846700) — movie filename/folder contract, Movie filters, user data and resume regressions, formatting, Clippy, full Rust tests and roadmap/source guards.
+**Latest passing CI:** [run 40011417762](https://github.com/sguzman/pelagos/actions/runs/40011417762) — protected item counts, personal favorite filters, typed Movie/Series search and browsing, formatting, Clippy and full Rust suite.
 
 ## 🚀 Current starter
 
@@ -69,6 +69,8 @@ System info now reports `LocalAddress` from a concrete listening IPv4/IPv6 socke
 Conservative local SxxEyy recognition now identifies Series, Season and Episode objects only under season-directory agreement, retaining generic Video for unrecognized files. Stable SeriesId/SeasonId references connect the existing virtual folder IDs. Preliminary `GET /Shows/{seriesId}/Seasons` and `/Shows/{seriesId}/Episodes` expose permission-scoped results, numeric season/episode order, specials, paging and `startItemId` continuation. Unsupported options refuse rather than imply metadata that Pelagos lacks. Full naming parity, missing-episode discovery, NextUp and unmodified client acceptance remain open.
 
 Conservative local Movie recognition now requires the video filename and containing folder to match `Title (YYYY)`; otherwise the indexed file stays a generic Video. The Movie DTO exposes a constrained title and `ProductionYear`, and the shared catalog/search filters recognize Movie and the `isMovie` query. Existing stable indexed IDs, playback-position state, and per-library access controls remain in place. This is filename evidence only, not automatic movie classification, NFO parsing, provider metadata or verified client parity.
+
+`GET /Items/Counts` now reports visible indexed media totals and recognized Movie/Series/Episode counts, honoring the authenticated user's own `isFavorite` state. Other categories remain zero until actual matching classification exists; those zeros are **not** evidence of full Jellyfin counts parity. Explicit `isSeries`/`isMovie` filters now work across `/Items` and `/Search/Hints`, including typed Series discovery, without changing default file-only browsing or library access controls.
 
 ## 🦀 Architecture and independence
 

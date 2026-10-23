@@ -1033,6 +1033,50 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T132",
+              "emoji": "🔢",
+              "name": "Permission-scoped Jellyfin item counts with personal favorite filtering",
+              "checks": [
+                {
+                  "title": "Expose pinned GET /Items/Counts, recognized Movie/Series/Episode counts and indexed-media ItemCount without fabricating unsupported song/provider categories",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs — authenticated counts, physical indexed media, and deliberate zero values for nonclassified item kinds"
+                },
+                {
+                  "title": "CI verifies unauthorized denial, cross-user 403, library grants/revocations, personal favorites, restart persistence, zero unsupported categories and admin scope",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40010743895 — formatting, Clippy, full Rust HTTP/unit and tracking checks passed"
+                },
+                {
+                  "title": "Full Jellyfin ItemCounts category semantics, provider classifications, performance parity and unmodified-client acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T134",
+              "emoji": "🎚️",
+              "name": "Recognized Movie and Series boolean filtering in catalog and search",
+              "checks": [
+                {
+                  "title": "Implement isSeries/isMovie in Items and Search/Hints, retain file-only default browse, expose explicit Series list while refusing unrelated classification flags",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; src/search.rs; tests/classified_flags_http.rs — recognized categories remain tied to authorized catalog"
+                },
+                {
+                  "title": "CI verifies mixed filter exclusion, explicit Series discovery, scoped Search/Hints, cross-user 403, unsupported flags and grant revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40011417762 — complete Rust tests, formatting, Clippy and contract/roadmap guards passed"
+                },
+                {
+                  "title": "Upstream boolean-filter combinations and actual unmodified Jellyfin TV clients validate full search/browse parity",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
