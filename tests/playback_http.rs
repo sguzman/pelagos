@@ -100,7 +100,7 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     let executable = temp.path().join("fake-ffprobe");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf '%s' '{\"format\":{\"duration\":\"61.25\"},\"streams\":[{\"index\":0,\"codec_type\":\"video\",\"codec_name\":\"h264\",\"width\":640,\"height\":360},{\"index\":1,\"codec_type\":\"audio\",\"codec_name\":\"aac\",\"sample_rate\":\"48000\",\"channels\":2}]}'\n",
+        "#!/bin/sh\nprintf '%s' '{\"format\":{\"duration\":\"61.25\"},\"streams\":[{\"index\":0,\"codec_type\":\"video\",\"codec_name\":\"h264\",\"profile\":\"High\",\"avg_frame_rate\":\"30000/1001\",\"r_frame_rate\":\"30/1\",\"pix_fmt\":\"yuv420p\",\"color_primaries\":\"bt709\",\"width\":640,\"height\":360},{\"index\":1,\"codec_type\":\"audio\",\"codec_name\":\"aac\",\"sample_rate\":\"48000\",\"channels\":2}]}'\n",
     )
     .unwrap();
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
@@ -134,6 +134,13 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     assert_eq!(info["MediaSources"][0]["Container"], "mp4");
     assert_eq!(info["MediaSources"][0]["RunTimeTicks"], 612_500_000);
     assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Codec"], "h264");
+    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Profile"], "High");
+    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["PixelFormat"], "yuv420p");
+    assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["ColorPrimaries"], "bt709");
+    let fps = info["MediaSources"][0]["MediaStreams"][0]["AverageFrameRate"]
+        .as_f64()
+        .unwrap();
+    assert!((fps - 29.970_029_97).abs() < 1e-7);
     assert_eq!(
         info["MediaSources"][0]["MediaStreams"][1]["SampleRate"],
         48000
