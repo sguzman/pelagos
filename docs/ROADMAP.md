@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 24%` across 117 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 25%` across 119 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 37%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 38%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -151,7 +151,7 @@
   - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
   - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
 
-### 🧭 P5 — General API contracts — `█████░░░░░ 45%`
+### 🧭 P5 — General API contracts — `█████░░░░░ 46%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -201,8 +201,12 @@
   - [x] Implement pinned GET /UserItems/Resume and legacy user route from permitted video/audio media with position, filtering, pagination and playback activity timestamps — src/resume.rs; src/user_data.rs; src/app.rs; tests/resume_http.rs — filtered private resume listing and persisted positive-position timestamps
   - [x] CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses — GitHub Actions 39999748396 — formatting, Clippy, complete Rust HTTP/unit tests and project tracking checks passed
   - [ ] Unmodified Jellyfin client resume shelves, DatePlayed ordering, active-session exclusions and full metadata parity validated
+- ↕️ **T133 — Validated item sorting, user scope and optional DTO flags** — `███████░░░ 67%`
+  - [x] Accept pinned SortName and Ascending/Descending item queries, enableUserData/enableImages opt-outs, and self-scoped userId; refuse unsupported feature requests — src/catalog_api.rs; tests/items_options_http.rs — deterministic sort, omission flags, user identity and 501 refusals
+  - [x] CI verifies descending pagination, user data/image opt-out, 401/403 account isolation and unimplemented sort/metadata rejection — GitHub Actions 40002822616 — full Rust CI and test suite green
+  - [ ] Real Jellyfin clients validate multi-key sort/filter options, full DTO field semantics and query metadata parity
 
-## 📚 M2 — Full media library and metadata — `███░░░░░░░ 27%`
+## 📚 M2 — Full media library and metadata — `███░░░░░░░ 29%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -264,7 +268,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `███░░░░░░░ 29%`
+### 🎼 P8 — Library feature APIs — `███░░░░░░░ 34%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -294,6 +298,10 @@
   - [x] Emit filename-derived media Container from indexed relative paths, omitting it from virtual library and folder items — src/catalog_api.rs; tests/catalog_http.rs — MP4/MKV/FLAC DTOs and private folder metadata
   - [x] CI verifies container DTO regression and full existing catalog suite — GitHub Actions 39998201271 — formatting, Clippy, catalog HTTP and full test checks passed
   - [ ] Unmodified Jellyfin clients and pinned BaseItemDto metadata differential validate container consistency
+- 🌳 **T228 — Stable virtual user library root and connected folder navigation** — `███████░░░ 67%`
+  - [x] Implement pinned Jellyfin GET /Items/Root and legacy root, with stable root ID and authorized collection-folder parent graph — src/catalog_api.rs; tests/root_http.rs; tests/ancestors_http.rs — stable pathless root, parent chain, recursive browse and self-only identity
+  - [x] CI verifies empty/ungranted roots, grant/revoke, ancestor chain, direct/root DTO consistency and persistence across restart — GitHub Actions 40002822616 — full Rust format, Clippy, HTTP tests, upstream matrix and roadmap checks passed
+  - [ ] Unmodified Jellyfin clients and upstream comparison verify root folder DTO and navigation parity
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 
