@@ -65,10 +65,8 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
         "server".to_owned(),
         state.clone(),
     )));
-    let no_history = json(
-        call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let no_history =
+        json(call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await).await;
     assert_eq!(no_history["TotalRecordCount"], 0);
 
     let series = json(
@@ -122,10 +120,8 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
         )
         .unwrap();
     }
-    let latest = json(
-        call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let latest =
+        json(call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await).await;
     assert_eq!(latest["TotalRecordCount"], 2);
     let items = latest["Items"].as_array().unwrap();
     assert_eq!(items[0]["SeriesName"], "Two");
@@ -149,10 +145,8 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
     assert_eq!(page["Items"][0]["SeriesName"], "One");
     assert!(page["Items"][0].get("UserData").is_none());
 
-    let admin_next = json(
-        call(&router, "GET", "/Shows/NextUp", Some(&admin.access_token)).await,
-    )
-    .await;
+    let admin_next =
+        json(call(&router, "GET", "/Shows/NextUp", Some(&admin.access_token)).await).await;
     assert_eq!(admin_next["TotalRecordCount"], 0);
     assert_eq!(
         call(
@@ -186,20 +180,38 @@ async fn unscoped_next_up_is_ranked_by_personal_watch_recency_and_access() {
         state.clone(),
     )));
     let persisted = json(
-        call(&restarted, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await,
+        call(
+            &restarted,
+            "GET",
+            "/Shows/NextUp",
+            Some(&viewer.access_token),
+        )
+        .await,
     )
     .await;
     assert_eq!(persisted["TotalRecordCount"], 2);
     auth::revoke_library(&state, "viewer", &two).unwrap();
     let revoked_two = json(
-        call(&restarted, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await,
+        call(
+            &restarted,
+            "GET",
+            "/Shows/NextUp",
+            Some(&viewer.access_token),
+        )
+        .await,
     )
     .await;
     assert_eq!(revoked_two["TotalRecordCount"], 1);
     assert_eq!(revoked_two["Items"][0]["SeriesName"], "One");
     auth::revoke_library(&state, "viewer", &one).unwrap();
     let revoked_all = json(
-        call(&restarted, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await,
+        call(
+            &restarted,
+            "GET",
+            "/Shows/NextUp",
+            Some(&viewer.access_token),
+        )
+        .await,
     )
     .await;
     assert_eq!(revoked_all["TotalRecordCount"], 0);

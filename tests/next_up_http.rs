@@ -111,16 +111,8 @@ async fn selected_series_next_up_respects_episode_order_resume_and_library_grant
         .status(),
         StatusCode::NOT_FOUND
     );
-    let unstarted = json(
-        call(
-            &router,
-            "GET",
-            "/Shows/NextUp",
-            Some(&viewer.access_token),
-        )
-        .await,
-    )
-    .await;
+    let unstarted =
+        json(call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await).await;
     assert_eq!(unstarted["TotalRecordCount"], 0);
     for unsupported in [
         format!("{url}&enableRewatching=true"),
@@ -188,16 +180,8 @@ async fn selected_series_next_up_respects_episode_order_resume_and_library_grant
     );
     let after_dawn = json(call(&router, "GET", &url, Some(&viewer.access_token)).await).await;
     assert_eq!(after_dawn["Items"][0]["Name"], "Noon");
-    let general = json(
-        call(
-            &router,
-            "GET",
-            "/Shows/NextUp",
-            Some(&viewer.access_token),
-        )
-        .await,
-    )
-    .await;
+    let general =
+        json(call(&router, "GET", "/Shows/NextUp", Some(&viewer.access_token)).await).await;
     assert_eq!(general["TotalRecordCount"], 1);
     assert_eq!(general["Items"][0]["Name"], "Noon");
     let paged = json(

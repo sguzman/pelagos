@@ -229,9 +229,10 @@ async fn next_up(
         .into_iter()
         .filter(|item| {
             item.item_type == "Episode"
-                && item.series_id.as_deref().is_some_and(|id| {
-                    series_id.is_none_or(|selected| selected == id)
-                })
+                && item
+                    .series_id
+                    .as_deref()
+                    .is_some_and(|id| series_id.is_none_or(|selected| selected == id))
                 && item.parent_index_number.is_some_and(|season| season > 0)
                 && item.index_number.is_some()
         })
