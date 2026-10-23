@@ -309,12 +309,11 @@ async fn attach_user_data(
     let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
     let state_dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
-    let personal = tokio::task::spawn_blocking(move || {
-        user_data::read_many(&state_dir, &user.id, &ids)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let personal =
+        tokio::task::spawn_blocking(move || user_data::read_many(&state_dir, &user.id, &ids))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     for (item, data) in items.iter_mut().zip(personal) {
         item.user_data = Some(data);
     }
@@ -373,7 +372,7 @@ async fn user_views(
             server_id: state.server_id().to_owned(),
             parent_id: None,
             size: None,
-        user_data: None,
+            user_data: None,
         })
         .collect::<Vec<_>>();
     Ok(Json(QueryResult {

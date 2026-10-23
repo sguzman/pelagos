@@ -125,10 +125,7 @@ pub fn read_many(
     item_ids: &[String],
 ) -> Result<Vec<UserItemData>> {
     let db = open_db(state_dir)?;
-    item_ids
-        .iter()
-        .map(|id| load(&db, user_id, id))
-        .collect()
+    item_ids.iter().map(|id| load(&db, user_id, id)).collect()
 }
 
 fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Result<UserItemData> {
