@@ -127,8 +127,7 @@ fn open_confined(
         // Indexing stores canonical roots; replacing a root with a symlink is unsafe.
         return Err(StatusCode::FORBIDDEN);
     }
-    let opened = std::fs::File::open(root.join(relative))
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let opened = std::fs::File::open(root.join(relative)).map_err(|_| StatusCode::NOT_FOUND)?;
     let actual = std::fs::canonicalize(format!("/proc/self/fd/{}", opened.as_raw_fd()))
         .map_err(|_| StatusCode::NOT_FOUND)?;
     if !actual.starts_with(&canonical_root) {
@@ -177,10 +176,7 @@ async fn serve_file(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     let (opened, actual, size) = tokio::task::spawn_blocking(move || {
-        open_confined(
-            Path::new(&matched.root),
-            Path::new(&matched.relative_path),
-        )
+        open_confined(Path::new(&matched.root), Path::new(&matched.relative_path))
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
@@ -248,7 +244,6 @@ async fn head_stream(
 mod tests {
     use super::*;
 
-
     #[cfg(target_os = "linux")]
     #[test]
     fn opened_handle_cannot_be_redirected_after_validation() {
@@ -262,8 +257,7 @@ mod tests {
         let outside = tmp.path().join("secret.mp4");
         std::fs::write(&video, b"permitted").unwrap();
         std::fs::write(&outside, b"restricted").unwrap();
-        let (mut opened, _path, _) =
-            open_confined(&root, Path::new("video.mp4")).unwrap();
+        let (mut opened, _path, _) = open_confined(&root, Path::new("video.mp4")).unwrap();
         std::fs::remove_file(&video).unwrap();
         symlink(&outside, &video).unwrap();
 
