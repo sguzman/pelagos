@@ -1,7 +1,7 @@
 //! Authenticated Jellyfin v12.3 theme-media response subset.
 //! Recognize only pinned local extra naming rules in already-authorized item folders;
 //! inherited themes, arbitrary metadata providers and sorting are not modeled.
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -65,36 +65,12 @@ pub fn router() -> Router<Arc<AppState>> {
 /// Return direct extras only. Pinned NamingOptions recognizes "theme" audio
 /// filenames, audio under "theme-music", and video under "backdrops".
 /// Never attach a library-root theme to unrelated sibling media.
-async fn indexed_themes(
-    state: Arc<AppState>,
-    item_id: String,
-    headers: HeaderMap,
-    query: ThemeQuery,
-) -> Result<(ThemeMediaResult, ThemeMediaResult), StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
-    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
-        return Err(StatusCode::FORBIDDEN);
-    }
-    let nodes = catalog_api::accessible_nodes(state, headers).await?;
-    let owner = nodes
-        .iter()
-        .find(|node| node.id == item_id)
-        .ok_or(StatusCode::NOT_FOUND)?;
-    // When Jellyfin finds no local theme, inheritFromParent walks up the
-    // hierarchy and changes OwnerId. Refuse until full traversal is modeled.
-    if query.inherit_from_parent == Some(true)
-        || query
-            .sort_by
-            .as_deref()
-            .is_some_and(|value| value != "SortName")
-        || query
-            .sort_order
-            .as_deref()
-            .is_some_and(|value| !matches!(value, "Ascending" | "Descending"))
-        || (query.sort_order.is_some() && query.sort_by.is_none())
-    {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
+/// Extract only pinned local-extra names from the current authorized item
+/// snapshot; this never traverses the host filesystem during a request.
+fn local_extras(
+    nodes: &[catalog_api::ItemDto],
+    owner: &catalog_api::ItemDto,
+) -> (Vec<catalog_api::ItemDto>, Vec<catalog_api::ItemDto>) {
     let container = if owner.is_folder
         && matches!(owner.item_type.as_str(), "Folder" | "Series")
         && owner.parent_id.is_some()
@@ -136,7 +112,7 @@ async fn indexed_themes(
                     && item.parent_id.as_deref() == Some(container)
             })
             .map(|item| item.id.as_str());
-        for item in &nodes {
+        for item in nodes {
             let mut extra = item.clone();
             if item.media_type.as_deref() == Some("Audio")
                 && ((item.parent_id.as_deref() == Some(container)
@@ -153,21 +129,87 @@ async fn indexed_themes(
             }
         }
     }
-    let sort = |a: &catalog_api::ItemDto, b: &catalog_api::ItemDto| {
-        a.name
-            .to_lowercase()
-            .cmp(&b.name.to_lowercase())
-            .then_with(|| a.id.cmp(&b.id))
-    };
-    songs.sort_by(sort);
-    videos.sort_by(sort);
-    if query.sort_order.as_deref() == Some("Descending") {
-        songs.reverse();
-        videos.reverse();
+    (songs, videos)
+}
+
+async fn indexed_themes(
+    state: Arc<AppState>,
+    item_id: String,
+    headers: HeaderMap,
+    query: ThemeQuery,
+) -> Result<(ThemeMediaResult, ThemeMediaResult), StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let nodes = catalog_api::accessible_nodes(state, headers).await?;
+    let owner = nodes
+        .iter()
+        .find(|node| node.id == item_id)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if query
+        .sort_by
+        .as_deref()
+        .is_some_and(|value| value != "SortName")
+        || query
+            .sort_order
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "Ascending" | "Descending"))
+        || (query.sort_order.is_some() && query.sort_by.is_none())
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+
+    // Pinned Jellyfin repeats each theme-kind search up the parent chain
+    // independently. ThemeSongs and ThemeVideos may therefore have different
+    // OwnerIds. Stop on first matched extras for each kind, or the user root
+    // if no theme exists anywhere in the authorized ancestry.
+    let inherit = query.inherit_from_parent == Some(true);
+    let descending = query.sort_order.as_deref() == Some("Descending");
+    let mut songs_result = None;
+    let mut videos_result = None;
+    let mut seen = HashSet::new();
+    let mut current = Some(owner);
+    while let Some(node) = current {
+        if !seen.insert(node.id.as_str()) {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        let (mut songs, mut videos) = local_extras(&nodes, node);
+        let sort = |a: &catalog_api::ItemDto, b: &catalog_api::ItemDto| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then_with(|| a.id.cmp(&b.id))
+        };
+        songs.sort_by(sort);
+        videos.sort_by(sort);
+        if descending {
+            songs.reverse();
+            videos.reverse();
+        }
+        let terminal = !inherit || node.parent_id.is_none();
+        if songs_result.is_none() && (!songs.is_empty() || terminal) {
+            songs_result = Some(ThemeMediaResult::new(node.id.clone(), songs));
+        }
+        if videos_result.is_none() && (!videos.is_empty() || terminal) {
+            videos_result = Some(ThemeMediaResult::new(node.id.clone(), videos));
+        }
+        if songs_result.is_some() && videos_result.is_some() {
+            break;
+        }
+        current = match node.parent_id.as_deref() {
+            Some(parent) => Some(
+                nodes
+                    .iter()
+                    .find(|item| item.id == parent)
+                    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+            ),
+            None => None,
+        };
     }
     Ok((
-        ThemeMediaResult::new(item_id.clone(), songs),
-        ThemeMediaResult::new(item_id, videos),
+        songs_result.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
+        videos_result.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?,
     ))
 }
 
