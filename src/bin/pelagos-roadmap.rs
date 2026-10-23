@@ -64,7 +64,9 @@ fn task_progress(task: &Value, ids: &mut HashSet<String>) -> Result<usize, Strin
         .ok_or_else(|| format!("{id}: task progress must be an unsigned integer"))?
         as usize;
     if expected != actual {
-        return Err(format!("{id}: claimed {actual}%, accepted checks yield {expected}%"));
+        return Err(format!(
+            "{id}: claimed {actual}%, accepted checks yield {expected}%"
+        ));
     }
     Ok(expected)
 }
