@@ -105,6 +105,42 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     assert_eq!(page["SearchHints"].as_array().unwrap().len(), 1);
     assert_eq!(page["SearchHints"][0]["Name"], "Film B");
 
+    let no_video = body_json(
+        get(
+            &router,
+            "/Search/Hints?searchTerm=Film&excludeItemTypes=Video",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(no_video["TotalRecordCount"], 0);
+
+    let photo = body_json(
+        get(
+            &router,
+            "/Search/Hints?searchTerm=Cover&mediaTypes=Photo",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(photo["TotalRecordCount"], 1);
+    assert_eq!(photo["SearchHints"][0]["Name"], "Cover");
+
+    let views = body_json(get(&router, "/UserViews", Some(&viewer.access_token)).await).await;
+    let root_id = views["Items"][0]["Id"].as_str().unwrap();
+    let parent_hints = body_json(
+        get(
+            &router,
+            &format!("/Search/Hints?searchTerm=Film&parentId={root_id}"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(parent_hints["TotalRecordCount"], 2);
+
     let admin_matches = body_json(
         get(
             &router,
