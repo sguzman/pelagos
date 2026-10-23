@@ -50,6 +50,8 @@ pub struct ItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_index_number: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub production_year: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub user_data: Option<user_data::UserItemData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_tags: Option<std::collections::BTreeMap<String, String>>,
@@ -135,6 +137,7 @@ fn virtual_root(server_id: &str) -> ItemDto {
         season_id: None,
         index_number: None,
         parent_index_number: None,
+        production_year: None,
         user_data: None,
         image_tags: None,
     }
@@ -239,8 +242,14 @@ fn map_item(
     } else {
         None
     };
+    let movie = if file.kind == "video" && episode.is_none() {
+        naming::movie_hint(Path::new(&file.relative_path))
+    } else {
+        None
+    };
     let (item_type, media_type) = match file.kind.as_str() {
         "video" if episode.is_some() => ("Episode", "Video"),
+        "video" if movie.is_some() => ("Movie", "Video"),
         "video" => ("Video", "Video"),
         "audio" => ("Audio", "Audio"),
         "image" => ("Photo", "Photo"),
@@ -249,6 +258,7 @@ fn map_item(
     let name = episode
         .as_ref()
         .and_then(|hint| hint.episode_title.clone())
+        .or_else(|| movie.as_ref().map(|hint| hint.title.clone()))
         .unwrap_or(name);
     let series_id = episode.as_ref().and_then(|_| {
         Path::new(&file.relative_path)
@@ -274,6 +284,7 @@ fn map_item(
         season_id,
         index_number: episode.as_ref().map(|hint| hint.episode),
         parent_index_number: episode.as_ref().map(|hint| hint.season),
+        production_year: movie.map(|hint| hint.production_year),
         user_data: None,
         image_tags: primary_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -298,6 +309,7 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         season_id: None,
         index_number: None,
         parent_index_number: None,
+        production_year: None,
         user_data: None,
         image_tags: image_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
@@ -393,6 +405,7 @@ fn catalog_nodes(
                         season_id: None,
                         index_number,
                         parent_index_number: None,
+                        production_year: None,
                         user_data: None,
                         image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
                             .and_then(artwork::image_tag)
@@ -489,7 +502,7 @@ async fn query_items(
         }
         None => all.retain(|item| !item.is_folder),
     }
-    if query.is_movie.is_some() || query.is_series.is_some() {
+    if query.is_series.is_some() {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let included = filter_types(query.include_item_types.as_deref())?;
@@ -512,6 +525,9 @@ async fn query_items(
                     .is_some_and(|kind| types.contains(kind))
             })
     });
+    if let Some(is_movie) = query.is_movie {
+        all.retain(|item| (item.item_type == "Movie") == is_movie);
+    }
     all.sort_by(|a, b| {
         let order = if query.sort_by.as_deref() == Some("SortName") {
             a.name.to_lowercase().cmp(&b.name.to_lowercase())
