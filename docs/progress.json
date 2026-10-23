@@ -967,6 +967,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T133",
+              "emoji": "↕️",
+              "name": "Validated item sorting, user scope and optional DTO flags",
+              "checks": [
+                {
+                  "title": "Accept pinned SortName and Ascending/Descending item queries, enableUserData/enableImages opt-outs, and self-scoped userId; refuse unsupported feature requests",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/items_options_http.rs — deterministic sort, omission flags, user identity and 501 refusals"
+                },
+                {
+                  "title": "CI verifies descending pagination, user data/image opt-out, 401/403 account isolation and unimplemented sort/metadata rejection",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40002822616 — full Rust CI and test suite green"
+                },
+                {
+                  "title": "Real Jellyfin clients validate multi-key sort/filter options, full DTO field semantics and query metadata parity",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
@@ -1408,6 +1430,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin clients and pinned BaseItemDto metadata differential validate container consistency",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T228",
+              "emoji": "🌳",
+              "name": "Stable virtual user library root and connected folder navigation",
+              "checks": [
+                {
+                  "title": "Implement pinned Jellyfin GET /Items/Root and legacy root, with stable root ID and authorized collection-folder parent graph",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/root_http.rs; tests/ancestors_http.rs — stable pathless root, parent chain, recursive browse and self-only identity"
+                },
+                {
+                  "title": "CI verifies empty/ungranted roots, grant/revoke, ancestor chain, direct/root DTO consistency and persistence across restart",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40002822616 — full Rust format, Clippy, HTTP tests, upstream matrix and roadmap checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients and upstream comparison verify root folder DTO and navigation parity",
                   "passed": false
                 }
               ],
