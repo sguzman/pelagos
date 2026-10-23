@@ -56,7 +56,9 @@ async fn playback_requires_auth_and_rejects_unsupported_modes() {
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        request(&router, "GET", path, Some(&viewer), "").await.status(),
+        request(&router, "GET", path, Some(&viewer), "")
+            .await
+            .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -72,7 +74,9 @@ async fn playback_requires_auth_and_rejects_unsupported_modes() {
         StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(
-        request(&router, "GET", path, Some(&admin), "").await.status(),
+        request(&router, "GET", path, Some(&admin), "")
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
 }
