@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use clap::{Parser, Subcommand};
-use pelagos::{app, identity};
+use pelagos::{app, discovery, identity};
 use tracing::info;
 
 #[derive(Debug, Parser)]
@@ -18,6 +18,10 @@ struct Args {
     /// Private state directory (defaults to XDG_STATE_HOME/pelagos).
     #[arg(long)]
     state_dir: Option<PathBuf>,
+
+    /// Enable opt-in Jellyfin UDP discovery on port 7359 (requires LAN bind).
+    #[arg(long)]
+    discover: bool,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -64,6 +68,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let id = identity::load_or_create(&state_dir)?;
     let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
+    if args.discover {
+        if address.ip().is_loopback() {
+            return Err("--discover requires an HTTP LAN bind such as --bind 0.0.0.0".into());
+        }
+        let udp = discovery::bind_default().await?;
+        let discovery_id = id.clone();
+        tokio::spawn(async move {
+            if let Err(error) = discovery::serve(udp, address.port(), discovery_id).await {
+                tracing::error!(%error, "UDP discovery stopped");
+            }
+        });
+        info!(port = discovery::DISCOVERY_PORT, "opt-in Jellyfin UDP discovery active");
+    }
     info!(%address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
     axum::serve(listener, app::router(Arc::new(app::AppState::new(id)))).await?;
     Ok(())

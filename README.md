@@ -6,7 +6,7 @@
 
 **Identity:** `#1DB2C0` · `oklch(70% 0.115 205)` ([color decision](docs/COLOR.md)). **Administration appearance:** ◐ System (default) / ☀ Light / ☾ Dark, with the selector at the top right.
 
-> **Pre-alpha scaffolding, not yet Jellyfin compatible.** The server boots a provisional API, health endpoint and admin UI. A read-only filename-based scanner is available via CLI, but there is no server-side media library, authentication, transcoding, user account migration or Smart TV playback yet. Full compatibility is an acceptance goal, not a current claim.
+> **Pre-alpha scaffolding, not yet Jellyfin compatible.** The server boots a provisional API, health endpoint and admin UI. Read-only scanning and FFprobe inspection are available via CLI, but there is no server-side media library, authentication, transcoding, user account migration or Smart TV playback yet. Full compatibility is an acceptance goal, not a current claim.
 
 ## 🎯 MVP means the COMPLETE Jellyfin Server port
 
@@ -32,12 +32,14 @@ cargo run -- --bind 127.0.0.1 --port 8097
 cargo run -- scan /path/to/authorized/media
 # Optional FFprobe metadata inspection (requires the system's ffprobe):
 cargo run -- probe /path/to/authorized/media.mp4
+# Opt-in LAN discovery (does NOT enable login or TV streaming):
+cargo run -- --bind 0.0.0.0 --port 8097 --discover
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ```
 
-Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/status`. The unauthenticated prototype deliberately defaults to **loopback-only** and port 8097, avoiding the usual Jellyfin port 8096. Do not expose this build to untrusted networks. Requires a normal Rust toolchain; no Python tooling is required.
+Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/status`. The unauthenticated prototype deliberately defaults to **loopback-only** and port 8097, avoiding the usual Jellyfin port 8096. UDP discovery is opt-in, on port 7359, only responds to LAN/loopback peers and cannot run alongside another service already bound to that UDP port. Do not expose this build to untrusted networks. Requires a normal Rust toolchain; no Python tooling is required.
 
 ## 🦀 Architecture and independence
 
