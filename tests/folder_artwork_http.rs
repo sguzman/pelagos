@@ -127,7 +127,8 @@ async fn collection_and_nested_folders_expose_and_serve_primary_artwork() {
         StatusCode::NOT_FOUND
     );
     auth::grant_library(&state, "viewer", &library).unwrap();
-    let viewer_views = json(get(&router, "/UserViews", "GET", Some(&viewer.access_token)).await).await;
+    let viewer_views =
+        json(get(&router, "/UserViews", "GET", Some(&viewer.access_token)).await).await;
     assert_eq!(
         viewer_views["Items"][0]["ImageTags"]["Primary"],
         root["ImageTags"]["Primary"]

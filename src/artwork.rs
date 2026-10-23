@@ -1,6 +1,10 @@
 //! Authenticated, read-only primary artwork from already indexed sidecar files.
 //! No external image providers, image resizing, metadata rewrites or source writes.
-use std::{path::{Path, PathBuf}, sync::Arc, time::UNIX_EPOCH};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::UNIX_EPOCH,
+};
 
 use axum::{
     Router,
