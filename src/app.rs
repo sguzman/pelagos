@@ -6,6 +6,7 @@ use std::{
 use axum::{
     Json, Router,
     extract::State,
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
     routing::get,
 };
@@ -67,6 +68,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/pelagos/status", get(status))
         // This compatibility-shaped endpoint alone does NOT establish Jellyfin compatibility.
         .route("/System/Info/Public", get(public_info))
+        .route("/System/Info", get(system_info))
         .route("/System/Ping", get(ping).post(ping))
         .merge(auth_api::router())
         .merge(catalog_api::router())
@@ -132,14 +134,51 @@ async fn ping() -> &'static str {
     "Pelagos"
 }
 
-async fn public_info(State(state): State<Arc<AppState>>) -> Json<PublicSystemInfo> {
-    Json(PublicSystemInfo {
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct SystemInfo {
+    #[serde(flatten)]
+    public: PublicSystemInfo,
+    has_pending_restart: bool,
+    is_shutting_down: bool,
+    supports_library_monitor: bool,
+    web_socket_port_number: u16,
+    completed_installations: Vec<serde_json::Value>,
+    can_self_restart: bool,
+    can_launch_web_browser: bool,
+    has_update_available: bool,
+}
+
+async fn system_info(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<SystemInfo>, StatusCode> {
+    auth_api::authenticated(state.clone(), headers).await?;
+    Ok(Json(SystemInfo {
+        public: public_fields(&state),
+        has_pending_restart: false,
+        is_shutting_down: false,
+        supports_library_monitor: false,
+        web_socket_port_number: 0,
+        completed_installations: Vec::new(),
+        can_self_restart: false,
+        can_launch_web_browser: false,
+        has_update_available: false,
+    }))
+}
+
+fn public_fields(state: &AppState) -> PublicSystemInfo {
+    PublicSystemInfo {
         id: state.server_id.clone(),
         server_name: "Pelagos",
         version: env!("CARGO_PKG_VERSION"),
         product_name: "Pelagos",
-        operating_system: "",
+        operating_system: std::env::consts::OS,
         startup_wizard_completed: false,
         local_address: None,
-    })
+    }
+}
+
+async fn public_info(State(state): State<Arc<AppState>>) -> Json<PublicSystemInfo> {
+    Json(public_fields(&state))
 }
