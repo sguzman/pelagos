@@ -248,12 +248,18 @@ async fn serve_file(
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Videos/{item_id}/stream", get(stream).head(head_stream))
-        .route("/Videos/{item_id}/{file_name}", get(stream_named).head(head_stream_named))
+        .route(
+            "/Videos/{item_id}/{file_name}",
+            get(stream_named).head(head_stream_named),
+        )
         .route(
             "/Audio/{item_id}/stream",
             get(audio_stream).head(head_audio_stream),
         )
-        .route("/Audio/{item_id}/{file_name}", get(audio_named).head(head_audio_named))
+        .route(
+            "/Audio/{item_id}/{file_name}",
+            get(audio_named).head(head_audio_named),
+        )
 }
 
 async fn stream(
@@ -306,8 +312,16 @@ async fn stream_named(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "video", Some(container_name(&filename)?))
-        .await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        false,
+        "video",
+        Some(container_name(&filename)?),
+    )
+    .await
 }
 
 async fn head_stream_named(
@@ -316,8 +330,16 @@ async fn head_stream_named(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "video", Some(container_name(&filename)?))
-        .await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        true,
+        "video",
+        Some(container_name(&filename)?),
+    )
+    .await
 }
 
 async fn audio_named(
@@ -326,8 +348,16 @@ async fn audio_named(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "audio", Some(container_name(&filename)?))
-        .await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        false,
+        "audio",
+        Some(container_name(&filename)?),
+    )
+    .await
 }
 
 async fn head_audio_named(
@@ -336,8 +366,16 @@ async fn head_audio_named(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "audio", Some(container_name(&filename)?))
-        .await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        true,
+        "audio",
+        Some(container_name(&filename)?),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -390,13 +428,18 @@ mod tests {
         );
     }
 
-
     #[test]
     fn extension_routes_accept_only_stream_prefix() {
         assert_eq!(container_name("stream.mp4").unwrap(), "mp4");
         assert_eq!(container_name("stream.flac").unwrap(), "flac");
-        assert_eq!(container_name("video.mp4").unwrap_err(), StatusCode::NOT_FOUND);
-        assert_eq!(container_name("stream.").unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            container_name("video.mp4").unwrap_err(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            container_name("stream.").unwrap_err(),
+            StatusCode::NOT_FOUND
+        );
     }
 
     #[test]
