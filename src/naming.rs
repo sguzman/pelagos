@@ -160,7 +160,9 @@ mod tests {
     #[test]
     fn recognizes_only_matching_movie_folder_and_file_pairs() {
         assert_eq!(
-            movie_hint(Path::new("Films/Café de México (2024)/Café de México (2024).mkv")),
+            movie_hint(Path::new(
+                "Films/Café de México (2024)/Café de México (2024).mkv"
+            )),
             Some(MovieHint {
                 title: "Café de México".to_owned(),
                 production_year: 2024,
