@@ -1,12 +1,15 @@
 //! Pelagos-owned, per-user playback flags. No access to Jellyfin's database.
 //! This is an initial Jellyfin v12.3 user-data subset, not a complete sync engine.
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::Path,
+    sync::Arc,
+};
 
 use axum::{
     Json, Router,
     extract::{Path as RoutePath, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{delete, post},
+    routing::post,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -247,7 +250,14 @@ macro_rules! legacy_handler {
             headers: HeaderMap,
             Query(query): Query<UserDataQuery>,
         ) -> std::result::Result<Json<UserItemData>, StatusCode> {
-            legacy(State(state), RoutePath((user_id, item_id)), headers, Query(query), $flag).await
+            legacy(
+                State(state),
+                RoutePath((user_id, item_id)),
+                headers,
+                Query(query),
+                $flag,
+            )
+            .await
         }
     };
 }
@@ -284,13 +294,27 @@ mod tests {
         assert!(a.played);
         assert_eq!(a.play_count, 1);
         assert_eq!(read(dir.path(), "a", "item").unwrap().play_count, 1);
-        assert_eq!(set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap().play_count, 1);
-        assert!(set_flag(dir.path(), "a", "item", Flag::Favorite(true)).unwrap().is_favorite);
+        assert_eq!(
+            set_flag(dir.path(), "a", "item", Flag::Played(true))
+                .unwrap()
+                .play_count,
+            1
+        );
+        assert!(
+            set_flag(dir.path(), "a", "item", Flag::Favorite(true))
+                .unwrap()
+                .is_favorite
+        );
         assert_eq!(read(dir.path(), "b", "item").unwrap().play_count, 0);
         assert!(!read(dir.path(), "b", "item").unwrap().is_favorite);
         let b = set_flag(dir.path(), "a", "item", Flag::Played(false)).unwrap();
         assert!(!b.played);
         assert_eq!(b.play_count, 1);
-        assert_eq!(set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap().play_count, 2);
+        assert_eq!(
+            set_flag(dir.path(), "a", "item", Flag::Played(true))
+                .unwrap()
+                .play_count,
+            2
+        );
     }
 }
