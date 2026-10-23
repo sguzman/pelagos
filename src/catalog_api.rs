@@ -62,7 +62,10 @@ fn stable_id(root: &str, name: &str) -> String {
     let mut bytes: [u8; 32] = digest.finalize().into();
     bytes[6] = (bytes[6] & 0x0f) | 0x50;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    Uuid::from_slice(&bytes[..16]).expect("SHA-256 output is at least 16 bytes").simple().to_string()
+    Uuid::from_slice(&bytes[..16])
+        .expect("SHA-256 output is at least 16 bytes")
+        .simple()
+        .to_string()
 }
 
 fn map_item(file: catalog::CatalogFile, server_id: &str) -> ItemDto {
@@ -160,10 +163,18 @@ async fn item(
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
 ) -> Result<Json<ItemDto>, StatusCode> {
-    let items = query_items(state, headers, ItemQuery::default()).await?;
-    // Dedicated indexed ID lookup will replace this capped diagnostic route.
-    items.0.items.into_iter().find(|item| item.id == item_id)
-        .map(Json).ok_or(StatusCode::NOT_FOUND)
+    let dir = admin_state(state.clone(), headers).await?;
+    let server_id = state.server_id().to_owned();
+    let candidates = tokio::task::spawn_blocking(move || catalog::all_files(&dir))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    candidates
+        .into_iter()
+        .map(|file| map_item(file, &server_id))
+        .find(|item| item.id == item_id)
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 async fn user_views(
@@ -175,16 +186,21 @@ async fn user_views(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let items = roots.into_iter().map(|root| ItemDto {
-        id: stable_id(&root, ""),
-        name: Path::new(&root).file_name().map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Library".to_owned()),
-        item_type: "CollectionFolder".to_owned(),
-        media_type: None,
-        is_folder: true,
-        server_id: state.server_id().to_owned(),
-        size: None,
-    }).collect::<Vec<_>>();
+    let items = roots
+        .into_iter()
+        .map(|root| ItemDto {
+            id: stable_id(&root, ""),
+            name: Path::new(&root)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Library".to_owned()),
+            item_type: "CollectionFolder".to_owned(),
+            media_type: None,
+            is_folder: true,
+            server_id: state.server_id().to_owned(),
+            size: None,
+        })
+        .collect::<Vec<_>>();
     Ok(Json(QueryResult {
         total_record_count: items.len(),
         items,

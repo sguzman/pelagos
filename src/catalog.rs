@@ -164,7 +164,6 @@ pub fn list(state_dir: &Path, root: &Path) -> Result<Vec<IndexedItem>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-
 #[derive(Debug, Clone)]
 pub struct CatalogFile {
     pub root: String,
