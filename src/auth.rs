@@ -3,6 +3,7 @@
 //! digests are stored. This is a foundational auth implementation, not policy parity.
 use std::{
     error::Error,
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -112,6 +113,11 @@ fn database(state_dir: &Path) -> Result<Connection> {
              device_id TEXT,
              device_name TEXT,
              application_version TEXT
+         );
+         CREATE TABLE IF NOT EXISTS pelagos_library_access(
+             user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
+             root TEXT NOT NULL,
+             PRIMARY KEY(user_id, root)
          );",
     )?;
     Ok(db)
@@ -354,6 +360,66 @@ pub fn list_sessions(
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+
+/// Local CLI administration: grant one explicitly named user read access to one
+/// canonical library root. A newly created non-admin account has no library access.
+pub fn grant_library(state_dir: &Path, username: &str, root: &Path) -> Result<bool> {
+    let root = fs::canonicalize(root)?;
+    if !root.is_dir() {
+        return Err("library permission target must be a directory".into());
+    }
+    let name = root
+        .to_str()
+        .ok_or("library permission root must be UTF-8")?;
+    let db = database(state_dir)?;
+    let user_id: String = db
+        .query_row(
+            "SELECT id FROM pelagos_users WHERE username_key=?1 AND disabled=0",
+            params![username.to_lowercase()],
+            |row| row.get(0),
+        )
+        .optional()?
+        .ok_or("user does not exist or is disabled")?;
+    let inserted = db.execute(
+        "INSERT OR IGNORE INTO pelagos_library_access(user_id, root) VALUES (?1, ?2)",
+        params![user_id, name],
+    )?;
+    Ok(inserted != 0)
+}
+
+/// Local CLI administration: revoke an existing grant. Does not alter media.
+pub fn revoke_library(state_dir: &Path, username: &str, root: &Path) -> Result<bool> {
+    let root = fs::canonicalize(root)?;
+    let name = root
+        .to_str()
+        .ok_or("library permission root must be UTF-8")?;
+    let db = database(state_dir)?;
+    Ok(db.execute(
+        "DELETE FROM pelagos_library_access
+         WHERE user_id=(SELECT id FROM pelagos_users WHERE username_key=?1) AND root=?2",
+        params![username.to_lowercase(), name],
+    )? != 0)
+}
+
+/// None means an administrator may access every indexed root; Some(set) gives
+/// the exact canonical roots explicitly permitted to a non-administrator.
+pub fn visible_library_roots(
+    state_dir: &Path,
+    user: &User,
+) -> Result<Option<HashSet<String>>> {
+    if user.policy.is_disabled {
+        return Ok(Some(HashSet::new()));
+    }
+    if user.policy.is_administrator {
+        return Ok(None);
+    }
+    let db = database(state_dir)?;
+    let mut stmt =
+        db.prepare("SELECT root FROM pelagos_library_access WHERE user_id=?1 ORDER BY root")?;
+    let results = stmt.query_map(params![user.id], |row| row.get(0))?;
+    Ok(Some(results.collect::<rusqlite::Result<HashSet<_>>>()?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -501,6 +567,30 @@ mod tests {
             1
         );
         assert!(revoke(dir.path(), &admin.access_token).unwrap());
+    }
+
+
+    #[test]
+    fn library_grants_are_deny_by_default_and_can_be_revoked() {
+        let dir = tempfile::tempdir().unwrap();
+        let media = dir.path().join("Library");
+        fs::create_dir(&media).unwrap();
+        let admin = create_user(dir.path(), "admin", "admin-test-passphrase").unwrap();
+        let viewer = create_user(dir.path(), "viewer", "viewer-test-passphrase").unwrap();
+        assert!(visible_library_roots(dir.path(), &admin).unwrap().is_none());
+        assert!(visible_library_roots(dir.path(), &viewer).unwrap().unwrap().is_empty());
+        assert!(grant_library(dir.path(), "viewer", &media).unwrap());
+        assert!(!grant_library(dir.path(), "viewer", &media).unwrap());
+        let canonical = fs::canonicalize(&media).unwrap();
+        assert!(
+            visible_library_roots(dir.path(), &viewer)
+                .unwrap()
+                .unwrap()
+                .contains(canonical.to_str().unwrap())
+        );
+        assert!(!grant_library(dir.path(), "unknown", &media).is_ok());
+        assert!(revoke_library(dir.path(), "viewer", &media).unwrap());
+        assert!(visible_library_roots(dir.path(), &viewer).unwrap().unwrap().is_empty());
     }
 
     #[test]
