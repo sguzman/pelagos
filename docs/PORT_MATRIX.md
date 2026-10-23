@@ -29,7 +29,7 @@
 
 1. Inventory every upstream source file and record its SHA and owning Rust replacement(s).
 2. Derive routes, DTOs, states and side effects from the pinned version into behavioral/API contract matrices.
-3. Implement independently in Rust, preserving GPL/MI​​T licensing boundaries ([provenance](PROVENANCE.md)).
+3. Implement independently in Rust, preserving GPL/MIT licensing boundaries ([provenance](PROVENANCE.md)).
 4. Require passing Rust unit, integration and client/differential tests before upgrading any source status to accepted.
 5. Resolve upstream file additions/removals explicitly when changing the baseline tag. A v12.3 acceptance gate may not silently float to a different upstream version.
 
