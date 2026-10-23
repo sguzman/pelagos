@@ -85,6 +85,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/System/Ping", get(ping).post(ping))
         .merge(auth_api::router())
         .merge(catalog_api::router())
+        .merge(latest::router())
         .merge(streaming::router())
         .merge(playback::router())
         .merge(search::router())
