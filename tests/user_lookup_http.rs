@@ -47,7 +47,10 @@ async fn user_id_lookup_matches_me_without_leaking_other_accounts() {
         state.clone(),
     )));
     let own = format!("/Users/{}", viewer.user.id);
-    assert_eq!(get(&router, &own, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        get(&router, &own, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let me = json(get(&router, "/Users/Me", Some(&viewer.access_token)).await).await;
     let by_id = json(get(&router, &own, Some(&viewer.access_token)).await).await;
     assert_eq!(by_id, me);
@@ -65,9 +68,7 @@ async fn user_id_lookup_matches_me_without_leaking_other_accounts() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        get(&router, &own, Some(&admin.access_token))
-            .await
-            .status(),
+        get(&router, &own, Some(&admin.access_token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
