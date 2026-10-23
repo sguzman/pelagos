@@ -61,3 +61,7 @@ Direct-play-only audio `PlaybackInfo` reports now accept permissive fallback cap
 ## Sidecar browse consistency and playback request identity
 
 Media covers no longer populate unrelated Photo browsing/search results, while standalone images remain visible ([CI 39989870345](https://github.com/sguzman/pelagos/actions/runs/39989870345)). Probe-driven MediaStream mapping supports additional codec/color/profile/frame-rate fields ([CI 39990374327](https://github.com/sguzman/pelagos/actions/runs/39990374327)). Authenticated `PlaybackInfo` now supports Jellyfin query-over-body precedence and enforces `userId`, with guarded unsupported negotiation fields ([CI 39992775206](https://github.com/sguzman/pelagos/actions/runs/39992775206)). These remain synthetic evidence: **unmodified TV acceptance not yet tested**.
+
+## Private artwork revalidation
+
+Primary images now support per-user scoped conditional ETag fetches and empty 304 responses; the validator changes when original size/mtime changes without a library rescan ([CI 39993608914](https://github.com/sguzman/pelagos/actions/runs/39993608914)). **Unmodified TV client not tested.**

@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 21%` across 108 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 21%` across 109 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -178,7 +178,7 @@
   - [x] CI verifies per-user playback/favorite DTO fields and access isolation — GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed
   - [ ] Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views
 
-## 📚 M2 — Full media library and metadata — `██░░░░░░░░ 22%`
+## 📚 M2 — Full media library and metadata — `███░░░░░░░ 25%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -205,7 +205,7 @@
   - [x] CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation — GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed
   - [ ] Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades
 
-### 🧩 P7 — Metadata systems — `███░░░░░░░ 29%`
+### 🧩 P7 — Metadata systems — `███░░░░░░░ 34%`
 
 - 📝 **T210 — Metadata readers** — `░░░░░░░░░░ 0%`
   - [ ] Implement NFO, tags, EXIF, chapters and sidecar parsing
@@ -235,6 +235,10 @@
   - [x] Classify title/cover/poster/folder sidecars using media-root and directory matching; leave independent photo items visible and originals indexed — src/artwork.rs sidecar_keys; src/catalog_api.rs catalog_nodes — scoped separation of display items and indexed image assets
   - [x] CI verifies photo browse/search semantics, album artwork retention and unrelated photo libraries — GitHub Actions 39989870345 — Rust artwork, catalog HTTP, search and security regression suites passed
   - [ ] Unmodified TV and photo clients validate cover classification across diverse real library layouts
+- 🏷️ **T217 — Private conditional ETag validation for indexed artwork** — `███████░░░ 67%`
+  - [x] Return descriptor-backed private ETag validators; match If-None-Match with empty 304 — src/artwork.rs — source metadata-based validator on verified opened file handle
+  - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
+  - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
 ### 🎼 P8 — Library feature APIs — `██░░░░░░░░ 22%`
 

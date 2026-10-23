@@ -1105,6 +1105,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T217",
+              "emoji": "🏷️",
+              "name": "Private conditional ETag validation for indexed artwork",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Return descriptor-backed private ETag validators; match If-None-Match with empty 304",
+                  "passed": true,
+                  "evidence": "src/artwork.rs — source metadata-based validator on verified opened file handle"
+                },
+                {
+                  "title": "CI proves 304 without bytes and invalidation after edit without reindexing",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
