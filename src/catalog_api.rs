@@ -580,9 +580,6 @@ async fn query_items(
         }
         None => all.retain(|item| !item.is_folder),
     }
-    if query.is_series.is_some() {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
     let included = filter_types(query.include_item_types.as_deref())?;
     let excluded = filter_types(query.exclude_item_types.as_deref())?;
     let media = media_types(query.media_types.as_deref())?;
@@ -605,6 +602,9 @@ async fn query_items(
     });
     if let Some(is_movie) = query.is_movie {
         all.retain(|item| (item.item_type == "Movie") == is_movie);
+    }
+    if let Some(is_series) = query.is_series {
+        all.retain(|item| (item.item_type == "Series") == is_series);
     }
     all.sort_by(|a, b| {
         let order = if query.sort_by.as_deref() == Some("SortName") {
