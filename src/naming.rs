@@ -29,9 +29,7 @@ fn season_folder_number(name: &str) -> Option<u16> {
 fn episode_token(stem: &str) -> Option<(u16, u16, usize)> {
     let bytes = stem.as_bytes();
     for i in 0..bytes.len() {
-        if !bytes[i].eq_ignore_ascii_case(&b's')
-            || i > 0 && bytes[i - 1].is_ascii_alphanumeric()
-        {
+        if !bytes[i].eq_ignore_ascii_case(&b's') || i > 0 && bytes[i - 1].is_ascii_alphanumeric() {
             continue;
         }
         let season_start = i + 1;
@@ -39,10 +37,7 @@ fn episode_token(stem: &str) -> Option<(u16, u16, usize)> {
         while j < bytes.len() && j - season_start < 3 && bytes[j].is_ascii_digit() {
             j += 1;
         }
-        if j == season_start
-            || j >= bytes.len()
-            || !bytes[j].eq_ignore_ascii_case(&b'e')
-        {
+        if j == season_start || j >= bytes.len() || !bytes[j].eq_ignore_ascii_case(&b'e') {
             continue;
         }
         let episode_start = j + 1;
@@ -75,8 +70,8 @@ pub fn episode_hint(relative_path: &Path) -> Option<EpisodeHint> {
     if folder_season != season {
         return None;
     }
-    let title = stem[end..]
-        .trim_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '.'));
+    let title =
+        stem[end..].trim_matches(|c: char| c.is_whitespace() || matches!(c, '-' | '_' | '.'));
     Some(EpisodeHint {
         series_name: series_name.to_owned(),
         season,
