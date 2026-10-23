@@ -8,6 +8,7 @@ pub mod catalog;
 pub mod catalog_api;
 pub mod discovery;
 pub mod identity;
+pub mod latest;
 pub mod media;
 pub mod naming;
 pub mod playback;
