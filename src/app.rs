@@ -27,6 +27,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/pelagos/status", get(status))
         // This compatibility-shaped endpoint alone does NOT establish Jellyfin compatibility.
         .route("/System/Info/Public", get(public_info))
+        .route("/System/Ping", get(ping).post(ping))
         .with_state(state)
 }
 
@@ -75,8 +76,11 @@ struct PublicSystemInfo {
     product_name: &'static str,
     operating_system: &'static str,
     startup_wizard_completed: bool,
-    can_self_restart: bool,
     local_address: Option<String>,
+}
+
+async fn ping() -> &'static str {
+    "Pelagos"
 }
 
 async fn public_info(State(state): State<Arc<AppState>>) -> Json<PublicSystemInfo> {
@@ -85,9 +89,8 @@ async fn public_info(State(state): State<Arc<AppState>>) -> Json<PublicSystemInf
         server_name: "Pelagos",
         version: env!("CARGO_PKG_VERSION"),
         product_name: "Pelagos",
-        operating_system: std::env::consts::OS,
+        operating_system: "",
         startup_wizard_completed: false,
-        can_self_restart: false,
         local_address: None,
     })
 }
