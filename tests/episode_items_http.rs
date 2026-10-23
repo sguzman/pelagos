@@ -66,8 +66,15 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
     )));
 
     assert_eq!(
-        json(get(&router, "/Items?includeItemTypes=Episode", Some(&viewer.access_token)).await)
-            .await["TotalRecordCount"],
+        json(
+            get(
+                &router,
+                "/Items?includeItemTypes=Episode",
+                Some(&viewer.access_token)
+            )
+            .await
+        )
+        .await["TotalRecordCount"],
         0
     );
     auth::grant_library(&state, "viewer", &media).unwrap();
@@ -83,7 +90,10 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
     )
     .await;
     let folders = children["Items"].as_array().unwrap();
-    let signal = folders.iter().find(|item| item["Name"] == "Signal").unwrap();
+    let signal = folders
+        .iter()
+        .find(|item| item["Name"] == "Signal")
+        .unwrap();
     assert_eq!(signal["Type"], "Series");
     assert!(signal["IsFolder"].as_bool().unwrap());
     let series_id = signal["Id"].as_str().unwrap();
@@ -120,7 +130,10 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
     assert_eq!(arrival["ParentId"], season_id);
     assert!(arrival.get("Path").is_none());
     let episode_id = arrival["Id"].as_str().unwrap();
-    let featurette = items.iter().find(|item| item["Name"] == "Featurette").unwrap();
+    let featurette = items
+        .iter()
+        .find(|item| item["Name"] == "Featurette")
+        .unwrap();
     assert_eq!(featurette["Type"], "Video");
     assert!(featurette.get("SeriesName").is_none());
 

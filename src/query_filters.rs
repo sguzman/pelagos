@@ -14,8 +14,14 @@ pub(crate) fn filter_types(value: Option<&str>) -> Result<Option<Vec<String>>, S
     if parsed.iter().any(|term| {
         !matches!(
             term.as_str(),
-            "Video" | "Audio" | "Photo" | "Folder" | "CollectionFolder"
-                | "Episode" | "Season" | "Series"
+            "Video"
+                | "Audio"
+                | "Photo"
+                | "Folder"
+                | "CollectionFolder"
+                | "Episode"
+                | "Season"
+                | "Series"
         )
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);

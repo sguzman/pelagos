@@ -309,10 +309,7 @@ fn catalog_nodes(
             continue;
         };
         series_folders.insert((file.root.clone(), series_dir.to_path_buf()));
-        season_folders.insert(
-            (file.root.clone(), season_dir.to_path_buf()),
-            hint.season,
-        );
+        season_folders.insert((file.root.clone(), season_dir.to_path_buf()), hint.season);
     }
     let indexed_images = files
         .iter()
@@ -349,8 +346,7 @@ fn catalog_nodes(
                 let path = folder.to_string_lossy();
                 let folder_id = stable_id(&root, &format!("folder:{path}"));
                 if seen.insert(folder_id.clone()) {
-                    let index_number =
-                        season_folders.get(&(root.clone(), folder.clone())).copied();
+                    let index_number = season_folders.get(&(root.clone(), folder.clone())).copied();
                     let folder_type = if index_number.is_some() {
                         "Season"
                     } else if series_folders.contains(&(root.clone(), folder.clone())) {
