@@ -22,6 +22,7 @@ pub(crate) fn filter_types(value: Option<&str>) -> Result<Option<Vec<String>>, S
                 | "Episode"
                 | "Season"
                 | "Series"
+                | "Movie"
         )
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
