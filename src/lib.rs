@@ -7,6 +7,6 @@ pub mod catalog_api;
 pub mod discovery;
 pub mod identity;
 pub mod media;
-pub mod probe;
 pub mod playback;
+pub mod probe;
 pub mod streaming;

@@ -1,6 +1,9 @@
 //! Conservative Jellyfin-shaped playback metadata, derived from FFprobe.
 //! This is not playback negotiation parity: only static file sources are offered.
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::{
     Json, Router,
@@ -66,7 +69,9 @@ pub struct MediaStream {
 }
 
 fn number(value: &Value) -> Option<i64> {
-    value.as_i64().or_else(|| value.as_str()?.parse::<i64>().ok())
+    value
+        .as_i64()
+        .or_else(|| value.as_str()?.parse::<i64>().ok())
 }
 
 fn mapped_stream(value: &Value) -> Option<MediaStream> {
@@ -107,7 +112,9 @@ fn source_from_probe(item_id: &str, file: &Path, result: &probe::ProbeReport) ->
         .as_ref()
         .and_then(|f| f["duration"].as_str())
         .and_then(|s| s.parse::<f64>().ok())
-        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0 && *seconds <= i64::MAX as f64 / 10_000_000.0)
+        .filter(|seconds| {
+            seconds.is_finite() && *seconds >= 0.0 && *seconds <= i64::MAX as f64 / 10_000_000.0
+        })
         .map(|seconds| (seconds * 10_000_000.0).round() as i64);
     MediaSource {
         protocol: "File",
@@ -134,7 +141,10 @@ async fn media_file(state: &AppState, item_id: String) -> Result<PathBuf, Status
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .into_iter()
-        .find(|file| file.kind == "video" && catalog_api::stable_id(&file.root, &file.relative_path) == item_id)
+        .find(|file| {
+            file.kind == "video"
+                && catalog_api::stable_id(&file.root, &file.relative_path) == item_id
+        })
         .ok_or(StatusCode::NOT_FOUND)?;
     let root = tokio::fs::canonicalize(&found.root)
         .await
@@ -194,7 +204,10 @@ async fn post_playback(
 }
 
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route("/Items/{item_id}/PlaybackInfo", get(get_playback).post(post_playback))
+    Router::new().route(
+        "/Items/{item_id}/PlaybackInfo",
+        get(get_playback).post(post_playback),
+    )
 }
 
 #[cfg(test)]
