@@ -2010,6 +2010,124 @@
       ]
     },
     {
+      "controller": "SyncPlayController",
+      "source_path": "Jellyfin.Api/Controllers/SyncPlayController.cs",
+      "upstream_blob_sha": "991fb87144d7ae2cfaaef214f8fae2c9ff7772eb",
+      "route_prefix": "SyncPlay",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/SyncPlay/New",
+          "source_line": 54
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Join",
+          "source_line": 71
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Leave",
+          "source_line": 88
+        },
+        {
+          "method": "GET",
+          "path": "/SyncPlay/List",
+          "source_line": 104
+        },
+        {
+          "method": "GET",
+          "path": "/SyncPlay/{id:guid}",
+          "source_line": 120
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/SetNewQueue",
+          "source_line": 137
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/SetPlaylistItem",
+          "source_line": 158
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/RemoveFromPlaylist",
+          "source_line": 176
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/MovePlaylistItem",
+          "source_line": 194
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Queue",
+          "source_line": 212
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Unpause",
+          "source_line": 229
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Pause",
+          "source_line": 245
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Stop",
+          "source_line": 261
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Seek",
+          "source_line": 278
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Buffering",
+          "source_line": 296
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Ready",
+          "source_line": 318
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/SetIgnoreWait",
+          "source_line": 340
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/NextItem",
+          "source_line": 358
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/PreviousItem",
+          "source_line": 376
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/SetRepeatMode",
+          "source_line": 394
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/SetShuffleMode",
+          "source_line": 412
+        },
+        {
+          "method": "POST",
+          "path": "/SyncPlay/Ping",
+          "source_line": 430
+        }
+      ]
+    },
+    {
       "controller": "SystemController",
       "source_path": "Jellyfin.Api/Controllers/SystemController.cs",
       "upstream_blob_sha": "450225c3713828a65d6e0b6369195568c9626619",
@@ -2064,6 +2182,96 @@
           "method": "GET",
           "path": "/System/Logs/Log",
           "source_line": 206
+        }
+      ]
+    },
+    {
+      "controller": "TimeSyncController",
+      "source_path": "Jellyfin.Api/Controllers/TimeSyncController.cs",
+      "upstream_blob_sha": "fe6e11f9e29d82398f58f8b760ab1af0480d910f",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/GetUtcTime",
+          "source_line": 20
+        }
+      ]
+    },
+    {
+      "controller": "TrailersController",
+      "source_path": "Jellyfin.Api/Controllers/TrailersController.cs",
+      "upstream_blob_sha": "6bddd853371714a5639faee8138a9e64b4539796",
+      "route_prefix": "Trailers",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Trailers",
+          "source_line": 123
+        }
+      ]
+    },
+    {
+      "controller": "TrickplayController",
+      "source_path": "Jellyfin.Api/Controllers/TrickplayController.cs",
+      "upstream_blob_sha": "d7a10ce5f6db81ba9abc2a66e546fe69a5c465b7",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/Trickplay/{width}/tiles.m3u8",
+          "source_line": 50
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/Trickplay/{width}/{index}.jpg",
+          "source_line": 79
+        }
+      ]
+    },
+    {
+      "controller": "TvShowsController",
+      "source_path": "Jellyfin.Api/Controllers/TvShowsController.cs",
+      "upstream_blob_sha": "6b0f10e02a33c395f9bad71576c4e13cad974660",
+      "route_prefix": "Shows",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Shows/NextUp",
+          "source_line": 75
+        },
+        {
+          "method": "GET",
+          "path": "/Shows/Upcoming",
+          "source_line": 138
+        },
+        {
+          "method": "GET",
+          "path": "/Shows/{seriesId}/Episodes",
+          "source_line": 202
+        },
+        {
+          "method": "GET",
+          "path": "/Shows/{seriesId}/Seasons",
+          "source_line": 332
+        }
+      ]
+    },
+    {
+      "controller": "UniversalAudioController",
+      "source_path": "Jellyfin.Api/Controllers/UniversalAudioController.cs",
+      "upstream_blob_sha": "cdbd1ee7aa36cd2f61d130b8c07a09028384c4f9",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/universal",
+          "source_line": 92
+        },
+        {
+          "method": "HEAD",
+          "path": "/Audio/{itemId}/universal",
+          "source_line": 93
         }
       ]
     },
@@ -2166,6 +2374,155 @@
       ]
     },
     {
+      "controller": "UserLibraryController",
+      "source_path": "Jellyfin.Api/Controllers/UserLibraryController.cs",
+      "upstream_blob_sha": "da030322496d89124eb3eac22353b532c2823744",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}",
+          "source_line": 82
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/{itemId}",
+          "source_line": 117
+        },
+        {
+          "method": "GET",
+          "path": "/Items/Root",
+          "source_line": 132
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/Root",
+          "source_line": 154
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Intros",
+          "source_line": 169
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/{itemId}/Intros",
+          "source_line": 204
+        },
+        {
+          "method": "POST",
+          "path": "/UserFavoriteItems/{itemId}",
+          "source_line": 220
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/FavoriteItems/{itemId}",
+          "source_line": 252
+        },
+        {
+          "method": "DELETE",
+          "path": "/UserFavoriteItems/{itemId}",
+          "source_line": 268
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/FavoriteItems/{itemId}",
+          "source_line": 300
+        },
+        {
+          "method": "DELETE",
+          "path": "/UserItems/{itemId}/Rating",
+          "source_line": 316
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/Items/{itemId}/Rating",
+          "source_line": 348
+        },
+        {
+          "method": "POST",
+          "path": "/UserItems/{itemId}/Rating",
+          "source_line": 365
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Items/{itemId}/Rating",
+          "source_line": 399
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/LocalTrailers",
+          "source_line": 416
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/{itemId}/LocalTrailers",
+          "source_line": 450
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/SpecialFeatures",
+          "source_line": 466
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/{itemId}/SpecialFeatures",
+          "source_line": 502
+        },
+        {
+          "method": "GET",
+          "path": "/Items/Latest",
+          "source_line": 527
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/Latest",
+          "source_line": 619
+        }
+      ]
+    },
+    {
+      "controller": "UserViewsController",
+      "source_path": "Jellyfin.Api/Controllers/UserViewsController.cs",
+      "upstream_blob_sha": "a934e5dbf8b74906cd54e2cfc4999d15cb593d4f",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/UserViews",
+          "source_line": 65
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Views",
+          "source_line": 107
+        },
+        {
+          "method": "GET",
+          "path": "/UserViews/GroupingOptions",
+          "source_line": 128
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/GroupingOptions",
+          "source_line": 163
+        }
+      ]
+    },
+    {
+      "controller": "VideoAttachmentsController",
+      "source_path": "Jellyfin.Api/Controllers/VideoAttachmentsController.cs",
+      "upstream_blob_sha": "2c8b452c352d60818f8a8180662d13344e596db2",
+      "route_prefix": "Videos",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Videos/{videoId}/{mediaSourceId}/Attachments/{index}",
+          "source_line": 50
+        }
+      ]
+    },
+    {
       "controller": "VideosController",
       "source_path": "Jellyfin.Api/Controllers/VideosController.cs",
       "upstream_blob_sha": "29a92cdb906792a095217728f783e016efc5739e",
@@ -2205,6 +2562,24 @@
           "method": "HEAD",
           "path": "/Videos/{itemId}/stream.{container}",
           "source_line": 553
+        }
+      ]
+    },
+    {
+      "controller": "YearsController",
+      "source_path": "Jellyfin.Api/Controllers/YearsController.cs",
+      "upstream_blob_sha": "aa6464ee7af725cc9fdb8009f1ca753eff41f281",
+      "route_prefix": "Years",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Years",
+          "source_line": 72
+        },
+        {
+          "method": "GET",
+          "path": "/Years/{year}",
+          "source_line": 173
         }
       ]
     }

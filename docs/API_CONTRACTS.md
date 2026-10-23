@@ -1,8 +1,8 @@
 # 📡 Jellyfin v12.3 controller attribute inventory
 
-**Partial inventory:** 50/60 upstream controllers, 360 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
+**Source-controller coverage:** 60/60 upstream controllers, 419 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
 
-This is **not** a complete API inventory and **not** accepted parity. Method attribute lines alone do not establish route registration, authentication, parameter binding, response schemas, event streams or actual TV client behavior. Fields with `path: null` require manual route-attribute resolution.
+This is **not a fully audited or implemented API inventory** and **not** accepted parity. Method attribute lines alone do not establish route registration, authentication, parameter binding, response schemas, event streams or actual TV client behavior. Fields with `path: null` require manual route-attribute resolution. Controller source coverage is complete at the root folder level; coverage beyond this folder, plus detailed contract review, remain open.
 
 - **ActivityLogController** — `System/ActivityLog` — 1 method attributes
 - **ApiKeyController** — `Auth` — 3 method attributes
@@ -51,8 +51,18 @@ This is **not** a complete API inventory and **not** accepted parity. Method att
 - **StudiosController** — `Studios` — 2 method attributes
 - **SubtitleController** — `/` — 10 method attributes
 - **SuggestionsController** — `/` — 2 method attributes
+- **SyncPlayController** — `SyncPlay` — 22 method attributes
 - **SystemController** — `System` — 10 method attributes
+- **TimeSyncController** — `/` — 1 method attributes
+- **TrailersController** — `Trailers` — 1 method attributes
+- **TrickplayController** — `/` — 2 method attributes
+- **TvShowsController** — `Shows` — 4 method attributes
+- **UniversalAudioController** — `/` — 2 method attributes
 - **UserController** — `Users` — 18 method attributes
+- **UserLibraryController** — `/` — 20 method attributes
+- **UserViewsController** — `/` — 4 method attributes
+- **VideoAttachmentsController** — `Videos` — 1 method attributes
 - **VideosController** — `Videos` — 7 method attributes
+- **YearsController** — `Years` — 2 method attributes
 
-**Next:** expand to all 60 controllers, audit class-level route composition and cross-reference each HTTP contract to Rust handlers and differential tests before crediting a port.
+**Next:** cross-check routes against v12.3 OpenAPI, audit class-level route composition and cross-reference HTTP contracts to Rust handlers and differential tests before crediting a port.
