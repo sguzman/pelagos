@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pelagos · Administration</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --accent: #1db2c0;
+      --bg-light: #f4f9f9; --text-light: #173c44; --panel-light: #ffffff; --muted-light: #53717a;
+      --bg-dark: #0b171b; --text-dark: #e5f6f8; --panel-dark: #14282d; --muted-dark: #acc4c8;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; font: 16px/1.5 system-ui, sans-serif; }
+    body[data-resolved-theme="light"] { color-scheme: light; background: var(--bg-light); color: var(--text-light); --panel: var(--panel-light); --muted: var(--muted-light); --stroke: #cee0e1; }
+    body[data-resolved-theme="dark"] { color-scheme: dark; background: var(--bg-dark); color: var(--text-dark); --panel: var(--panel-dark); --muted: var(--muted-dark); --stroke: #305057; }
+    header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1.25rem clamp(1rem, 4vw, 3rem); border-bottom: 1px solid var(--stroke); }
+    .brand { display: flex; align-items: center; gap: .7rem; letter-spacing: .025em; font-size: 1.25rem; font-weight: 750; }
+    .mark { width: 2rem; height: 2rem; border-radius: 45% 55% 54% 46%; background: var(--accent); }
+    .theme { display: inline-flex; align-items: center; gap: .25rem; background: var(--panel); border: 1px solid var(--stroke); padding: .25rem; border-radius: .8rem; }
+    .theme button { appearance: none; border: 0; padding: .5rem .7rem; border-radius: .55rem; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: .82rem; }
+    .theme button[aria-pressed="true"] { background: var(--accent); color: #061b20; font-weight: 700; }
+    .theme button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    main { width: min(72rem, 100%); margin: 0 auto; padding: clamp(1.25rem, 4vw, 3rem); }
+    h1 { font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.15; margin: 0 0 1rem; }
+    p { max-width: 65ch; }
+    .sub { color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: var(--panel); border: 1px solid var(--stroke); border-radius: 1rem; padding: 1.4rem; }
+    .card h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+    .card p { margin: 0; color: var(--muted); }
+    .status { display: inline-block; border: 1px solid var(--stroke); border-radius: 10rem; padding: .25rem .7rem; font-size: .85rem; }
+    a { color: inherit; text-underline-offset: .2em; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="mark" aria-hidden="true"></span> Pelagos</div>
+    <div class="theme" role="group" aria-label="Appearance" id="appearance">
+      <button data-choice="system" type="button" aria-pressed="true">◐ System</button>
+      <button data-choice="light" type="button" aria-pressed="false">☀ Light</button>
+      <button data-choice="dark" type="button" aria-pressed="false">☾ Dark</button>
+    </div>
+  </header>
+  <main>
+    <span class="status">🦀 Rust server · Pre-alpha</span>
+    <h1>The open sea, under your control.</h1>
+    <p class="sub">Pelagos is being built as a complete Rust replacement for Jellyfin Server with compatibility for unmodified Jellyfin clients, including Smart TVs.</p>
+    <div class="cards">
+      <section class="card"><h2>⚙ Server</h2><p>Native Rust HTTP listener and stable local server identity.</p></section>
+      <section class="card"><h2>📺 Jellyfin compatibility</h2><p>Not yet operational. TV connection and playback remain mandatory MVP acceptance tests.</p></section>
+      <section class="card"><h2>🎞 Media engine</h2><p>Library scanning, FFmpeg integration, transcoding and subtitles are planned.</p></section>
+      <section class="card"><h2>🔐 Administration</h2><p>Appearance control is live. Accounts and security-sensitive settings are not implemented.</p></section>
+    </div>
+    <p class="sub">Diagnostics: <a href="/health">health</a> · <a href="/api/pelagos/status">server status</a></p>
+  </main>
+  <script>
+    (() => {
+      const key = "pelagos.appearance";
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      let saved = "system";
+      try { saved = localStorage.getItem(key) || "system"; } catch (_) {}
+      let choice = ["system", "light", "dark"].includes(saved) ? saved : "system";
+      const buttons = [...document.querySelectorAll("#appearance button")];
+      function render() {
+        document.body.dataset.resolvedTheme = choice === "system" ? (media.matches ? "dark" : "light") : choice;
+        buttons.forEach(button => button.setAttribute("aria-pressed", String(button.dataset.choice === choice)));
+      }
+      buttons.forEach(button => button.addEventListener("click", () => {
+        choice = button.dataset.choice;
+        try { localStorage.setItem(key, choice); } catch (_) {}
+        render();
+      }));
+      media.addEventListener("change", render);
+      render();
+    })();
+  </script>
+</body>
+</html>
