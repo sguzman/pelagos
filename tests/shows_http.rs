@@ -66,7 +66,12 @@ async fn shows_queries_keep_series_boundaries_season_order_and_private_accounts(
         state.clone(),
     )));
     let admin_list = json(
-        get(&router, "/Items?includeItemTypes=Episode", Some(&admin.access_token)).await,
+        get(
+            &router,
+            "/Items?includeItemTypes=Episode",
+            Some(&admin.access_token),
+        )
+        .await,
     )
     .await;
     assert_eq!(admin_list["TotalRecordCount"], 5);
@@ -91,7 +96,10 @@ async fn shows_queries_keep_series_boundaries_season_order_and_private_accounts(
     let seasons_url = format!("/Shows/{signal}/Seasons");
     let episodes_url = format!("/Shows/{signal}/Episodes");
 
-    assert_eq!(get(&router, &seasons_url, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        get(&router, &seasons_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         get(&router, &episodes_url, Some(&viewer.access_token))
             .await
