@@ -131,3 +131,32 @@ async fn folder_views_and_recursive_browse_match_parent_chain() {
     .await;
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }
+
+
+#[tokio::test]
+async fn indexed_empty_library_remains_browsable_without_phantom_files() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().join("EmptyMovies");
+    let state = fixture.path().join("state");
+    std::fs::create_dir_all(&root).unwrap();
+    catalog::index(&state, &root).unwrap();
+    auth::create_user(&state, "admin", "strong-empty-library-test").unwrap();
+    let token = auth::authenticate(&state, "admin", "strong-empty-library-test", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let views = json(get(&router, "/UserViews", Some(&token)).await).await;
+    assert_eq!(views["TotalRecordCount"], 1);
+    assert_eq!(views["Items"][0]["Name"], "EmptyMovies");
+    let id = views["Items"][0]["Id"].as_str().unwrap();
+    let children =
+        json(get(&router, &format!("/Items?parentId={id}"), Some(&token)).await).await;
+    assert_eq!(children["TotalRecordCount"], 0);
+    assert!(children["Items"].as_array().unwrap().is_empty());
+    let root_item = json(get(&router, &format!("/Items/{id}"), Some(&token)).await).await;
+    assert_eq!(root_item["Name"], "EmptyMovies");
+}
