@@ -159,7 +159,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let udp = discovery::bind_default().await?;
         let discovery_id = id.clone();
         tokio::spawn(async move {
-            if let Err(error) = discovery::serve(udp, listening_address.port(), discovery_id).await {
+            if let Err(error) = discovery::serve(udp, listening_address.port(), discovery_id).await
+            {
                 tracing::error!(%error, "UDP discovery stopped");
             }
         });
