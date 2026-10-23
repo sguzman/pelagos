@@ -89,9 +89,7 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
     .await;
     let all = inventory["Items"].as_array().unwrap();
     let id = |name: &str| {
-        all.iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        all.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
@@ -145,8 +143,14 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
         .await,
     )
     .await;
-    assert_eq!(series_theme["ThemeSongsResult"]["Items"][0]["Name"], "series");
-    assert_eq!(series_theme["ThemeVideosResult"]["Items"][0]["Name"], "intro");
+    assert_eq!(
+        series_theme["ThemeSongsResult"]["Items"][0]["Name"],
+        "series"
+    );
+    assert_eq!(
+        series_theme["ThemeVideosResult"]["Items"][0]["Name"],
+        "intro"
+    );
     for path in [
         format!("/Items/{second}/ThemeSongs"),
         format!("/Items/{second}/ThemeVideos"),
