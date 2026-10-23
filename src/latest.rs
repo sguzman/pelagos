@@ -67,18 +67,26 @@ async fn latest_for_user(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let included = filter_types(query.include_item_types.as_deref())?;
-    // The pinned source groups episodes under their series, but audio/photo
-    // require album entities Pelagos does not model yet. Only the explicit
-    // Episode query can enable genuine grouping; all other grouped requests
-    // refuse instead of inventing a generic grouping convention.
-    let group_episodes = query.group_items != Some(false);
-    if group_episodes
-        && !included
-            .as_ref()
-            .is_some_and(|types| types.len() == 1 && types[0] == "Episode")
+    // Pinned Jellyfin v12.3: only Episode has a LatestItemsIndexContainer
+    // among the item types we currently recognize without album metadata.
+    // Movie and generic Video remain their own items, even with groupItems=true.
+    // Audio and Photo need genuine MusicAlbum/PhotoAlbum entities, so grouped
+    // requests involving those kinds (or an unscoped catalog) stay unsupported.
+    let grouped = query.group_items != Some(false);
+    if grouped
+        && !included.as_ref().is_some_and(|types| {
+            !types.is_empty()
+                && types
+                    .iter()
+                    .all(|kind| matches!(kind.as_str(), "Episode" | "Movie" | "Video"))
+        })
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
+    let group_episodes = grouped
+        && included
+            .as_ref()
+            .is_some_and(|types| types.iter().any(|kind| kind == "Episode"));
     let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
     let series = if group_episodes {
         nodes
