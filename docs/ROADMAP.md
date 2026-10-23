@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 17%` across 99 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 18%` across 101 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -247,11 +247,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 22%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 27%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `████░░░░░░ 40%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 45%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -293,6 +293,14 @@
   - [x] Accept Jellyfin-shaped /Sessions/Playing start/progress/stop direct-play reports, preserve user-private resume ticks — src/playstate.rs; src/user_data.rs — validated item access and direct-only session event reporting
   - [x] CI proves position persistence, restart behavior, permission revocation, invalid ticks and rejection of unsupported remux/transcode methods — GitHub Actions 39982784834 — Rust playback report and user data integration tests passed
   - [ ] Unmodified TV clients demonstrate resume/reconnect, play thresholds, playback event delivery and full sessions/WebSocket behavior
+- 🎞️ **T330 — Jellyfin container-suffixed direct-play GET/HEAD URLs** — `███████░░░ 67%`
+  - [x] Support static /Videos/{id}/stream.ext and /Audio/{id}/stream.ext routes without lying about container conversion — src/streaming.rs — recognized stream.<container> URLs with exact indexed source extension guard
+  - [x] CI verifies audio/video extension-path byte ranges, 404 invalid paths and 501 mismatched containers — GitHub Actions 39983627300 — Rust direct play named route tests, format and Clippy passed
+  - [ ] Unmodified Jellyfin TV/mobile apps accept named stream URLs and seek in real formats
+- 🚫 **T331 — Strict static streaming option negotiation boundaries** — `███████░░░ 67%`
+  - [x] Refuse nonzero tick seeking, unsupported codec/subtitle selection, invalid source IDs and incompatible container queries — src/streaming.rs — guard unsupported transcode/remux negotiation fields and validate start tick bounds
+  - [x] CI tests accurate 200/400/501 static stream option responses and regressions — GitHub Actions 39984094410 — Rust stream negotiation HTTP tests, Clippy and format passed
+  - [ ] Full client codecs and remux/transcode negotiation validated with real FFmpeg, hardware and TV devices
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

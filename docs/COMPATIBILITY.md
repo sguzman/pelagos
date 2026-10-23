@@ -49,3 +49,7 @@ The initial `/Items` and `/Search/Hints` implementations share a recognized medi
 ## Personal media state and direct-play resume (synthetic only)
 
 Per-user played/favorite routes, legacy user-item lookup and read-only `UserData` item responses pass Rust/HTTP acceptance fixtures ([CI 39982107696](https://github.com/sguzman/pelagos/actions/runs/39982107696)). Guarded direct-play start/progress/stop routes persist per-account `PositionTicks` and reject unsupported transcoding variants ([CI 39982784834](https://github.com/sguzman/pelagos/actions/runs/39982784834)). These are **not** proof of unmodified TV resume, offline sync, completion thresholds or real playback session behavior. Real-device compatibility remains **Not tested**.
+
+## Container-named streams and negotiating unsupported codecs
+
+The initial static direct-play handler accepts `/Videos/{id}/stream.mp4` and `/Audio/{id}/stream.mp3` when the indexed container matches, including HTTP ranges ([CI 39983627300](https://github.com/sguzman/pelagos/actions/runs/39983627300)). Unsupported explicit remux/transcode/tick-seek requests return 501 rather than false 200 success ([CI 39984094410](https://github.com/sguzman/pelagos/actions/runs/39984094410)). Unmodified TV app playback remains **Not tested**.

@@ -1375,6 +1375,50 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T330",
+              "emoji": "🎞️",
+              "name": "Jellyfin container-suffixed direct-play GET/HEAD URLs",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Support static /Videos/{id}/stream.ext and /Audio/{id}/stream.ext routes without lying about container conversion",
+                  "passed": true,
+                  "evidence": "src/streaming.rs — recognized stream.<container> URLs with exact indexed source extension guard"
+                },
+                {
+                  "title": "CI verifies audio/video extension-path byte ranges, 404 invalid paths and 501 mismatched containers",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39983627300 — Rust direct play named route tests, format and Clippy passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV/mobile apps accept named stream URLs and seek in real formats",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T331",
+              "emoji": "🚫",
+              "name": "Strict static streaming option negotiation boundaries",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Refuse nonzero tick seeking, unsupported codec/subtitle selection, invalid source IDs and incompatible container queries",
+                  "passed": true,
+                  "evidence": "src/streaming.rs — guard unsupported transcode/remux negotiation fields and validate start tick bounds"
+                },
+                {
+                  "title": "CI tests accurate 200/400/501 static stream option responses and regressions",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39984094410 — Rust stream negotiation HTTP tests, Clippy and format passed"
+                },
+                {
+                  "title": "Full client codecs and remux/transcode negotiation validated with real FFmpeg, hardware and TV devices",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
