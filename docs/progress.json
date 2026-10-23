@@ -682,6 +682,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T118",
+              "emoji": "👤",
+              "name": "Self-scoped Jellyfin user lookup by ID",
+              "checks": [
+                {
+                  "title": "Serve pinned GET /Users/{userId} for authenticated account only, matching /Users/Me without exposing other users",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs; tests/user_lookup_http.rs — self lookup, inaccessible account 404, token validation"
+                },
+                {
+                  "title": "CI verifies account equality, cross-account privacy and revoked token denial",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -897,6 +919,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin clients verify read/write UserData DTO parity and synchronization semantics",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T130",
+              "emoji": "✍️",
+              "name": "Transactional Jellyfin UserData item updates",
+              "checks": [
+                {
+                  "title": "Implement pinned POST UserItems/{itemId}/UserData and legacy route for supported played, favorite, play-count and resume-tick fields with strict unsupported-input handling",
+                  "passed": true,
+                  "evidence": "src/user_data.rs; tests/user_data_update_http.rs — private transactional SQLite updates with guarded field validation"
+                },
+                {
+                  "title": "CI verifies atomic rejection, caller/library isolation, negative positions, persistent flags, idempotency and grant revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39998782291 — complete Rust CI passed on main"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients validate full UpdateUserItemDataDto, preference fields, event synchronization and resume semantics",
                   "passed": false
                 }
               ],
@@ -1324,6 +1368,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T227",
+              "emoji": "📦",
+              "name": "Indexed native container metadata on library items",
+              "checks": [
+                {
+                  "title": "Emit filename-derived media Container from indexed relative paths, omitting it from virtual library and folder items",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/catalog_http.rs — MP4/MKV/FLAC DTOs and private folder metadata"
+                },
+                {
+                  "title": "CI verifies container DTO regression and full existing catalog suite",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39998201271 — formatting, Clippy, catalog HTTP and full test checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients and pinned BaseItemDto metadata differential validate container consistency",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
