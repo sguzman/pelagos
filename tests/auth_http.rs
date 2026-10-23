@@ -141,3 +141,67 @@ async fn jellyfin_client_header_survives_login_session_response() {
     assert_eq!(result["SessionInfo"]["ApplicationVersion"], "2.0");
     assert_eq!(result["SessionInfo"]["ServerId"], "server");
 }
+
+
+#[tokio::test]
+async fn sessions_list_obeys_user_scope_and_explicitly_rejects_unimplemented_filters() {
+    let state = tempfile::tempdir().unwrap();
+    auth::create_user(state.path(), "admin", "admin-session-test-password").unwrap();
+    auth::create_user(state.path(), "viewer", "viewer-session-test-password").unwrap();
+    let admin = auth::authenticate(
+        state.path(),
+        "admin",
+        "admin-session-test-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
+    let viewer = auth::authenticate(
+        state.path(),
+        "viewer",
+        "viewer-session-test-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.path().to_path_buf(),
+    )));
+    let denied = send(&router, "GET", "/Sessions", Body::empty(), None).await;
+    assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+    let viewer_sessions = json_response(
+        send(
+            &router,
+            "GET",
+            "/Sessions",
+            Body::empty(),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(viewer_sessions.as_array().unwrap().len(), 1);
+    assert_eq!(viewer_sessions[0]["UserName"], "viewer");
+    let all_sessions = json_response(
+        send(
+            &router,
+            "GET",
+            "/Sessions",
+            Body::empty(),
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(all_sessions.as_array().unwrap().len(), 2);
+    let unsupported = send(
+        &router,
+        "GET",
+        "/Sessions?activeWithinSeconds=30",
+        Body::empty(),
+        Some(&admin.access_token),
+    )
+    .await;
+    assert_eq!(unsupported.status(), StatusCode::NOT_IMPLEMENTED);
+}
