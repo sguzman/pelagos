@@ -435,6 +435,13 @@ async fn episodes(
     show_items(state, headers, series_id, query, true).await
 }
 
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/Shows/NextUp", get(next_up))
+        .route("/Shows/{series_id}/Seasons", get(seasons))
+        .route("/Shows/{series_id}/Episodes", get(episodes))
+}
+
 #[cfg(test)]
 mod next_up_date_tests {
     use super::utc_date_key;
@@ -463,11 +470,4 @@ mod next_up_date_tests {
             assert!(utc_date_key(bad).is_none(), "{bad}");
         }
     }
-}
-
-pub fn router() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/Shows/NextUp", get(next_up))
-        .route("/Shows/{series_id}/Seasons", get(seasons))
-        .route("/Shows/{series_id}/Episodes", get(episodes))
 }
