@@ -25,12 +25,7 @@ async fn get(router: &Router, path: &str, method: &str, token: Option<&str>) -> 
         .unwrap()
 }
 
-async fn conditional(
-    router: &Router,
-    path: &str,
-    token: &str,
-    etag: &str,
-) -> Response {
+async fn conditional(router: &Router, path: &str, token: &str, etag: &str) -> Response {
     router
         .clone()
         .oneshot(
@@ -148,7 +143,10 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
         response.headers()[header::CACHE_CONTROL],
         "private, no-cache"
     );
-    let etag = response.headers()[header::ETAG].to_str().unwrap().to_owned();
+    let etag = response.headers()[header::ETAG]
+        .to_str()
+        .unwrap()
+        .to_owned();
     assert_eq!(etag, format!("\"{first_tag}\""));
     assert_eq!(
         to_bytes(response.into_body(), 100).await.unwrap().as_ref(),

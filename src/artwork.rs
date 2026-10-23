@@ -248,7 +248,10 @@ async fn image_response(
         )?;
         // Validate against the already opened confined descriptor, never an
         // unverified path after an image was swapped or symlinked.
-        let tag = opened.metadata().ok().and_then(|meta| tag_from_metadata(&selected, &meta));
+        let tag = opened
+            .metadata()
+            .ok()
+            .and_then(|meta| tag_from_metadata(&selected, &meta));
         Ok::<_, StatusCode>((opened, path, size, tag.map(|tag| format!("\"{tag}\""))))
     })
     .await
@@ -262,10 +265,9 @@ async fn image_response(
     {
         let mut response = Response::new(Body::empty());
         *response.status_mut() = StatusCode::NOT_MODIFIED;
-        response.headers_mut().insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("private, no-cache"),
-        );
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-cache"));
         response.headers_mut().insert(
             ETAG,
             HeaderValue::from_str(etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
@@ -286,10 +288,9 @@ async fn image_response(
         HeaderValue::from_str(&size.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
     // Keep image validators honest if a user edits the original artwork.
-    response.headers_mut().insert(
-        CACHE_CONTROL,
-        HeaderValue::from_static("private, no-cache"),
-    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-cache"));
     if let Some(etag) = etag {
         response.headers_mut().insert(
             ETAG,
