@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 18%` across 101 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 19%` across 105 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -178,7 +178,7 @@
   - [x] CI verifies per-user playback/favorite DTO fields and access isolation — GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed
   - [ ] Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views
 
-## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 10%`
+## 📚 M2 — Full media library and metadata — `██░░░░░░░░ 20%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -205,7 +205,7 @@
   - [x] CI validates v1 migration, empty-library rescans, /UserViews and empty parent navigation — GitHub Actions 39960935517 — format, Clippy and Rust synthetic migration and REST tests passed
   - [ ] Live Jellyfin clients browse renamed, deleted and empty production libraries across upgrades
 
-### 🧩 P7 — Metadata systems — `░░░░░░░░░░ 0%`
+### 🧩 P7 — Metadata systems — `██░░░░░░░░ 22%`
 
 - 📝 **T210 — Metadata readers** — `░░░░░░░░░░ 0%`
   - [ ] Implement NFO, tags, EXIF, chapters and sidecar parsing
@@ -223,8 +223,16 @@
   - [ ] Implement language, localization, provider IDs and sort-title rules
   - [ ] Automated tests and Jellyfin baseline fixture verify language, localization, provider IDs and sort-title rules
   - [ ] Production or real-client acceptance validates language, localization, provider IDs and sort-title rules
+- 🖼️ **T214 — Indexed primary posters and cover artwork for individual media** — `███████░░░ 67%`
+  - [x] Find local indexed title posters or cover files, advertise ImageTags.Primary and serve scope-checked Primary GET/HEAD — src/artwork.rs; src/catalog_api.rs — deterministic local image sidecar selection and Linux descriptor validation
+  - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39987262612 — title-specific precedence, image response/MIME, owner scope, revocation, symlink guard tests passed
+  - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
+- 📁 **T215 — Primary artwork for library and nested collection folders** — `███████░░░ 67%`
+  - [x] Resolve indexed poster/folder/cover art for collection roots and nested album folders through Primary and Primary/0 URLs — src/artwork.rs; src/catalog_api.rs — virtual folder image tags, guarded nested-folder resolution and empty-library views
+  - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39988010040 — album/root media artwork, indexed /0, user grants/revocation, formatter and Clippy passed
+  - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
 
-### 🎼 P8 — Library feature APIs — `█░░░░░░░░░ 13%`
+### 🎼 P8 — Library feature APIs — `██░░░░░░░░ 22%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -246,12 +254,16 @@
   - [x] Implement stable collection/folder IDs and ParentId hierarchy from indexed filenames — src/catalog_api.rs — folder nodes, direct child and recursive file queries
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
+- 🏷️ **T226 — Permission-scoped primary ImageInfo collection API** — `███████░░░ 67%`
+  - [x] List locally indexed primary image tags and actual sizes via GET /Items/{id}/Images without raw paths or fabricated dimensions — src/artwork.rs — authenticated Jellyfin ImageInfo subset, read-only metadata and missing-image behavior
+  - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39988687987 — scoped ImageInfo listing, privacy, HTTP and Rust validation passed
+  - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 27%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 29%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█████░░░░░ 45%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 46%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -301,6 +313,10 @@
   - [x] Refuse nonzero tick seeking, unsupported codec/subtitle selection, invalid source IDs and incompatible container queries — src/streaming.rs — guard unsupported transcode/remux negotiation fields and validate start tick bounds
   - [x] CI tests accurate 200/400/501 static stream option responses and regressions — GitHub Actions 39984094410 — Rust stream negotiation HTTP tests, Clippy and format passed
   - [ ] Full client codecs and remux/transcode negotiation validated with real FFmpeg, hardware and TV devices
+- 🎧 **T332 — FFprobe audio playback sources and optional fallback permissions** — `███████░░░ 67%`
+  - [x] Expose audio PlaybackInfo and a local direct-play URL; treat fallback flags as client permissions without falsely advertising transcode/remux support — src/playback.rs — audio files now return bounded FFprobe media streams, runtime, and the static audio route; direct-play-only capability truth
+  - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39986043745 — audio source, device fallback flags, permission grants, revocation and Clippy tests passed
+  - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

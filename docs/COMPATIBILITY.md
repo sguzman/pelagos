@@ -53,3 +53,7 @@ Per-user played/favorite routes, legacy user-item lookup and read-only `UserData
 ## Container-named streams and negotiating unsupported codecs
 
 The initial static direct-play handler accepts `/Videos/{id}/stream.mp4` and `/Audio/{id}/stream.mp3` when the indexed container matches, including HTTP ranges ([CI 39983627300](https://github.com/sguzman/pelagos/actions/runs/39983627300)). Unsupported explicit remux/transcode/tick-seek requests return 501 rather than false 200 success ([CI 39984094410](https://github.com/sguzman/pelagos/actions/runs/39984094410)). Unmodified TV app playback remains **Not tested**.
+
+## Local primary artwork and audio PlaybackInfo
+
+Direct-play-only audio `PlaybackInfo` reports now accept permissive fallback capability flags but never claim transcoding or remuxing ([CI 39986043745](https://github.com/sguzman/pelagos/actions/runs/39986043745)). Local, indexed primary poster and folder art is advertised and can be fetched via Jellyfin `Primary` and `Primary/0` URLs ([CI 39987262612](https://github.com/sguzman/pelagos/actions/runs/39987262612), [CI 39988010040](https://github.com/sguzman/pelagos/actions/runs/39988010040)). The `/Items/{id}/Images` list exposes local ImageInfo metadata without filesystem paths ([CI 39988687987](https://github.com/sguzman/pelagos/actions/runs/39988687987)). Image resizing, richer metadata providers and unmodified TV rendering remain **Not tested**.

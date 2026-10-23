@@ -1039,6 +1039,50 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T214",
+              "emoji": "🖼️",
+              "name": "Indexed primary posters and cover artwork for individual media",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Find local indexed title posters or cover files, advertise ImageTags.Primary and serve scope-checked Primary GET/HEAD",
+                  "passed": true,
+                  "evidence": "src/artwork.rs; src/catalog_api.rs — deterministic local image sidecar selection and Linux descriptor validation"
+                },
+                {
+                  "title": "CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39987262612 — title-specific precedence, image response/MIME, owner scope, revocation, symlink guard tests passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T215",
+              "emoji": "📁",
+              "name": "Primary artwork for library and nested collection folders",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Resolve indexed poster/folder/cover art for collection roots and nested album folders through Primary and Primary/0 URLs",
+                  "passed": true,
+                  "evidence": "src/artwork.rs; src/catalog_api.rs — virtual folder image tags, guarded nested-folder resolution and empty-library views"
+                },
+                {
+                  "title": "CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39988010040 — album/root media artwork, indexed /0, user grants/revocation, formatter and Clippy passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -1145,6 +1189,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T226",
+              "emoji": "🏷️",
+              "name": "Permission-scoped primary ImageInfo collection API",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "List locally indexed primary image tags and actual sizes via GET /Items/{id}/Images without raw paths or fabricated dimensions",
+                  "passed": true,
+                  "evidence": "src/artwork.rs — authenticated Jellyfin ImageInfo subset, read-only metadata and missing-image behavior"
+                },
+                {
+                  "title": "CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39988687987 — scoped ImageInfo listing, privacy, HTTP and Rust validation passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata",
                   "passed": false
                 }
               ]
@@ -1416,6 +1482,28 @@
                 },
                 {
                   "title": "Full client codecs and remux/transcode negotiation validated with real FFmpeg, hardware and TV devices",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T332",
+              "emoji": "🎧",
+              "name": "FFprobe audio playback sources and optional fallback permissions",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Expose audio PlaybackInfo and a local direct-play URL; treat fallback flags as client permissions without falsely advertising transcode/remux support",
+                  "passed": true,
+                  "evidence": "src/playback.rs — audio files now return bounded FFprobe media streams, runtime, and the static audio route; direct-play-only capability truth"
+                },
+                {
+                  "title": "CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39986043745 — audio source, device fallback flags, permission grants, revocation and Clippy tests passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata",
                   "passed": false
                 }
               ]
