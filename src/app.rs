@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -8,14 +8,35 @@ use axum::{
 };
 use serde::Serialize;
 
+use crate::auth_api;
+
 #[derive(Debug)]
 pub struct AppState {
     server_id: String,
+    auth_dir: Option<PathBuf>,
 }
 
 impl AppState {
     pub fn new(server_id: String) -> Self {
-        Self { server_id }
+        Self {
+            server_id,
+            auth_dir: None,
+        }
+    }
+
+    pub fn with_auth_dir(server_id: String, auth_dir: PathBuf) -> Self {
+        Self {
+            server_id,
+            auth_dir: Some(auth_dir),
+        }
+    }
+
+    pub fn auth_dir(&self) -> Option<PathBuf> {
+        self.auth_dir.clone()
+    }
+
+    pub fn server_id(&self) -> &str {
+        &self.server_id
     }
 }
 
@@ -28,6 +49,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         // This compatibility-shaped endpoint alone does NOT establish Jellyfin compatibility.
         .route("/System/Info/Public", get(public_info))
         .route("/System/Ping", get(ping).post(ping))
+        .merge(auth_api::router())
         .with_state(state)
 }
 

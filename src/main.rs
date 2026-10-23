@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{io::{self, IsTerminal, Read}, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use pelagos::{app, discovery, identity};
@@ -36,6 +36,8 @@ enum Command {
     },
     /// Synchronize one read-only filesystem scan into Pelagos' private SQLite index.
     Index { directory: PathBuf },
+    /// Create a local Pelagos user, reading the password from standard input only.
+    UserAdd { username: String },
     /// List items in an already indexed library.
     Catalog { directory: PathBuf },
     /// Inspect one media file with the installed FFprobe executable.
@@ -86,8 +88,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
     }
+    if let Some(Command::UserAdd { username }) = &args.command {
+        if io::stdin().is_terminal() {
+            return Err("supply a password via standard input (not a command-line argument)".into());
+        }
+        let mut input = String::new();
+        io::stdin().take(1025).read_to_string(&mut input)?;
+        let password = input.trim_end_matches(['\r', '\n']);
+        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let user = pelagos::auth::create_user(&state_dir, username, password)
+            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        println!("created user: {} ({})", user.name, user.id);
+        return Ok(());
+    }
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);
     let id = identity::load_or_create(&state_dir)?;
+    let state_for_auth = state_dir.clone();
     let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
     if args.discover {
@@ -107,6 +123,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     info!(%address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
-    axum::serve(listener, app::router(Arc::new(app::AppState::new(id)))).await?;
+    axum::serve(listener, app::router(Arc::new(app::AppState::with_auth_dir(id, state_for_auth)))).await?;
     Ok(())
 }
