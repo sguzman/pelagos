@@ -61,7 +61,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
 
-fn stable_id(root: &str, name: &str) -> String {
+pub(crate) fn stable_id(root: &str, name: &str) -> String {
     let mut digest = Sha256::new();
     digest.update(root.as_bytes());
     digest.update([0]);

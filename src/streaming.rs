@@ -1,0 +1,222 @@
+//! Bounded direct-file streaming using the v12.3 Jellyfin video URL shape.
+//! This is static direct play only: no remuxing, transcoding or broad client parity.
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+use axum::{
+    Router,
+    body::Body,
+    extract::{Path as RoutePath, Query, State},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{ACCEPT_RANGES, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
+    },
+    response::Response,
+    routing::get,
+};
+use serde::Deserialize;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+use tokio_util::io::ReaderStream;
+
+use crate::{app::AppState, auth_api, catalog, catalog_api};
+
+#[derive(Debug, Default, Deserialize)]
+struct StreamQuery {
+    #[serde(rename = "static")]
+    static_play: Option<bool>,
+}
+
+fn media_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+        "mp4" | "m4v" => "video/mp4",
+        "mkv" => "video/x-matroska",
+        "webm" => "video/webm",
+        "ts" | "m2ts" => "video/mp2t",
+        "mov" => "video/quicktime",
+        "avi" => "video/x-msvideo",
+        "mpeg" | "mpg" => "video/mpeg",
+        _ => "application/octet-stream",
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ByteRange {
+    start: u64,
+    end: u64,
+}
+
+fn parse_range(value: &str, size: u64) -> Option<ByteRange> {
+    if size == 0 {
+        return None;
+    }
+    let bounds = value.strip_prefix("bytes=")?;
+    if bounds.contains(',') {
+        return None;
+    }
+    let (first, last) = bounds.split_once('-')?;
+    if first.is_empty() {
+        let suffix = last.parse::<u64>().ok()?;
+        if suffix == 0 {
+            return None;
+        }
+        return Some(ByteRange {
+            start: size.saturating_sub(suffix),
+            end: size - 1,
+        });
+    }
+    let start = first.parse::<u64>().ok()?;
+    if start >= size {
+        return None;
+    }
+    let end = if last.is_empty() {
+        size - 1
+    } else {
+        last.parse::<u64>().ok()?.min(size - 1)
+    };
+    if end < start {
+        return None;
+    }
+    Some(ByteRange { start, end })
+}
+
+fn response_headers(response: &mut Response, length: u64, mime: &str) -> Result<(), StatusCode> {
+    response.headers_mut().insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    response.headers_mut().insert(
+        CONTENT_LENGTH,
+        HeaderValue::from_str(&length.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_str(mime).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    Ok(())
+}
+
+fn invalid_range(size: u64) -> Response {
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
+    if let Ok(header) = HeaderValue::from_str(&format!("bytes */{size}")) {
+        response.headers_mut().insert(CONTENT_RANGE, header);
+    }
+    response
+}
+
+async fn serve_file(
+    state: Arc<AppState>,
+    item_id: String,
+    headers: HeaderMap,
+    query: StreamQuery,
+    head_only: bool,
+) -> Result<Response, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.static_play != Some(true) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let directory = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let matched = tokio::task::spawn_blocking(move || catalog::all_files(&directory))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_iter()
+        .find(|row| row.kind == "video" && catalog_api::stable_id(&row.root, &row.relative_path) == item_id)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let root = tokio::fs::canonicalize(&matched.root)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let candidate = PathBuf::from(&matched.root).join(&matched.relative_path);
+    let canonical = tokio::fs::canonicalize(&candidate)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if !canonical.starts_with(&root) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let metadata = tokio::fs::metadata(&canonical)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if !metadata.is_file() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let size = metadata.len();
+    let range = headers
+        .get(RANGE)
+        .and_then(|header| header.to_str().ok())
+        .map(|value| parse_range(value, size));
+    let range = match range {
+        Some(None) => return Ok(invalid_range(size)),
+        Some(Some(range)) => Some(range),
+        None => None,
+    };
+    let (start, length, status) = match &range {
+        Some(range) => (
+            range.start,
+            range.end - range.start + 1,
+            StatusCode::PARTIAL_CONTENT,
+        ),
+        None => (0, size, StatusCode::OK),
+    };
+    let mut response = if head_only {
+        Response::new(Body::empty())
+    } else {
+        let mut file = tokio::fs::File::open(&canonical)
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        file.seek(io::SeekFrom::Start(start))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        Response::new(Body::from_stream(ReaderStream::new(file.take(length))))
+    };
+    *response.status_mut() = status;
+    response_headers(&mut response, length, media_type(&canonical))?;
+    if let Some(range) = range {
+        response.headers_mut().insert(
+            CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+    }
+    Ok(response)
+}
+
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new().route("/Videos/{item_id}/stream", get(stream).head(head_stream))
+}
+
+async fn stream(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, false).await
+}
+
+async fn head_stream(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, true).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn byte_ranges_reject_invalid_and_support_suffix() {
+        assert_eq!(parse_range("bytes=2-5", 10), Some(ByteRange { start: 2, end: 5 }));
+        assert_eq!(parse_range("bytes=-3", 10), Some(ByteRange { start: 7, end: 9 }));
+        assert_eq!(parse_range("bytes=8-", 10), Some(ByteRange { start: 8, end: 9 }));
+        assert_eq!(parse_range("bytes=20-", 10), None);
+        assert_eq!(parse_range("bytes=1-3,5-7", 10), None);
+        assert_eq!(parse_range("bytes=-0", 10), None);
+    }
+}

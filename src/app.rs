@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{auth_api, catalog_api};
+use crate::{auth_api, catalog_api, streaming};
 
 #[derive(Debug)]
 pub struct AppState {
@@ -51,6 +51,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/System/Ping", get(ping).post(ping))
         .merge(auth_api::router())
         .merge(catalog_api::router())
+        .merge(streaming::router())
         .with_state(state)
 }
 
