@@ -152,6 +152,7 @@ fn catalog_nodes(
         .filter(|f| f.kind == "image")
         .cloned()
         .collect::<Vec<_>>();
+    let media_sidecars = artwork::sidecar_keys(&files);
     for root in roots {
         let root_id = stable_id(&root, "");
         if seen.insert(root_id) {
@@ -161,6 +162,11 @@ fn catalog_nodes(
         }
     }
     for file in files {
+        if file.kind == "image"
+            && media_sidecars.contains(&(file.root.clone(), file.relative_path.clone()))
+        {
+            continue;
+        }
         let root = file.root.clone();
         let root_id = stable_id(&root, "");
         if seen.insert(root_id.clone()) {
