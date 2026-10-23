@@ -61,3 +61,32 @@ async fn admin_page_contains_system_default_and_theme_controls() {
     assert!(html.contains("data-choice=\"dark\""));
     assert!(html.contains("let choice = [\"system\", \"light\", \"dark\"]"));
 }
+
+#[tokio::test]
+async fn system_info_follows_jellyfin_v12_3_public_schema() {
+    let response = test_app()
+        .oneshot(Request::builder().uri("/System/Info/Public").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let body = to_bytes(response.into_body(), 4096).await.unwrap();
+    let value: Value = serde_json::from_slice(&body).unwrap();
+    for key in ["Id", "ServerName", "LocalAddress", "Version", "ProductName", "OperatingSystem", "StartupWizardCompleted"] {
+        assert!(value.get(key).is_some(), "missing {key}");
+    }
+    assert!(value.get("CanSelfRestart").is_none());
+    assert_eq!(value["OperatingSystem"], "");
+    assert_eq!(value["StartupWizardCompleted"], false);
+}
+
+#[tokio::test]
+async fn jellyfin_system_ping_accepts_get_and_post() {
+    for method in ["GET", "POST"] {
+        let response = test_app()
+            .oneshot(Request::builder().method(method).uri("/System/Ping").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 1024).await.unwrap();
+        assert_eq!(body.as_ref(), b"Pelagos");
+    }
+}
