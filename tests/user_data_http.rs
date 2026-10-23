@@ -80,9 +80,54 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     let starred = body(call(&router, "POST", &favorite, Some(&viewer.access_token)).await).await;
     assert_eq!(starred["IsFavorite"], true);
     assert_eq!(starred["PlayCount"], 1);
+    let listed = body(call(&router, "GET", "/Items", Some(&viewer.access_token)).await).await;
+    assert_eq!(listed["Items"][0]["UserData"]["PlayCount"], 1);
+    assert_eq!(listed["Items"][0]["UserData"]["IsFavorite"], true);
+    let details = body(
+        call(
+            &router,
+            "GET",
+            &format!("/Items/{id}"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(details["UserData"]["Played"], true);
+    let legacy_details = body(
+        call(
+            &router,
+            "GET",
+            &format!("/Users/{}/Items/{id}", viewer.user.id),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(legacy_details["UserData"]["IsFavorite"], true);
+    let cross_user_lookup = call(
+        &router,
+        "GET",
+        &format!("/Users/{}/Items/{id}", admin.user.id),
+        Some(&viewer.access_token),
+    )
+    .await;
+    assert_eq!(cross_user_lookup.status(), StatusCode::FORBIDDEN);
 
     let admin_data = body(call(&router, "POST", &favorite, Some(&admin.access_token)).await).await;
     assert_eq!(admin_data["PlayCount"], 0);
+    let admin_details = body(
+        call(
+            &router,
+            "GET",
+            &format!("/Items/{id}"),
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(admin_details["UserData"]["PlayCount"], 0);
+    assert_eq!(admin_details["UserData"]["IsFavorite"], true);
 
     let other = format!("/Users/{}/PlayedItems/{id}", admin.user.id);
     assert_eq!(
