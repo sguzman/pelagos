@@ -13,7 +13,7 @@ use crate::media::{self, MediaKind};
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const DB_NAME: &str = "pelagos.sqlite3";
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Serialize)]
 pub struct IndexedItem {
@@ -85,6 +85,19 @@ fn connect(state_dir: &Path) -> Result<Connection> {
              COMMIT;",
         )?;
     }
+    if version < 2 {
+        db.execute_batch(
+            "BEGIN IMMEDIATE;
+             CREATE TABLE IF NOT EXISTS libraries (
+                 root TEXT PRIMARY KEY NOT NULL,
+                 created_unix INTEGER NOT NULL DEFAULT (unixepoch())
+             );
+             INSERT OR IGNORE INTO libraries(root)
+             SELECT DISTINCT library_root FROM media_files;
+             PRAGMA user_version=2;
+             COMMIT;",
+        )?;
+    }
     Ok(db)
 }
 
@@ -103,6 +116,10 @@ pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
     let scan = media::scan(&root)?;
     let mut db = connect(state_dir)?;
     let tx = db.transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO libraries(root) VALUES (?1)",
+        params![path_text(&root)?],
+    )?;
     tx.execute_batch(
         "CREATE TEMP TABLE IF NOT EXISTS pelagos_seen(path TEXT PRIMARY KEY);
          DELETE FROM pelagos_seen;",
@@ -192,8 +209,7 @@ pub fn all_files(state_dir: &Path) -> Result<Vec<CatalogFile>> {
 
 pub fn library_roots(state_dir: &Path) -> Result<Vec<String>> {
     let db = connect(state_dir)?;
-    let mut query =
-        db.prepare("SELECT DISTINCT library_root FROM media_files ORDER BY library_root")?;
+    let mut query = db.prepare("SELECT root FROM libraries ORDER BY root")?;
     let rows = query.query_map([], |row| row.get(0))?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
@@ -256,6 +272,57 @@ mod tests {
         symlink(&outside, source.join("linked")).unwrap();
         assert_eq!(index(&state, &source).unwrap().indexed, 0);
         assert!(list(&state, &source).unwrap().is_empty());
+    }
+
+
+    #[test]
+    fn empty_libraries_remain_registered_after_clean_rescans() {
+        let fixture = tempfile::tempdir().unwrap();
+        let state = fixture.path().join("state");
+        let library = fixture.path().join("Movies");
+        fs::create_dir(&library).unwrap();
+        assert_eq!(index(&state, &library).unwrap().indexed, 0);
+        let name = path_text(&fs::canonicalize(&library).unwrap())
+            .unwrap()
+            .to_owned();
+        assert_eq!(library_roots(&state).unwrap(), vec![name.clone()]);
+        fs::write(library.join("Film.mp4"), b"video").unwrap();
+        assert_eq!(index(&state, &library).unwrap().indexed, 1);
+        fs::remove_file(library.join("Film.mp4")).unwrap();
+        assert_eq!(index(&state, &library).unwrap().stale_removed, 1);
+        assert!(list(&state, &library).unwrap().is_empty());
+        assert_eq!(library_roots(&state).unwrap(), vec![name]);
+    }
+
+    #[test]
+    fn v1_catalog_migrates_existing_roots_without_dropping_files() {
+        let fixture = tempfile::tempdir().unwrap();
+        let state = fixture.path().join("state");
+        let path = database_path(&state).unwrap();
+        let db = Connection::open(path).unwrap();
+        db.execute_batch(
+            "CREATE TABLE media_files (
+                library_root TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                last_seen_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                PRIMARY KEY (library_root, relative_path)
+            );
+            INSERT INTO media_files(library_root, relative_path, kind, size_bytes)
+            VALUES('/existing', 'A.mp4', 'video', 14);
+            PRAGMA user_version=1;",
+        )
+        .unwrap();
+        drop(db);
+        let first = connect(&state).unwrap();
+        let version: i64 = first
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        assert_eq!(library_roots(&state).unwrap(), vec!["/existing".to_owned()]);
+        assert_eq!(all_files(&state).unwrap()[0].relative_path, "A.mp4");
+        assert_eq!(library_roots(&state).unwrap().len(), 1);
     }
 
     #[test]
