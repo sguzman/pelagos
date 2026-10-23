@@ -41,7 +41,7 @@ cargo run -- catalog /path/to/authorized/media
 # Grant/revoke access to an explicitly indexed media root for a local account:
 cargo run -- library-grant viewer /path/to/authorized/media
 cargo run -- library-revoke viewer /path/to/authorized/media
-# Opt-in LAN discovery (does NOT enable login or TV streaming):
+# Opt-in LAN discovery; this does not establish TV login/playback compatibility:
 cargo run -- --bind 0.0.0.0 --port 8097 --discover
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
