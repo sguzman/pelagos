@@ -1,6 +1,10 @@
 //! Read-only Jellyfin-shaped item queries from Pelagos' private SQLite catalog.
 //! This is not yet full BaseItemDto or Jellyfin's library hierarchy.
-use std::{path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use axum::{
     Json, Router,
@@ -25,6 +29,8 @@ pub struct ItemDto {
     pub is_folder: bool,
     pub server_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<i64>,
 }
 
@@ -43,6 +49,7 @@ struct ItemQuery {
     limit: Option<usize>,
     search_term: Option<String>,
     parent_id: Option<String>,
+    recursive: Option<bool>,
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -68,7 +75,7 @@ fn stable_id(root: &str, name: &str) -> String {
         .to_string()
 }
 
-fn map_item(file: catalog::CatalogFile, server_id: &str) -> ItemDto {
+fn map_item(file: catalog::CatalogFile, server_id: &str, parent_id: String) -> ItemDto {
     let name = Path::new(&file.relative_path)
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -86,8 +93,79 @@ fn map_item(file: catalog::CatalogFile, server_id: &str) -> ItemDto {
         media_type: Some(media_type.to_owned()),
         is_folder: false,
         server_id: server_id.to_owned(),
+        parent_id: Some(parent_id),
         size: Some(file.size_bytes),
     }
+}
+
+fn root_item(root: &str, server_id: &str) -> ItemDto {
+    ItemDto {
+        id: stable_id(root, ""),
+        name: Path::new(root)
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Library".to_owned()),
+        item_type: "CollectionFolder".to_owned(),
+        media_type: None,
+        is_folder: true,
+        server_id: server_id.to_owned(),
+        parent_id: None,
+        size: None,
+    }
+}
+
+/// Build a virtual directory hierarchy from indexed filenames. No filesystem writes,
+/// metadata guesses, or symlink traversal occur here.
+fn catalog_nodes(files: Vec<catalog::CatalogFile>, server_id: &str) -> Vec<ItemDto> {
+    let mut result = Vec::new();
+    let mut seen = HashSet::new();
+    for file in files {
+        let root = file.root.clone();
+        let root_id = stable_id(&root, "");
+        if seen.insert(root_id.clone()) {
+            result.push(root_item(&root, server_id));
+        }
+        let mut parent_id = root_id;
+        let mut folder = PathBuf::new();
+        if let Some(directory) = Path::new(&file.relative_path).parent() {
+            for component in directory.components() {
+                folder.push(component.as_os_str());
+                let path = folder.to_string_lossy();
+                let folder_id = stable_id(&root, &format!("folder:{path}"));
+                if seen.insert(folder_id.clone()) {
+                    result.push(ItemDto {
+                        id: folder_id.clone(),
+                        name: component.as_os_str().to_string_lossy().into_owned(),
+                        item_type: "Folder".to_owned(),
+                        media_type: None,
+                        is_folder: true,
+                        server_id: server_id.to_owned(),
+                        parent_id: Some(parent_id.clone()),
+                        size: None,
+                    });
+                }
+                parent_id = folder_id;
+            }
+        }
+        result.push(map_item(file, server_id, parent_id));
+    }
+    result
+}
+
+fn is_descendant(
+    id: &str,
+    parent: &str,
+    parents: &HashMap<String, Option<String>>,
+) -> bool {
+    let mut current = parents.get(id).and_then(|p| p.as_deref());
+    for _ in 0..1024 {
+        match current {
+            Some(candidate) if candidate == parent => return true,
+            Some(candidate) => current = parents.get(candidate).and_then(|p| p.as_deref()),
+            None => return false,
+        }
+    }
+    false
 }
 
 /// Until per-library policies exist, catalog access is administrator-only.
@@ -110,22 +188,36 @@ async fn query_items(
 ) -> Result<Json<QueryResult>, StatusCode> {
     let state_dir = admin_state(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let mut all = tokio::task::spawn_blocking(move || catalog::all_files(&state_dir))
+    let files = tokio::task::spawn_blocking(move || catalog::all_files(&state_dir))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .into_iter()
-        .map(|row| map_item(row, &server_id))
-        .collect::<Vec<_>>();
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut all = catalog_nodes(files, &server_id);
+    match query.parent_id.as_deref() {
+        Some(parent) => {
+            let parents: HashMap<String, Option<String>> = all
+                .iter()
+                .map(|item| (item.id.clone(), item.parent_id.clone()))
+                .collect();
+            if !all.iter().any(|item| item.id == parent && item.is_folder) {
+                return Err(StatusCode::NOT_FOUND);
+            }
+            let recursive = query.recursive.unwrap_or(false);
+            all.retain(|item| {
+                if recursive {
+                    !item.is_folder && is_descendant(&item.id, parent, &parents)
+                } else {
+                    item.parent_id.as_deref() == Some(parent)
+                }
+            });
+        }
+        None => all.retain(|item| !item.is_folder),
+    }
     if let Some(search) = query.search_term.filter(|s| !s.is_empty()) {
         let search = search.to_lowercase();
         all.retain(|item| item.name.to_lowercase().contains(&search));
     }
-    // The directory hierarchy is not yet implemented; reject rather than silently
-    // returning unrelated items for a parent's children.
-    if query.parent_id.is_some() {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
+    all.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
     let total_record_count = all.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
@@ -169,9 +261,8 @@ async fn item(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    candidates
+    catalog_nodes(candidates, &server_id)
         .into_iter()
-        .map(|file| map_item(file, &server_id))
         .find(|item| item.id == item_id)
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
@@ -198,6 +289,7 @@ async fn user_views(
             media_type: None,
             is_folder: true,
             server_id: state.server_id().to_owned(),
+            parent_id: None,
             size: None,
         })
         .collect::<Vec<_>>();
@@ -223,6 +315,36 @@ async fn user_views_legacy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn generated_folder_hierarchy_is_stable_and_selectable() {
+        let files = vec![
+            catalog::CatalogFile {
+                root: "/media/movies".to_owned(),
+                relative_path: "Series/Season 1/Episode.mkv".to_owned(),
+                kind: "video".to_owned(),
+                size_bytes: 7,
+            },
+            catalog::CatalogFile {
+                root: "/media/movies".to_owned(),
+                relative_path: "Standalone.mp4".to_owned(),
+                kind: "video".to_owned(),
+                size_bytes: 5,
+            },
+        ];
+        let tree = catalog_nodes(files, "server");
+        assert_eq!(tree.len(), 5);
+        let root = tree.iter().find(|item| item.item_type == "CollectionFolder").unwrap();
+        let series = tree.iter().find(|item| item.name == "Series").unwrap();
+        let episode = tree.iter().find(|item| item.name == "Episode").unwrap();
+        assert_eq!(series.parent_id.as_deref(), Some(root.id.as_str()));
+        assert!(is_descendant(
+            &episode.id,
+            &root.id,
+            &tree.iter().map(|item| (item.id.clone(), item.parent_id.clone())).collect()
+        ));
+    }
 
     #[test]
     fn deterministic_path_id_with_no_filenames_leaked() {
