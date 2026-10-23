@@ -16,5 +16,6 @@ pub mod probe;
 pub(crate) mod query_filters;
 pub mod resume;
 pub mod search;
+pub mod shows;
 pub mod streaming;
 pub mod user_data;
