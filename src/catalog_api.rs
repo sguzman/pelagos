@@ -87,6 +87,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Items", get(user_items))
         .route("/Users/{user_id}/Items/{item_id}", get(user_item))
         .route("/UserViews", get(user_views))
+        .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
 
@@ -532,6 +533,41 @@ async fn user_item(
         return Err(StatusCode::FORBIDDEN);
     }
     item(State(state), RoutePath(item_id), headers).await
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MediaFoldersQuery {
+    is_hidden: Option<bool>,
+}
+
+/// Administrator-only subset of Jellyfin v12.3 /Library/MediaFolders.
+/// Pelagos currently has no hidden/disabled library configuration; the
+/// indexed roots are visible and this endpoint never exposes physical paths.
+async fn library_media_folders(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<MediaFoldersQuery>,
+) -> Result<Json<QueryResult>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let mut items = if query.is_hidden == Some(true) {
+        Vec::new()
+    } else {
+        accessible_nodes(state, headers)
+            .await?
+            .into_iter()
+            .filter(|item| item.item_type == "CollectionFolder")
+            .collect::<Vec<_>>()
+    };
+    items.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
+    Ok(Json(QueryResult {
+        total_record_count: items.len(),
+        items,
+        start_index: 0,
+    }))
 }
 
 async fn user_views(
