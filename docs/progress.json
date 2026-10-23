@@ -1172,6 +1172,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T206",
+              "emoji": "🎬",
+              "name": "Folder-confirmed local movie title and year recognition",
+              "checks": [
+                {
+                  "title": "Recognize a conservative Title (YYYY) movie only when video filename and containing directory agree; otherwise retain generic Video without fabricated production metadata",
+                  "passed": true,
+                  "evidence": "src/naming.rs; src/catalog_api.rs — local movie hints, Movie DTO and optional ProductionYear"
+                },
+                {
+                  "title": "CI verifies Movie type/isMovie filters, Search/Hints, resume persistence, stable IDs, Unicode titles and grant/revoke isolation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40008846700 — full formatting, Clippy, Rust HTTP/unit and source/roadmap checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients verify full movie naming, NFO/remote metadata, editions, provider IDs, collections and media-source parity",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 27%` across 124 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 27%` across 125 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -214,11 +214,11 @@
   - [x] CI verifies descending pagination, user data/image opt-out, 401/403 account isolation and unimplemented sort/metadata rejection — GitHub Actions 40002822616 — full Rust CI and test suite green
   - [ ] Real Jellyfin clients validate multi-key sort/filter options, full DTO field semantics and query metadata parity
 
-## 📚 M2 — Full media library and metadata — `███░░░░░░░ 32%`
+## 📚 M2 — Full media library and metadata — `███░░░░░░░ 34%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
-### 📂 P6 — Filesystem and items — `██░░░░░░░░ 22%`
+### 📂 P6 — Filesystem and items — `███░░░░░░░ 29%`
 
 - 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
   - [ ] Implement multi-root libraries, watcher updates and rescan correctness
@@ -244,6 +244,10 @@
   - [x] Recognize unambiguous season-folder-matched SxxEyy filenames with Unicode-aware paths while leaving unmatched media generic — src/naming.rs; tests/episode_items_http.rs — standalone parser and protected catalog DTO classification
   - [x] Full CI verifies stable SeasonId/SeriesId graph, partial naming metadata, image/search/resume integration and library grant revocation — GitHub Actions 40006848897 and 40007505990 — formatting, Clippy and full Rust HTTP/unit tests passed
   - [ ] Full Jellyfin naming, provider identifiers, collections, multi-episode files and unmodified client acceptance verified
+- 🎬 **T206 — Folder-confirmed local movie title and year recognition** — `███████░░░ 67%`
+  - [x] Recognize a conservative Title (YYYY) movie only when video filename and containing directory agree; otherwise retain generic Video without fabricated production metadata — src/naming.rs; src/catalog_api.rs — local movie hints, Movie DTO and optional ProductionYear
+  - [x] CI verifies Movie type/isMovie filters, Search/Hints, resume persistence, stable IDs, Unicode titles and grant/revoke isolation — GitHub Actions 40008846700 — full formatting, Clippy, Rust HTTP/unit and source/roadmap checks passed
+  - [ ] Unmodified Jellyfin clients verify full movie naming, NFO/remote metadata, editions, provider IDs, collections and media-source parity
 
 ### 🧩 P7 — Metadata systems — `███░░░░░░░ 34%`
 

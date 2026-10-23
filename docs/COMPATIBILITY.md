@@ -105,3 +105,7 @@ Pelagos reports Quick Connect disabled at the pinned `GET /QuickConnect/Enabled`
 ## Conservative TV catalog and Shows query routes (synthetic only)
 
 Recognized single SxxEyy names under matching season folders produce Series/Season/Episode DTOs, numerical indices, and stable SeriesId/SeasonId links; other video files remain generic unless recognized ([CI 40006848897](https://github.com/sguzman/pelagos/actions/runs/40006848897)). Permission-scoped pinned `GET /Shows/{seriesId}/Seasons` and `/Episodes` subsets now provide season/special filters, page slices, startItemId continuation, partial UserData and defensively rejected unsupported query options ([CI 40007768099](https://github.com/sguzman/pelagos/actions/runs/40007768099)). These are **not** a complete Emby.Naming implementation, upstream Jellyfin metadata graph, NextUp/missing-episode engine or verified real TV-client API.
+
+## Folder-confirmed movie recognition (synthetic only)
+
+Pelagos recognizes Movie DTOs only for a matching local `Title (YYYY)` video file inside a `Title (YYYY)` directory, exposing the parsed title and optional production year without guessing at generic videos. Catalog `includeItemTypes=Movie` and `isMovie` queries, Search/Hints Movie filtering, personal resume data and library grant revocation are verified by [CI 40008846700](https://github.com/sguzman/pelagos/actions/runs/40008846700). Broader Jellyfin movie naming conventions, provider/NFO metadata, alternate editions and unmodified client acceptance remain **Not tested or unimplemented**.
