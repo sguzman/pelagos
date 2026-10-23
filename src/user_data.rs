@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
     extract::{Path as RoutePath, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::post,
+    routing::{get, post},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -191,6 +191,57 @@ struct UserDataQuery {
     date_played: Option<String>,
 }
 
+/// The pinned Jellyfin UserItems/{itemId}/UserData read contract. This
+/// exposes only the caller's private state for an authorized catalog item.
+async fn read_authorized(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    item_id: String,
+    requested_user: Option<String>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if requested_user.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if !catalog_api::accessible_nodes(state.clone(), headers)
+        .await?
+        .iter()
+        .any(|item| item.id == item_id)
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let user_id = user.id;
+    let result = tokio::task::spawn_blocking(move || read(&dir, &user_id, &item_id))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(result))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UserDataReadQuery {
+    user_id: Option<String>,
+}
+
+async fn read_item(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataReadQuery>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    read_authorized(state, headers, item_id, query.user_id).await
+}
+
+async fn read_item_legacy(
+    State(state): State<Arc<AppState>>,
+    RoutePath((user_id, item_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    read_authorized(state, headers, item_id, Some(user_id)).await
+}
+
 async fn change(
     state: Arc<AppState>,
     headers: HeaderMap,
@@ -297,6 +348,11 @@ legacy_handler!(unfavorite_legacy, Flag::Favorite(false));
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/UserItems/{item_id}/UserData", get(read_item))
+        .route(
+            "/Users/{user_id}/Items/{item_id}/UserData",
+            get(read_item_legacy),
+        )
         .route("/UserPlayedItems/{item_id}", post(played).delete(unplayed))
         .route(
             "/Users/{user_id}/PlayedItems/{item_id}",
