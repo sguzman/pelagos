@@ -420,7 +420,7 @@ mod tests {
                 relative_path TEXT NOT NULL,
                 kind TEXT NOT NULL,
                 size_bytes INTEGER NOT NULL,
-                last_seen_at INTEGER NOT NULL,
+                last_seen_at INTEGER NOT NULL DEFAULT (unixepoch()),
                 PRIMARY KEY (library_root, relative_path)
              );
              CREATE TABLE libraries(root TEXT PRIMARY KEY NOT NULL);
