@@ -2,9 +2,9 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 6%` across 82 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 8%` across 84 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 29%`
+## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -31,7 +31,7 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory
   - [ ] Production or real-client acceptance validates baseline source/version and compatibility inventory
 
-### 🛠️ P1 — Build and storage — `█░░░░░░░░░ 13%`
+### 🛠️ P1 — Build and storage — `██░░░░░░░░ 22%`
 
 - 🏗️ **T006 — Build reproducibility** — `░░░░░░░░░░ 0%`
   - [ ] Implement locked dependencies and automated stable Rust compilation
@@ -53,6 +53,10 @@
   - [x] Implement native Rust file-type inventory without following symlinks or modifying media — src/media.rs; src/main.rs; Cargo.toml
   - [x] CI validates synthetic media detection, symlink avoidance and unchanged file contents — GitHub Actions 39950651357: format, clippy, tests and roadmap verification passed
   - [ ] Live Linux scan verifies a real user-authorized library safely
+- 🗄️ **T016 — Isolated transactional SQLite media catalog** — `███████░░░ 67%`
+  - [x] Create a separate Pelagos database and atomic read-only-source library index — src/catalog.rs; Cargo.toml; src/main.rs — versioned SQLite schema and index/catalog CLI
+  - [x] CI verifies incrementals, stale records, library isolation, symlinks and schema safety — GitHub Actions 39954730665 — Rust catalog tests, clippy, format and tracking checks pass
+  - [ ] Large real-media library and recovery/upgrade QA passes under Linux
 
 ### 🧪 P2 — Test framework — `███░░░░░░░ 27%`
 
@@ -77,11 +81,11 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `░░░░░░░░░░ 0%`
+## 🔌 M1 — Jellyfin protocol and API parity — `█░░░░░░░░░ 5%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
-### 🌐 P3 — System and transports — `░░░░░░░░░░ 0%`
+### 🌐 P3 — System and transports — `█░░░░░░░░░ 13%`
 
 - 📡 **T100 — Discovery and public server info** — `░░░░░░░░░░ 0%`
   - [ ] Implement Jellyfin discovery, public system info and stable version negotiation
@@ -99,6 +103,10 @@
   - [ ] Implement TV-friendly Quick Connect and device approval
   - [ ] Automated tests and Jellyfin baseline fixture verify TV-friendly Quick Connect and device approval
   - [ ] Production or real-client acceptance validates TV-friendly Quick Connect and device approval
+- 📺 **T104 — Jellyfin-compatible opt-in UDP LAN discovery** — `███████░░░ 67%`
+  - [x] Implement Jellyfin v12.3 UDP 7359 request/response with accurate LAN URL — src/discovery.rs; src/main.rs — opt-in discovery, local-peer checks, stable ID
+  - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
+  - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
 
 ### 👥 P4 — Authentication and user state — `░░░░░░░░░░ 0%`
 

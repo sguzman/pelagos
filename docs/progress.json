@@ -235,6 +235,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T016",
+              "emoji": "🗄️",
+              "name": "Isolated transactional SQLite media catalog",
+              "checks": [
+                {
+                  "title": "Create a separate Pelagos database and atomic read-only-source library index",
+                  "passed": true,
+                  "evidence": "src/catalog.rs; Cargo.toml; src/main.rs — versioned SQLite schema and index/catalog CLI"
+                },
+                {
+                  "title": "CI verifies incrementals, stale records, library isolation, symlinks and schema safety",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39954730665 — Rust catalog tests, clippy, format and tracking checks pass"
+                },
+                {
+                  "title": "Large real-media library and recovery/upgrade QA passes under Linux",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -441,6 +463,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T104",
+              "emoji": "📺",
+              "name": "Jellyfin-compatible opt-in UDP LAN discovery",
+              "checks": [
+                {
+                  "title": "Implement Jellyfin v12.3 UDP 7359 request/response with accurate LAN URL",
+                  "passed": true,
+                  "evidence": "src/discovery.rs; src/main.rs — opt-in discovery, local-peer checks, stable ID"
+                },
+                {
+                  "title": "Automated loopback UDP, message filtering, JSON property and address tests pass",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass"
+                },
+                {
+                  "title": "Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

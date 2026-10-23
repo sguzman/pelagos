@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`█░░░░░░░░░ 6%` across 82 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`█░░░░░░░░░ 8%` across 84 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39953180557](https://github.com/sguzman/pelagos/actions/runs/39953180557) — formatting, Clippy, Rust tests, roadmap/source/API inventories.
+**Latest passing CI:** [run 39954730665](https://github.com/sguzman/pelagos/actions/runs/39954730665) — formatting, Clippy, Rust/UDP/SQLite tests, roadmap and pinned inventory validations.
 
 ## 🚀 Current starter
 

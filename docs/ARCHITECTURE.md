@@ -38,3 +38,11 @@ The Rust-only `pelagos scan <directory>` subcommand enumerates recognized file e
 ## Initial read-only FFprobe bridge
 
 `cargo run -- probe /path/to/file.mkv` invokes system `ffprobe` with explicit argv, a process timeout, bounded output and JSON decoding. It never runs a shell or transcodes media. Synthetic tests verify error paths; real hardware/audio/video metadata mapping and Jellyfin `MediaStream` compatibility are still open. This does not make playback functional.
+
+## Private incremental media index
+
+`cargo run -- index /media/root` scans an explicitly provided media directory without following symlinks and writes only to Pelagos' own XDG-state `pelagos.sqlite3` database. The schema is versioned (`user_version = 1`), entries are scoped by canonical library root, indexes commit atomically, and stale-row purging happens only after the entire scan succeeds. `cargo run -- catalog /media/root` lists indexed entries without touching media. This is a preliminary filename/type catalog, not Jellyfin's rich media object database or a TV-accessible library.
+
+## LAN service discovery
+
+`--bind 0.0.0.0 --discover` explicitly enables the v12.3 Jellyfin UDP discovery phrase and `ServerDiscoveryInfo` JSON reply on UDP port 7359. System chooses a route-specific local interface IP for the reply and ignores non-LAN source addresses. The default remains loopback-only and discovery-disabled. A discovery packet or client visibility is NOT authentication, browsing or media playback; these require further server implementation. Do not expose pre-alpha HTTP admin surfaces to untrusted networks.
