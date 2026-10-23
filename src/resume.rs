@@ -130,7 +130,7 @@ async fn list_resume(
             if data.played || data.playback_position_ticks <= 0 {
                 return None;
             }
-            item.user_data = (query.enable_user_data != Some(false)).then_some(data);
+            item.user_data = Some(data);
             if query.enable_images == Some(false) {
                 item.image_tags = None;
             }
@@ -145,6 +145,11 @@ async fn list_resume(
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.id.cmp(&b.id))
     });
+    if query.enable_user_data == Some(false) {
+        for item in &mut resumable {
+            item.user_data = None;
+        }
+    }
     let total_record_count = resumable.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
