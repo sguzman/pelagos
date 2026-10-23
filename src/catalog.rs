@@ -206,9 +206,7 @@ pub fn refresh_registered(state_dir: &Path) -> Result<usize> {
                     size_bytes=excluded.size_bytes,
                     last_seen_at=unixepoch()",
             )?;
-            let mut seen = tx.prepare(
-                "INSERT INTO pelagos_refresh_seen (path) VALUES (?1)",
-            )?;
+            let mut seen = tx.prepare("INSERT INTO pelagos_refresh_seen (path) VALUES (?1)")?;
             for file in &scan.files {
                 let relative = path_text(&file.path)?;
                 seen.execute(params![relative])?;
