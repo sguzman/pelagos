@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 32%` across 143 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 32%` across 144 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -387,11 +387,11 @@
   - [x] Rust CI verifies administrator/non-administrator permissions, supported MIME and byte ranges, Unicode disposition, sidecar/photo exclusion and outside-root symlink rejection — GitHub Actions 40033133007: cargo fmt, Clippy, complete Rust suite, roadmap and pinned protocol/source guards passed
   - [ ] Full Jellyfin Download permission policy, real-client transfers and production acceptance are demonstrated
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 35%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█████░░░░░ 50%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 51%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -457,6 +457,10 @@
   - [x] Implement size-validated GET /Playback/BitrateTest with non-cacheable random data streamed in bounded chunks and an exact Content-Length — src/bitrate.rs — direct Rust random-reader, no 100 MB response allocation or shell tooling
   - [x] CI validates authentication, default 102400 bytes, maximum 100000000, exact stream length, random payload and invalid-size responses — GitHub Actions 39994640474 — authenticated HTTP and bounded generator tests plus Clippy/format passed
   - [ ] Unmodified Smart TV clients verify playback bitrate estimation against real network conditions
+- 🛡️ **T336 — Strict malformed and repeated byte-range header rejection** — `███████░░░ 67%`
+  - [x] Refuse opaque, unreadable, unfulfillable or duplicate HTTP Range headers without serving full media; preserve valid single-range streaming/download behavior — src/streaming.rs; Range header parsing and invalid_range Content-Range response
+  - [x] Native Rust HTTP and unit CI regressions verify malformed/non-text and duplicated Range fields for original-media requests and downloads — GitHub Actions 40034407511: complete Rust test suite, formatting, Clippy, evidence-ledger and pinned controller/source contract checks passed
+  - [ ] Upstream Jellyfin differential suite and unmodified real clients accept byte-range behavior across all supported files
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

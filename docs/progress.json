@@ -2277,6 +2277,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T336",
+              "emoji": "🛡️",
+              "name": "Strict malformed and repeated byte-range header rejection",
+              "checks": [
+                {
+                  "title": "Refuse opaque, unreadable, unfulfillable or duplicate HTTP Range headers without serving full media; preserve valid single-range streaming/download behavior",
+                  "passed": true,
+                  "evidence": "src/streaming.rs; Range header parsing and invalid_range Content-Range response"
+                },
+                {
+                  "title": "Native Rust HTTP and unit CI regressions verify malformed/non-text and duplicated Range fields for original-media requests and downloads",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40034407511: complete Rust test suite, formatting, Clippy, evidence-ledger and pinned controller/source contract checks passed"
+                },
+                {
+                  "title": "Upstream Jellyfin differential suite and unmodified real clients accept byte-range behavior across all supported files",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
