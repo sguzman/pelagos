@@ -168,7 +168,7 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(&video)
+                .uri(video.as_str())
                 .header("X-Emby-Token", &admin.access_token)
                 .header(header::RANGE, opaque.clone())
                 .body(Body::empty())
@@ -187,7 +187,7 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(&old)
+                .uri(old.as_str())
                 .header("X-Emby-Token", &viewer.access_token)
                 .header(header::RANGE, opaque)
                 .body(Body::empty())
