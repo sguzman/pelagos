@@ -87,7 +87,7 @@ async fn system_info_follows_jellyfin_v12_3_public_schema() {
         assert!(value.get(key).is_some(), "missing {key}");
     }
     assert!(value.get("CanSelfRestart").is_none());
-    assert_eq!(value["OperatingSystem"], "");
+    assert_eq!(value["OperatingSystem"], std::env::consts::OS);
     assert_eq!(value["StartupWizardCompleted"], false);
 }
 
