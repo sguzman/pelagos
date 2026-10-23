@@ -175,9 +175,15 @@ pub fn save_position(state_dir: &Path, user_id: &str, item_id: &str, ticks: i64)
     let mut db = open_db(state_dir)?;
     let tx = db.transaction()?;
     tx.execute(
-        "INSERT INTO item_user_data(user_id,item_id,position_ticks)
-         VALUES(?1,?2,?3)
-         ON CONFLICT(user_id,item_id) DO UPDATE SET position_ticks=excluded.position_ticks",
+        "INSERT INTO item_user_data(user_id,item_id,position_ticks,last_played_utc)
+         VALUES(?1,?2,?3,
+                CASE WHEN ?3 > 0 THEN strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                     ELSE NULL END)
+         ON CONFLICT(user_id,item_id) DO UPDATE
+         SET position_ticks=excluded.position_ticks,
+             last_played_utc=CASE WHEN excluded.position_ticks > 0
+                                  THEN strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                                  ELSE item_user_data.last_played_utc END",
         params![user_id, item_id, ticks],
     )?;
     tx.commit()?;
@@ -299,6 +305,7 @@ fn write_update(
     };
     let favorite = update.is_favorite.unwrap_or(prior.is_favorite);
     let newly_played = played && !prior.played;
+    let new_activity = newly_played || update.playback_position_ticks.is_some_and(|ticks| ticks > 0);
     tx.execute(
         "INSERT OR IGNORE INTO item_user_data(user_id,item_id) VALUES(?1,?2)",
         params![user_id, item_id],
@@ -306,7 +313,7 @@ fn write_update(
     tx.execute(
         "UPDATE item_user_data
          SET played=?3,play_count=?4,position_ticks=?5,favorite=?6,
-             last_played_utc=CASE WHEN ?7 THEN strftime('%Y-%m-%dT%H:%M:%SZ','now')
+             last_played_utc=CASE WHEN ?7 THEN strftime('%Y-%m-%dT%H:%M:%fZ','now')
                                   ELSE last_played_utc END
          WHERE user_id=?1 AND item_id=?2",
         params![
@@ -316,7 +323,7 @@ fn write_update(
             count,
             ticks,
             favorite,
-            newly_played
+            new_activity
         ],
     )?;
     tx.commit()?;
