@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 24%` across 116 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 24%` across 117 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 36%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 37%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -151,7 +151,7 @@
   - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
   - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
 
-### 🧭 P5 — General API contracts — `████░░░░░░ 43%`
+### 🧭 P5 — General API contracts — `█████░░░░░ 45%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -197,6 +197,10 @@
   - [x] Implement pinned POST UserItems/{itemId}/UserData and legacy route for supported played, favorite, play-count and resume-tick fields with strict unsupported-input handling — src/user_data.rs; tests/user_data_update_http.rs — private transactional SQLite updates with guarded field validation
   - [x] CI verifies atomic rejection, caller/library isolation, negative positions, persistent flags, idempotency and grant revocation — GitHub Actions 39998782291 — complete Rust CI passed on main
   - [ ] Unmodified Jellyfin clients validate full UpdateUserItemDataDto, preference fields, event synchronization and resume semantics
+- ▶️ **T131 — Authorized persisted-position Jellyfin resume item queries** — `███████░░░ 67%`
+  - [x] Implement pinned GET /UserItems/Resume and legacy user route from permitted video/audio media with position, filtering, pagination and playback activity timestamps — src/resume.rs; src/user_data.rs; src/app.rs; tests/resume_http.rs — filtered private resume listing and persisted positive-position timestamps
+  - [x] CI verifies library revocation, cross-user denial, audio/video filters, paging, stable sorting, legacy lookup and explicit unsupported-option responses — GitHub Actions 39999748396 — formatting, Clippy, complete Rust HTTP/unit tests and project tracking checks passed
+  - [ ] Unmodified Jellyfin client resume shelves, DatePlayed ordering, active-session exclusions and full metadata parity validated
 
 ## 📚 M2 — Full media library and metadata — `███░░░░░░░ 27%`
 
