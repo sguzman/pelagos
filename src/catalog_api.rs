@@ -92,6 +92,7 @@ struct ItemQuery {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Items", get(items))
+        .route("/Items/Counts", get(item_counts))
         .route("/Items/Root", get(items_root))
         .route("/Users/{user_id}/Items/Root", get(items_root_legacy))
         .route("/Items/{item_id}", get(item))
@@ -101,6 +102,83 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/UserViews", get(user_views))
         .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
+}
+
+/// Subset of the Jellyfin v12.3 ItemCounts response. Unsupported item
+/// classifications remain zero, not guessed from generic Audio/Video.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ItemCounts {
+    movie_count: usize,
+    series_count: usize,
+    episode_count: usize,
+    artist_count: usize,
+    program_count: usize,
+    trailer_count: usize,
+    song_count: usize,
+    album_count: usize,
+    music_video_count: usize,
+    box_set_count: usize,
+    book_count: usize,
+    item_count: usize,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ItemCountsQuery {
+    user_id: Option<String>,
+    is_favorite: Option<bool>,
+}
+
+async fn item_counts(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<ItemCountsQuery>,
+) -> Result<Json<ItemCounts>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let mut nodes = accessible_nodes(state.clone(), headers).await?;
+    if let Some(favorite) = query.is_favorite {
+        let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        let ids = nodes.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        let user_id = user.id;
+        let user_items =
+            tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        nodes = nodes
+            .into_iter()
+            .zip(user_items)
+            .filter_map(|(item, data)| (data.is_favorite == favorite).then_some(item))
+            .collect();
+    }
+    let count = |kind: &str| nodes.iter().filter(|item| item.item_type == kind).count();
+    let item_count = nodes
+        .iter()
+        .filter(|item| {
+            matches!(
+                item.item_type.as_str(),
+                "Movie" | "Episode" | "Video" | "Audio" | "Photo"
+            )
+        })
+        .count();
+    Ok(Json(ItemCounts {
+        movie_count: count("Movie"),
+        series_count: count("Series"),
+        episode_count: count("Episode"),
+        artist_count: 0,
+        program_count: 0,
+        trailer_count: 0,
+        song_count: 0,
+        album_count: 0,
+        music_video_count: 0,
+        box_set_count: 0,
+        book_count: 0,
+        item_count,
+    }))
 }
 
 #[derive(Debug, Default, Deserialize)]
