@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 29%` across 132 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 29%` across 133 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -85,7 +85,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 42%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 43%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -163,7 +163,7 @@
   - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
   - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
 
-### 🧭 P5 — General API contracts — `█████░░░░░ 49%`
+### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -225,6 +225,10 @@
   - [x] Implement isSeries/isMovie in Items and Search/Hints, retain file-only default browse, expose explicit Series list while refusing unrelated classification flags — src/catalog_api.rs; src/search.rs; tests/classified_flags_http.rs — recognized categories remain tied to authorized catalog
   - [x] CI verifies mixed filter exclusion, explicit Series discovery, scoped Search/Hints, cross-user 403, unsupported flags and grant revocation — GitHub Actions 40011417762 — complete Rust tests, formatting, Clippy and contract/roadmap guards passed
   - [ ] Upstream boolean-filter combinations and actual unmodified Jellyfin TV clients validate full search/browse parity
+- ♥️ **T135 — Personal watched and favorite filters across item browse and search** — `███████░░░ 67%`
+  - [x] Implement pinned isPlayed/isFavorite boolean filters before pagination and counts with the authenticated account's persisted user state — src/catalog_api.rs; src/search.rs — batched user-state read before pagination and hideable UserData response
+  - [x] Full CI verifies combined true/false filters, typed media search, search-folder distinctions, ordering, cross-user denial, restarts and library revocation — GitHub Actions 40016204498 — formatting, Clippy, full Rust unit/HTTP suites and source/roadmap checks passed
+  - [ ] Unmodified Jellyfin clients validate inherited per-series played state, provider metadata interactions and complete upstream ItemQuery filter parity
 
 ## 📚 M2 — Full media library and metadata — `████░░░░░░ 37%`
 

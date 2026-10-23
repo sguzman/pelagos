@@ -1099,6 +1099,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T135",
+              "emoji": "♥️",
+              "name": "Personal watched and favorite filters across item browse and search",
+              "checks": [
+                {
+                  "title": "Implement pinned isPlayed/isFavorite boolean filters before pagination and counts with the authenticated account's persisted user state",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; src/search.rs — batched user-state read before pagination and hideable UserData response"
+                },
+                {
+                  "title": "Full CI verifies combined true/false filters, typed media search, search-folder distinctions, ordering, cross-user denial, restarts and library revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40016204498 — formatting, Clippy, full Rust unit/HTTP suites and source/roadmap checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients validate inherited per-series played state, provider metadata interactions and complete upstream ItemQuery filter parity",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
