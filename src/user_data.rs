@@ -610,6 +610,70 @@ mod tests {
     }
 
     #[test]
+    fn batch_reads_preserve_order_defaults_and_isolation_across_sqlite_bind_chunks() {
+        let dir = tempfile::tempdir().unwrap();
+        let ids = (0..905).map(|i| format!("item-{i:04}")).collect::<Vec<_>>();
+        let mut db = open_db(dir.path()).unwrap();
+        let tx = db.transaction().unwrap();
+        for index in [0, 399, 400, 799, 800, 904] {
+            tx.execute(
+                "INSERT INTO item_user_data
+                 (user_id,item_id,played,play_count,position_ticks,favorite,last_played_utc)
+                 VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                params![
+                    "alice",
+                    ids[index],
+                    true,
+                    index as i64 + 1,
+                    index as i64 * 1000,
+                    true,
+                    "2026-10-23T00:00:00.000Z"
+                ],
+            )
+            .unwrap();
+        }
+        tx.execute(
+            "INSERT INTO item_user_data(user_id,item_id,favorite)
+             VALUES(?1,?2,1)",
+            params!["bob", ids[450]],
+        )
+        .unwrap();
+        tx.commit().unwrap();
+
+        let mut requested = ids.clone();
+        requested.push(ids[400].clone());
+        requested.push("not-in-database".to_owned());
+        let loaded = read_many(dir.path(), "alice", &requested).unwrap();
+        assert_eq!(loaded.len(), requested.len());
+        for (item, expected) in loaded.iter().zip(&requested) {
+            assert_eq!(&item.item_id, expected);
+            assert_eq!(&item.key, expected);
+        }
+        for index in [0, 399, 400, 799, 800, 904] {
+            assert!(loaded[index].played);
+            assert!(loaded[index].is_favorite);
+            assert_eq!(loaded[index].play_count, index as i64 + 1);
+            assert_eq!(loaded[index].playback_position_ticks, index as i64 * 1000);
+            assert_eq!(
+                loaded[index].last_played_date.as_deref(),
+                Some("2026-10-23T00:00:00.000Z")
+            );
+        }
+        assert!(!loaded[401].played);
+        assert!(!loaded[401].is_favorite);
+        assert_eq!(loaded[401].play_count, 0);
+        assert_eq!(loaded[905].play_count, loaded[400].play_count);
+        assert!(!loaded[906].is_favorite);
+        assert_eq!(loaded[906].play_count, 0);
+        assert!(read_many(dir.path(), "alice", &[]).unwrap().is_empty());
+        let other = read_many(dir.path(), "bob", &ids).unwrap();
+        assert!(!other[400].played);
+        assert!(!other[400].is_favorite);
+        assert!(other[450].is_favorite);
+        assert_eq!(other[450].play_count, 0);
+    }
+
+    #[test]
     fn flags_persist_separately_per_user_and_play_count_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
         let a = set_flag(dir.path(), "a", "item", Flag::Played(true)).unwrap();
