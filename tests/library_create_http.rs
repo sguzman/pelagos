@@ -58,7 +58,10 @@ async fn administrator_can_register_one_existing_canonical_library_without_affec
         "server".to_owned(),
         state.clone(),
     )));
-    let route = format!("/Library/VirtualFolders?name=Movies&paths={}", movies.display());
+    let route = format!(
+        "/Library/VirtualFolders?name=Movies&paths={}",
+        movies.display()
+    );
 
     assert_eq!(
         call(&router, "POST", &route, None, "").await.status(),
@@ -72,7 +75,10 @@ async fn administrator_can_register_one_existing_canonical_library_without_affec
     );
     assert!(catalog::library_roots(&state).unwrap().is_empty());
     for invalid in [
-        format!("/Library/VirtualFolders?name=Alias&paths={}", movies.display()),
+        format!(
+            "/Library/VirtualFolders?name=Alias&paths={}",
+            movies.display()
+        ),
         "/Library/VirtualFolders?name=Movies&paths=relative/path".to_owned(),
         format!(
             "/Library/VirtualFolders?name=Movies&paths={},{}",
@@ -114,10 +120,12 @@ async fn administrator_can_register_one_existing_canonical_library_without_affec
     );
     assert_eq!(catalog::library_roots(&state).unwrap().len(), 1);
     assert_eq!(catalog::list(&state, &movies).unwrap().len(), 1);
-    assert!(!catalog::all_files(&state)
-        .unwrap()
-        .iter()
-        .any(|file| file.relative_path == "Secret.mkv"));
+    assert!(
+        !catalog::all_files(&state)
+            .unwrap()
+            .iter()
+            .any(|file| file.relative_path == "Secret.mkv")
+    );
     assert_eq!(
         call(&router, "POST", &route, Some(&admin.access_token), "")
             .await
@@ -141,10 +149,12 @@ async fn administrator_can_register_one_existing_canonical_library_without_affec
         folders[0]["Locations"][0],
         std::fs::canonicalize(&movies).unwrap().to_str().unwrap()
     );
-    let views = json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
+    let views =
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
     assert_eq!(views["TotalRecordCount"], 0);
     auth::grant_library(&state, "viewer", &movies).unwrap();
-    let views = json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
+    let views =
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
     assert_eq!(views["TotalRecordCount"], 1);
     assert_eq!(views["Items"][0]["Id"], folders[0]["ItemId"]);
 
@@ -185,7 +195,10 @@ async fn virtual_library_registration_rejects_symlinked_root_and_missing_paths()
         "server".to_owned(),
         state.clone(),
     )));
-    let route = format!("/Library/VirtualFolders?name=Alias&paths={}", alias.display());
+    let route = format!(
+        "/Library/VirtualFolders?name=Alias&paths={}",
+        alias.display()
+    );
     assert_eq!(
         call(&router, "POST", &route, Some(&admin.access_token), "")
             .await
