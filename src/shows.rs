@@ -171,6 +171,129 @@ async fn show_items(
     }))
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextUpQuery {
+    user_id: Option<String>,
+    series_id: Option<String>,
+    parent_id: Option<String>,
+    start_index: Option<usize>,
+    limit: Option<usize>,
+    fields: Option<String>,
+    enable_images: Option<bool>,
+    enable_user_data: Option<bool>,
+    image_type_limit: Option<usize>,
+    enable_image_types: Option<String>,
+    next_up_date_cutoff: Option<String>,
+    enable_total_record_count: Option<bool>,
+    enable_resumable: Option<bool>,
+    enable_rewatching: Option<bool>,
+}
+
+/// Conservative per-series slice of pinned Jellyfin v12.3 Shows/NextUp.
+/// Only locally recognized episodes with explicit season and episode indices
+/// participate. Rewatching, specials interleaving and alternate editions are
+/// not modeled; those options must not silently return misleading results.
+async fn next_up(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<NextUpQuery>,
+) -> Result<Json<ShowResult>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.parent_id.is_some()
+        || query.fields.is_some()
+        || query.image_type_limit.is_some()
+        || query.enable_image_types.is_some()
+        || query.next_up_date_cutoff.is_some()
+        || query.enable_total_record_count == Some(false)
+        || query.enable_rewatching == Some(true)
+        || query.limit == Some(0)
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let series_id = query.series_id.ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
+    if !nodes
+        .iter()
+        .any(|item| item.id == series_id && item.item_type == "Series")
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let mut episodes = nodes
+        .into_iter()
+        .filter(|item| {
+            item.item_type == "Episode"
+                && item.series_id.as_deref() == Some(series_id.as_str())
+                && item.parent_index_number.is_some_and(|season| season > 0)
+                && item.index_number.is_some()
+        })
+        .collect::<Vec<_>>();
+    episodes.sort_by(|a, b| {
+        a.parent_index_number
+            .cmp(&b.parent_index_number)
+            .then_with(|| a.index_number.cmp(&b.index_number))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    let ids = episodes.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let user_id = user.id;
+    let saved = tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let positions = episodes
+        .iter()
+        .zip(saved.iter())
+        .filter(|(_, data)| data.played)
+        .map(|(item, _)| {
+            (
+                item.parent_index_number.unwrap_or(0),
+                item.index_number.unwrap_or(0),
+            )
+        })
+        .max();
+    let mut first_next = episodes
+        .into_iter()
+        .zip(saved)
+        .find(|(item, data)| {
+            !data.played
+                && positions.is_none_or(|position| {
+                    (
+                        item.parent_index_number.unwrap_or(0),
+                        item.index_number.unwrap_or(0),
+                    ) > position
+                })
+        })
+        .and_then(|(mut item, data)| {
+            if query.enable_resumable == Some(false) && data.playback_position_ticks > 0 {
+                return None;
+            }
+            if query.enable_user_data != Some(false) {
+                item.user_data = Some(data);
+            }
+            if query.enable_images == Some(false) {
+                item.image_tags = None;
+            }
+            Some(item)
+        });
+    let total_record_count = usize::from(first_next.is_some());
+    let start_index = query.start_index.unwrap_or(0);
+    let limit = query.limit.unwrap_or(100).min(200);
+    let items = if start_index == 0 && limit > 0 {
+        first_next.take().into_iter().collect()
+    } else {
+        Vec::new()
+    };
+    Ok(Json(ShowResult {
+        items,
+        total_record_count,
+        start_index,
+    }))
+}
+
 async fn seasons(
     State(state): State<Arc<AppState>>,
     RoutePath(series_id): RoutePath<String>,
@@ -191,6 +314,7 @@ async fn episodes(
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/Shows/NextUp", get(next_up))
         .route("/Shows/{series_id}/Seasons", get(seasons))
         .route("/Shows/{series_id}/Episodes", get(episodes))
 }
