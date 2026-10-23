@@ -75,7 +75,7 @@ async fn latest_for_user(
     if group_episodes
         && !included
             .as_ref()
-            .is_some_and(|types| types.len() == 1 && types.contains("Episode"))
+            .is_some_and(|types| types.len() == 1 && types[0] == "Episode")
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
