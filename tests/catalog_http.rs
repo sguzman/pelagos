@@ -81,3 +81,57 @@ async fn query_results_are_administrator_only_and_deterministically_paged() {
     assert_eq!(views["Items"][0]["Name"], "Movies");
     assert!(views["Items"][0].get("Path").is_none());
 }
+
+
+#[tokio::test]
+async fn folder_views_and_recursive_browse_match_parent_chain() {
+    let fixture = tempfile::tempdir().unwrap();
+    let root = fixture.path().join("Media");
+    let state = fixture.path().join("state");
+    std::fs::create_dir_all(root.join("Series/Season 1")).unwrap();
+    std::fs::write(root.join("Series/Season 1/Pilot.mkv"), b"synthetic").unwrap();
+    std::fs::write(root.join("StandAlone.mp4"), b"synthetic").unwrap();
+    catalog::index(&state, &root).unwrap();
+    auth::create_user(&state, "admin", "very-long-test-password").unwrap();
+    let token = auth::authenticate(&state, "admin", "very-long-test-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let views = json(get(&router, "/UserViews", Some(&token)).await).await;
+    let root_id = views["Items"][0]["Id"].as_str().unwrap();
+    let direct = json(
+        get(&router, &format!("/Items?parentId={root_id}"), Some(&token)).await,
+    )
+    .await;
+    assert_eq!(direct["TotalRecordCount"], 2);
+    let items = direct["Items"].as_array().unwrap();
+    let folder_id = items
+        .iter()
+        .find(|item| item["Name"] == "Series")
+        .unwrap()["Id"]
+        .as_str()
+        .unwrap();
+    let nested = json(
+        get(
+            &router,
+            &format!("/Items?parentId={folder_id}&recursive=true"),
+            Some(&token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(nested["TotalRecordCount"], 1);
+    assert_eq!(nested["Items"][0]["Name"], "Pilot");
+    let id = nested["Items"][0]["Id"].as_str().unwrap();
+    let direct_by_id = json(
+        get(&router, &format!("/Items/{id}"), Some(&token)).await,
+    )
+    .await;
+    assert_eq!(direct_by_id["Id"], id);
+    let missing = get(&router, "/Items?parentId=00000000000000000000000000000000", Some(&token)).await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+}
