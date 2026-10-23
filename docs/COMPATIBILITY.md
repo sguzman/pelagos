@@ -93,3 +93,7 @@ An authenticated virtual user root is now available through Jellyfin's pinned `/
 ## Administrator media-folder listing (synthetic only)
 
 `GET /Library/MediaFolders` now requires an administrator account and lists only currently indexed, non-hidden Pelagos collection roots (including empty libraries), with no absolute path values in item DTOs. The existing Pelagos catalog does not implement Jellyfin's hidden or disabled library configuration. Cross-account authorization, empty-library and filter regression tests passed [CI 40003332448](https://github.com/sguzman/pelagos/actions/runs/40003332448); no unmodified Jellyfin admin UI or pinned-server comparison has validated full behavior.
+
+## Advertised concrete HTTP identity (synthetic only)
+
+Jellyfin-shaped public and authenticated system information now report the actual configured listener URL when Pelagos binds to a concrete IPv4 or IPv6 address, including its chosen port. Wildcard binds do not advertise unusable `0.0.0.0`/`::` addresses; hostile HTTP `Host` headers cannot affect this value. The auth/public field agreement, network URI shapes and safe fallbacks passed [CI 40004088369](https://github.com/sguzman/pelagos/actions/runs/40004088369). Real LAN discovery, client-selected remote URLs and proxy/multi-interface compatibility remain **Not tested**.
