@@ -138,10 +138,10 @@ mod tests {
     #[test]
     fn rejects_unsynthesized_type_filters() {
         assert_eq!(
-            filter_types(Some("Movie")).unwrap_err(),
+            filter_types(Some("Book")).unwrap_err(),
             StatusCode::NOT_IMPLEMENTED
         );
-        assert!(filter_types(Some("Video,Audio")).unwrap().is_some());
+        assert!(filter_types(Some("Video,Audio,Movie")).unwrap().is_some());
         assert_eq!(
             media_types(Some("Unknown")).unwrap_err(),
             StatusCode::NOT_IMPLEMENTED
