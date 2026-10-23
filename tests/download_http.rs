@@ -87,6 +87,28 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
         StatusCode::NOT_FOUND
     );
     assert!(auth::set_content_download_permission(&state, "viewer", true).unwrap());
+    assert!(auth::revoke_library(&state, "viewer", &root).unwrap());
+    assert_eq!(
+        request(&router, &video, Some(&viewer.access_token), None)
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert!(auth::grant_library(&state, "viewer", &root).unwrap());
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    assert_eq!(
+        request(&restarted, &video, Some(&viewer.access_token), None)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let user = request(&router, "/Users/Me", Some(&viewer.access_token), None).await;
+    let current: Value =
+        serde_json::from_slice(&to_bytes(user.into_body(), 65536).await.unwrap()).unwrap();
+    assert_eq!(current["Policy"]["EnableContentDownloading"], true);
     let granted = request(&router, &video, Some(&viewer.access_token), None).await;
     assert_eq!(granted.status(), StatusCode::OK);
     assert_eq!(
@@ -94,6 +116,10 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
         b"VIDEO012345"
     );
     assert!(auth::set_content_download_permission(&state, "viewer", false).unwrap());
+    let user = request(&router, "/Users/Me", Some(&viewer.access_token), None).await;
+    let current: Value =
+        serde_json::from_slice(&to_bytes(user.into_body(), 65536).await.unwrap()).unwrap();
+    assert_eq!(current["Policy"]["EnableContentDownloading"], false);
     assert_eq!(
         request(&router, &video, Some(&viewer.access_token), None)
             .await
