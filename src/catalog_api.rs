@@ -174,11 +174,12 @@ fn is_descendant(id: &str, parent: &str, parents: &HashMap<String, Option<String
     false
 }
 
-async fn query_items(
+/// One shared permission boundary for item browsing and Jellyfin search.
+/// No item may become discoverable merely because a different API calls it.
+pub(crate) async fn accessible_nodes(
     state: Arc<AppState>,
     headers: HeaderMap,
-    query: ItemQuery,
-) -> Result<Json<QueryResult>, StatusCode> {
+) -> Result<Vec<ItemDto>, StatusCode> {
     let (state_dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
     let (mut files, mut roots) = tokio::task::spawn_blocking(move || {
@@ -193,7 +194,15 @@ async fn query_items(
         files.retain(|file| granted.contains(&file.root));
         roots.retain(|root| granted.contains(root));
     }
-    let mut all = catalog_nodes(files, roots, &server_id);
+    Ok(catalog_nodes(files, roots, &server_id))
+}
+
+async fn query_items(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    query: ItemQuery,
+) -> Result<Json<QueryResult>, StatusCode> {
+    let mut all = accessible_nodes(state, headers).await?;
     match query.parent_id.as_deref() {
         Some(parent) => {
             let parents: HashMap<String, Option<String>> = all
@@ -256,21 +265,8 @@ async fn item(
     RoutePath(item_id): RoutePath<String>,
     headers: HeaderMap,
 ) -> Result<Json<ItemDto>, StatusCode> {
-    let (dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
-    let server_id = state.server_id().to_owned();
-    let (mut candidates, mut roots) = tokio::task::spawn_blocking(move || {
-        let files = catalog::all_files(&dir)?;
-        let roots = catalog::library_roots(&dir)?;
-        Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if let Some(granted) = allowed {
-        candidates.retain(|file| granted.contains(&file.root));
-        roots.retain(|root| granted.contains(root));
-    }
-    catalog_nodes(candidates, roots, &server_id)
+    accessible_nodes(state, headers)
+        .await?
         .into_iter()
         .find(|item| item.id == item_id)
         .map(Json)
