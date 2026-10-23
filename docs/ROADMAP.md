@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 25%` across 119 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 25%` across 120 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -461,11 +461,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `░░░░░░░░░░ 0%`
+## 🛡️ M5 — Administration, extensibility and migration — `█░░░░░░░░░ 7%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `░░░░░░░░░░ 0%`
+### 🛠️ P15 — Admin and accounts — `██░░░░░░░░ 17%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -479,6 +479,10 @@
   - [ ] Implement libraries, scanner, metadata jobs and system logs
   - [ ] Automated tests and Jellyfin baseline fixture verify libraries, scanner, metadata jobs and system logs
   - [ ] Production or real-client acceptance validates libraries, scanner, metadata jobs and system logs
+- 🗂️ **T503 — Administrator-only indexed media folders catalog** — `███████░░░ 67%`
+  - [x] Expose pinned GET /Library/MediaFolders with administrator authorization and visible indexed empty or populated library roots — src/catalog_api.rs; tests/library_media_folders_http.rs — admin-bound read-only CollectionFolder query with no absolute paths
+  - [x] CI verifies 401 unauthenticated, 403 viewer even after grants, hidden-filter subset, stable parent IDs, and empty roots — GitHub Actions 40003332448 — complete Rust CI and HTTP authorization tests passed
+  - [ ] Real admin clients and pinned upstream Library/MediaFolders DTO/configuration semantics are verified
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 
