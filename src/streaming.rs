@@ -200,6 +200,11 @@ fn open_confined(
     Err(StatusCode::NOT_IMPLEMENTED)
 }
 
+enum FileMode {
+    Direct(Option<String>),
+    Download,
+}
+
 async fn serve_file(
     state: Arc<AppState>,
     item_id: String,
@@ -207,9 +212,12 @@ async fn serve_file(
     query: StreamQuery,
     head_only: bool,
     kind: &'static str,
-    requested_container: Option<String>,
-    download: bool,
+    mode: FileMode,
 ) -> Result<Response, StatusCode> {
+    let (download, requested_container) = match mode {
+        FileMode::Direct(container) => (false, container),
+        FileMode::Download => (true, None),
+    };
     if download {
         let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
         if !user.policy.is_administrator {
@@ -364,8 +372,7 @@ async fn download_media(
         },
         false,
         "any",
-        None,
-        true,
+        FileMode::Download,
     )
     .await
 }
@@ -387,8 +394,7 @@ async fn original_file(
         },
         false,
         "any",
-        None,
-        false,
+        FileMode::Direct(None),
     )
     .await
 }
@@ -408,8 +414,7 @@ async fn head_original_file(
         },
         true,
         "any",
-        None,
-        false,
+        FileMode::Direct(None),
     )
     .await
 }
@@ -420,7 +425,7 @@ async fn stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "video", None, false).await
+    serve_file(state, item_id, headers, query, false, "video", FileMode::Direct(None)).await
 }
 
 async fn head_stream(
@@ -429,7 +434,7 @@ async fn head_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "video", None, false).await
+    serve_file(state, item_id, headers, query, true, "video", FileMode::Direct(None)).await
 }
 
 async fn audio_stream(
@@ -438,7 +443,7 @@ async fn audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "audio", None, false).await
+    serve_file(state, item_id, headers, query, false, "audio", FileMode::Direct(None)).await
 }
 
 async fn head_audio_stream(
@@ -447,7 +452,7 @@ async fn head_audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "audio", None, false).await
+    serve_file(state, item_id, headers, query, true, "audio", FileMode::Direct(None)).await
 }
 
 fn container_name(filename: &str) -> Result<String, StatusCode> {
@@ -471,8 +476,7 @@ async fn stream_named(
         query,
         false,
         "video",
-        Some(container_name(&filename)?),
-        false,
+        FileMode::Direct(Some(container_name(&filename)?)),
     )
     .await
 }
@@ -490,8 +494,7 @@ async fn head_stream_named(
         query,
         true,
         "video",
-        Some(container_name(&filename)?),
-        false,
+        FileMode::Direct(Some(container_name(&filename)?)),
     )
     .await
 }
@@ -509,8 +512,7 @@ async fn audio_named(
         query,
         false,
         "audio",
-        Some(container_name(&filename)?),
-        false,
+        FileMode::Direct(Some(container_name(&filename)?)),
     )
     .await
 }
@@ -528,8 +530,7 @@ async fn head_audio_named(
         query,
         true,
         "audio",
-        Some(container_name(&filename)?),
-        false,
+        FileMode::Direct(Some(container_name(&filename)?)),
     )
     .await
 }
