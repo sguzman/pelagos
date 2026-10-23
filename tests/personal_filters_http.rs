@@ -168,7 +168,7 @@ async fn played_and_favorite_filters_apply_before_paging_without_cross_user_stat
         call(
             &router,
             "GET",
-            "/Search/Hints?searchTerm=a&isFavorite=false&isPlayed=false",
+            "/Search/Hints?searchTerm=a&isFavorite=false&isPlayed=false&includeItemTypes=Video",
             Some(&viewer.access_token),
         )
         .await,
