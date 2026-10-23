@@ -154,7 +154,7 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     assert_eq!(admin_matches["TotalRecordCount"], 3);
     let rejected = get(
         &router,
-        "/Search/Hints?searchTerm=film&includeItemTypes=Movie",
+        "/Search/Hints?searchTerm=film&includeItemTypes=Book",
         Some(&viewer.access_token),
     )
     .await;
