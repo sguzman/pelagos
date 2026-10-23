@@ -77,6 +77,32 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
         b"2345"
     );
 
+    let named_path = format!("/Videos/{id}/stream.mp4?static=true");
+    let named = call(&app, "GET", &named_path, Some(&token), Some("bytes=1-3")).await;
+    assert_eq!(named.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        to_bytes(named.into_body(), 64).await.unwrap().as_ref(),
+        b"123"
+    );
+    let wrong_container = call(
+        &app,
+        "GET",
+        &format!("/Videos/{id}/stream.mkv?static=true"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(wrong_container.status(), StatusCode::NOT_IMPLEMENTED);
+    let invalid_extension = call(
+        &app,
+        "GET",
+        &format!("/Videos/{id}/stream.m!p4?static=true"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(invalid_extension.status(), StatusCode::BAD_REQUEST);
+
     let head = call(&app, "HEAD", &path, Some(&token), None).await;
     assert_eq!(head.status(), StatusCode::OK);
     assert_eq!(head.headers()[header::CONTENT_LENGTH], "10");
@@ -132,6 +158,28 @@ async fn static_audio_streams_are_range_seekable_with_correct_mime() {
         to_bytes(partial.into_body(), 64).await.unwrap().as_ref(),
         b"DATA"
     );
+    let named = call(
+        &app,
+        "GET",
+        &format!("/Audio/{id}/stream.mp3?static=true"),
+        Some(&token),
+        Some("bytes=0-4"),
+    )
+    .await;
+    assert_eq!(named.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(
+        to_bytes(named.into_body(), 64).await.unwrap().as_ref(),
+        b"AUDIO"
+    );
+    let wrong = call(
+        &app,
+        "GET",
+        &format!("/Audio/{id}/stream.flac?static=true"),
+        Some(&token),
+        None,
+    )
+    .await;
+    assert_eq!(wrong.status(), StatusCode::NOT_IMPLEMENTED);
     let head = call(&app, "HEAD", &route, Some(&token), None).await;
     assert_eq!(head.status(), StatusCode::OK);
     assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
