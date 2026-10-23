@@ -2911,6 +2911,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T507",
+              "emoji": "🧹",
+              "name": "Administrator virtual-library removal with durable grant cleanup",
+              "checks": [
+                {
+                  "title": "Implement administrator-only pinned VirtualFolders DELETE subset that atomically clears registered library rows and matching per-user grants across attached private SQLite stores without modifying media",
+                  "passed": true,
+                  "evidence": "src/catalog.rs unregister_by_name; src/catalog_api.rs remove_virtual_folder; pinned Jellyfin v12.3 LibraryStructureController.RemoveVirtualFolder"
+                },
+                {
+                  "title": "Rust CI covers missing/offline roots, ambiguous names, anonymous/ordinary-account denial, source-media preservation, and deny-after-remove/re-add permissions",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40041020127: complete Rust unit/HTTP suites, formatting, Clippy, evidence-ledger and pinned controller/contract gates passed"
+                },
+                {
+                  "title": "Full Jellyfin virtual-folder CRUD/options, crash recovery across filesystems, concurrent mutations and unmodified administrator clients accepted",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
