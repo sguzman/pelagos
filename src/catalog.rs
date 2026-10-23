@@ -174,6 +174,63 @@ pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
     })
 }
 
+/// Atomically rescan *only* previously registered roots into private SQLite.
+/// Preflight and enumerate every root before changing any indexed rows. If an
+/// offline directory or replaced symlink fails validation, all old rows remain
+/// intact instead of being silently deleted or redirected elsewhere.
+pub fn refresh_registered(state_dir: &Path) -> Result<usize> {
+    let registered = library_roots(state_dir)?;
+    let mut reports = Vec::with_capacity(registered.len());
+    for saved in registered {
+        let root = PathBuf::from(&saved);
+        if fs::canonicalize(&root)? != root {
+            return Err("registered media root has been redirected".into());
+        }
+        let scanned = media::scan(&root)?;
+        reports.push((saved, scanned));
+    }
+    let mut db = connect(state_dir)?;
+    let tx = db.transaction()?;
+    tx.execute_batch(
+        "CREATE TEMP TABLE IF NOT EXISTS pelagos_refresh_seen(path TEXT PRIMARY KEY);",
+    )?;
+    for (root, scan) in &reports {
+        tx.execute("DELETE FROM pelagos_refresh_seen", [])?;
+        {
+            let mut put = tx.prepare(
+                "INSERT INTO media_files
+                    (library_root, relative_path, kind, size_bytes, first_indexed_unix)
+                 VALUES (?1, ?2, ?3, ?4, unixepoch())
+                 ON CONFLICT(library_root, relative_path) DO UPDATE SET
+                    kind=excluded.kind,
+                    size_bytes=excluded.size_bytes,
+                    last_seen_at=unixepoch()",
+            )?;
+            let mut seen = tx.prepare(
+                "INSERT INTO pelagos_refresh_seen (path) VALUES (?1)",
+            )?;
+            for file in &scan.files {
+                let relative = path_text(&file.path)?;
+                seen.execute(params![relative])?;
+                put.execute(params![
+                    root,
+                    relative,
+                    media_kind(file.kind),
+                    i64::try_from(file.size_bytes)?,
+                ])?;
+            }
+        }
+        tx.execute(
+            "DELETE FROM media_files
+             WHERE library_root=?1 AND NOT EXISTS
+             (SELECT 1 FROM pelagos_refresh_seen WHERE path=media_files.relative_path)",
+            params![root],
+        )?;
+    }
+    tx.commit()?;
+    Ok(reports.len())
+}
+
 /// Return an indexed library without rescanning or modifying source media.
 /// A library root must still exist; stale records are available only after a successful index.
 pub fn list(state_dir: &Path, root: &Path) -> Result<Vec<IndexedItem>> {

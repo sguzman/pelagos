@@ -110,6 +110,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Library/MediaFolders", get(library_media_folders))
         .route("/Library/PhysicalPaths", get(library_physical_paths))
         .route("/Library/VirtualFolders", get(library_virtual_folders))
+        .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
 
@@ -825,6 +826,25 @@ struct VirtualFolderInfo {
 /// Only an authenticated administrator can see the indexed physical roots.
 /// This is read-only and does not imply that Jellyfin library configuration
 /// mutations or transcoding/storage settings have been ported.
+/// Pinned Jellyfin administrator refresh subset. Unlike upstream's queued
+/// scan, completion is synchronous from the caller's perspective. Only saved
+/// media roots may be revisited; this endpoint never accepts a path argument.
+async fn refresh_library(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<StatusCode, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    tokio::task::spawn_blocking(move || catalog::refresh_registered(&dir))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn library_virtual_folders(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
