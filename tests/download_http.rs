@@ -132,3 +132,43 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
             .is_none()
     );
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn download_rejects_symlink_swap_outside_indexed_root() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    let root = fixture.path().join("library");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("Film.mkv"), b"allowed").unwrap();
+    catalog::index(&state, &root).unwrap();
+    auth::create_user(&state, "admin", "download-symlink-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "download-symlink-password", "server")
+        .unwrap()
+        .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let response = request(&router, "/Items", Some(&admin.access_token), None).await;
+    let all: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+    let id = all["Items"][0]["Id"].as_str().unwrap();
+    let outside = fixture.path().join("private.mkv");
+    std::fs::write(&outside, b"restricted").unwrap();
+    std::fs::remove_file(root.join("Film.mkv")).unwrap();
+    symlink(&outside, root.join("Film.mkv")).unwrap();
+    assert_eq!(
+        request(
+            &router,
+            &format!("/Items/{id}/Download"),
+            Some(&admin.access_token),
+            None,
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+}
