@@ -276,7 +276,10 @@ async fn serve_file(
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/Items/{item_id}/File", get(original_file).head(head_original_file))
+        .route(
+            "/Items/{item_id}/File",
+            get(original_file).head(head_original_file),
+        )
         .route("/Videos/{item_id}/stream", get(stream).head(head_stream))
         .route(
             "/Videos/{item_id}/{file_name}",
@@ -303,7 +306,10 @@ async fn original_file(
         state,
         item_id,
         headers,
-        StreamQuery { static_play: Some(true), ..StreamQuery::default() },
+        StreamQuery {
+            static_play: Some(true),
+            ..StreamQuery::default()
+        },
         false,
         "any",
         None,
@@ -320,7 +326,10 @@ async fn head_original_file(
         state,
         item_id,
         headers,
-        StreamQuery { static_play: Some(true), ..StreamQuery::default() },
+        StreamQuery {
+            static_play: Some(true),
+            ..StreamQuery::default()
+        },
         true,
         "any",
         None,
