@@ -168,7 +168,6 @@ fn catalog_nodes(
                         parent_id: Some(parent_id.clone()),
                         size: None,
                         user_data: None,
-        user_data: None,
                     });
                 }
                 parent_id = folder_id;
