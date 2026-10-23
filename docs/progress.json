@@ -257,6 +257,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T017",
+              "emoji": "⚡",
+              "name": "Bounded batched per-user SQLite metadata retrieval",
+              "checks": [
+                {
+                  "title": "Replace per-item UserData reads with bounded indexed SQLite batches while preserving exact input ordering, duplicate IDs, missing defaults and private user partitioning",
+                  "passed": true,
+                  "evidence": "src/user_data.rs — <=400 item-id bindings per batch, user-scoped query and original-order reconstruction"
+                },
+                {
+                  "title": "CI verifies hundreds of items across batch boundaries, watched/favorite/position/timestamp data, absent records, duplicate IDs and cross-user isolation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40012254173 — complete Rust tests, formatting, Clippy and repository guards passed"
+                },
+                {
+                  "title": "Large-scale library benchmarks and production performance/memory parity on Linux with unmodified Jellyfin client load",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -2445,6 +2467,28 @@
                 },
                 {
                   "title": "Real admin clients and pinned upstream Library/MediaFolders DTO/configuration semantics are verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T504",
+              "emoji": "🔐",
+              "name": "Administrator-only Jellyfin library physical root paths",
+              "checks": [
+                {
+                  "title": "Implement pinned GET /Library/PhysicalPaths exposing only indexed source roots after administrator validation, separate from user-safe pathless DTOs",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/library_media_folders_http.rs — privileged root list read with sort/dedup and no ordinary-user path exposure"
+                },
+                {
+                  "title": "CI verifies unauthenticated 401, nonadmin 403 even with library grants, indexed empty roots, exact source paths and persistent restart behavior",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40012627288 — formatting, Clippy, native HTTP tests and source/roadmap guards passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin administration clients verify exact library options, elevation semantics and end-to-end configuration workflows",
                   "passed": false
                 }
               ],

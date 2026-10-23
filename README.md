@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 28%` across 127 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 28%` across 129 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40011417762](https://github.com/sguzman/pelagos/actions/runs/40011417762) — protected item counts, personal favorite filters, typed Movie/Series search and browsing, formatting, Clippy and full Rust suite.
+**Latest passing CI:** [run 40012627288](https://github.com/sguzman/pelagos/actions/runs/40012627288) — administrator-only physical paths, batched SQLite personal metadata, formatting, Clippy, complete Rust tests and source/roadmap guards.
 
 ## 🚀 Current starter
 
@@ -71,6 +71,8 @@ Conservative local SxxEyy recognition now identifies Series, Season and Episode 
 Conservative local Movie recognition now requires the video filename and containing folder to match `Title (YYYY)`; otherwise the indexed file stays a generic Video. The Movie DTO exposes a constrained title and `ProductionYear`, and the shared catalog/search filters recognize Movie and the `isMovie` query. Existing stable indexed IDs, playback-position state, and per-library access controls remain in place. This is filename evidence only, not automatic movie classification, NFO parsing, provider metadata or verified client parity.
 
 `GET /Items/Counts` now reports visible indexed media totals and recognized Movie/Series/Episode counts, honoring the authenticated user's own `isFavorite` state. Other categories remain zero until actual matching classification exists; those zeros are **not** evidence of full Jellyfin counts parity. Explicit `isSeries`/`isMovie` filters now work across `/Items` and `/Search/Hints`, including typed Series discovery, without changing default file-only browsing or library access controls.
+
+Personal watched/favorite/resume metadata now loads via bounded SQLite batches rather than a separate query for every media item; regression coverage includes 900+ IDs and enforces isolation and input-order preservation. The pinned `GET /Library/PhysicalPaths` provides administrators only with configured indexed filesystem roots, while ordinary media DTOs remain pathless. Neither change establishes full upstream migration or real client parity.
 
 ## 🦀 Architecture and independence
 

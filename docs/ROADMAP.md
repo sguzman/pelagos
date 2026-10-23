@@ -2,9 +2,9 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 28%` across 127 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 28%` across 129 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
+## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -31,7 +31,7 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory
   - [ ] Production or real-client acceptance validates baseline source/version and compatibility inventory
 
-### 🛠️ P1 — Build and storage — `██░░░░░░░░ 22%`
+### 🛠️ P1 — Build and storage — `███░░░░░░░ 29%`
 
 - 🏗️ **T006 — Build reproducibility** — `░░░░░░░░░░ 0%`
   - [ ] Implement locked dependencies and automated stable Rust compilation
@@ -57,6 +57,10 @@
   - [x] Create a separate Pelagos database and atomic read-only-source library index — src/catalog.rs; Cargo.toml; src/main.rs — versioned SQLite schema and index/catalog CLI
   - [x] CI verifies incrementals, stale records, library isolation, symlinks and schema safety — GitHub Actions 39954730665 — Rust catalog tests, clippy, format and tracking checks pass
   - [ ] Large real-media library and recovery/upgrade QA passes under Linux
+- ⚡ **T017 — Bounded batched per-user SQLite metadata retrieval** — `███████░░░ 67%`
+  - [x] Replace per-item UserData reads with bounded indexed SQLite batches while preserving exact input ordering, duplicate IDs, missing defaults and private user partitioning — src/user_data.rs — <=400 item-id bindings per batch, user-scoped query and original-order reconstruction
+  - [x] CI verifies hundreds of items across batch boundaries, watched/favorite/position/timestamp data, absent records, duplicate IDs and cross-user isolation — GitHub Actions 40012254173 — complete Rust tests, formatting, Clippy and repository guards passed
+  - [ ] Large-scale library benchmarks and production performance/memory parity on Linux with unmodified Jellyfin client load
 
 ### 🧪 P2 — Test framework — `███░░░░░░░ 27%`
 
@@ -489,11 +493,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `█░░░░░░░░░ 7%`
+## 🛡️ M5 — Administration, extensibility and migration — `█░░░░░░░░░ 12%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `██░░░░░░░░ 17%`
+### 🛠️ P15 — Admin and accounts — `███░░░░░░░ 27%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -511,6 +515,10 @@
   - [x] Expose pinned GET /Library/MediaFolders with administrator authorization and visible indexed empty or populated library roots — src/catalog_api.rs; tests/library_media_folders_http.rs — admin-bound read-only CollectionFolder query with no absolute paths
   - [x] CI verifies 401 unauthenticated, 403 viewer even after grants, hidden-filter subset, stable parent IDs, and empty roots — GitHub Actions 40003332448 — complete Rust CI and HTTP authorization tests passed
   - [ ] Real admin clients and pinned upstream Library/MediaFolders DTO/configuration semantics are verified
+- 🔐 **T504 — Administrator-only Jellyfin library physical root paths** — `███████░░░ 67%`
+  - [x] Implement pinned GET /Library/PhysicalPaths exposing only indexed source roots after administrator validation, separate from user-safe pathless DTOs — src/catalog_api.rs; tests/library_media_folders_http.rs — privileged root list read with sort/dedup and no ordinary-user path exposure
+  - [x] CI verifies unauthenticated 401, nonadmin 403 even with library grants, indexed empty roots, exact source paths and persistent restart behavior — GitHub Actions 40012627288 — formatting, Clippy, native HTTP tests and source/roadmap guards passed
+  - [ ] Unmodified Jellyfin administration clients verify exact library options, elevation semantics and end-to-end configuration workflows
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 
