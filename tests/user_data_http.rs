@@ -55,6 +55,18 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     let id = items["Items"][0]["Id"].as_str().unwrap();
     let mark = format!("/UserPlayedItems/{id}");
     let favorite = format!("/UserFavoriteItems/{id}");
+    let user_data = format!("/UserItems/{id}/UserData");
+    let legacy_data = format!("/Users/{}/Items/{id}/UserData", viewer.user.id);
+    assert_eq!(
+        call(&router, "GET", &user_data, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&router, "GET", &user_data, Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         call(&router, "POST", &mark, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -67,6 +79,13 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     );
 
     auth::grant_library(&state, "viewer", &media).unwrap();
+    let initial = body(
+        call(&router, "GET", &user_data, Some(&viewer.access_token)).await,
+    )
+    .await;
+    assert_eq!(initial["Played"], false);
+    assert_eq!(initial["PlayCount"], 0);
+    assert_eq!(initial["IsFavorite"], false);
     let first = body(call(&router, "POST", &mark, Some(&viewer.access_token)).await).await;
     assert_eq!(first["Played"], true);
     assert_eq!(first["PlayCount"], 1);
@@ -80,6 +99,35 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     let starred = body(call(&router, "POST", &favorite, Some(&viewer.access_token)).await).await;
     assert_eq!(starred["IsFavorite"], true);
     assert_eq!(starred["PlayCount"], 1);
+    let saved = body(
+        call(&router, "GET", &legacy_data, Some(&viewer.access_token)).await,
+    )
+    .await;
+    assert_eq!(saved["PlayCount"], 1);
+    assert_eq!(saved["IsFavorite"], true);
+    assert_eq!(saved["ItemId"], id);
+    assert_eq!(
+        call(
+            &router,
+            "GET",
+            &format!("/UserItems/{id}/UserData?userId={}", admin.user.id),
+            Some(&viewer.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(
+            &router,
+            "GET",
+            &format!("/Users/{}/Items/{id}/UserData", admin.user.id),
+            Some(&viewer.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
     let listed = body(call(&router, "GET", "/Items", Some(&viewer.access_token)).await).await;
     assert_eq!(listed["Items"][0]["UserData"]["PlayCount"], 1);
     assert_eq!(listed["Items"][0]["UserData"]["IsFavorite"], true);
@@ -128,6 +176,12 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     .await;
     assert_eq!(admin_details["UserData"]["PlayCount"], 0);
     assert_eq!(admin_details["UserData"]["IsFavorite"], true);
+    let admin_read = body(
+        call(&router, "GET", &user_data, Some(&admin.access_token)).await,
+    )
+    .await;
+    assert_eq!(admin_read["PlayCount"], 0);
+    assert_eq!(admin_read["IsFavorite"], true);
 
     let other = format!("/Users/{}/PlayedItems/{id}", admin.user.id);
     assert_eq!(
@@ -161,6 +215,12 @@ async fn played_and_favorites_are_scoped_persistent_and_revocable() {
     let replayed = body(call(&restarted, "POST", &legacy, Some(&viewer.access_token)).await).await;
     assert_eq!(replayed["PlayCount"], 2);
     auth::revoke_library(&state, "viewer", &media).unwrap();
+    assert_eq!(
+        call(&restarted, "GET", &user_data, Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         call(&restarted, "DELETE", &mark, Some(&viewer.access_token))
             .await
