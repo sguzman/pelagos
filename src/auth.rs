@@ -455,20 +455,14 @@ mod tests {
         assert_eq!(sessions, 0);
     }
 
-
     #[test]
     fn session_listing_is_user_scoped_admin_visible_and_revocation_aware() {
         let dir = tempfile::tempdir().unwrap();
         let admin_user = create_user(dir.path(), "admin", "admin-test-passphrase").unwrap();
         let viewer_user = create_user(dir.path(), "viewer", "viewer-test-passphrase").unwrap();
-        let admin = authenticate(
-            dir.path(),
-            "admin",
-            "admin-test-passphrase",
-            "server",
-        )
-        .unwrap()
-        .unwrap();
+        let admin = authenticate(dir.path(), "admin", "admin-test-passphrase", "server")
+            .unwrap()
+            .unwrap();
         let viewer = authenticate_with_client(
             dir.path(),
             "viewer",
@@ -484,13 +478,28 @@ mod tests {
         let mine = list_sessions(dir.path(), &viewer_user, "server", None).unwrap();
         assert_eq!(mine.len(), 1);
         assert_eq!(mine[0].user_id, viewer_user.id);
-        assert_eq!(list_sessions(dir.path(), &admin_user, "server", None).unwrap().len(), 2);
+        assert_eq!(
+            list_sessions(dir.path(), &admin_user, "server", None)
+                .unwrap()
+                .len(),
+            2
+        );
         let filtered = list_sessions(dir.path(), &admin_user, "server", Some("tv-1")).unwrap();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id, viewer.session_info.id);
-        assert_eq!(list_sessions(dir.path(), &viewer_user, "server", Some("unknown")).unwrap().len(), 0);
+        assert_eq!(
+            list_sessions(dir.path(), &viewer_user, "server", Some("unknown"))
+                .unwrap()
+                .len(),
+            0
+        );
         assert!(revoke(dir.path(), &viewer.access_token).unwrap());
-        assert_eq!(list_sessions(dir.path(), &admin_user, "server", None).unwrap().len(), 1);
+        assert_eq!(
+            list_sessions(dir.path(), &admin_user, "server", None)
+                .unwrap()
+                .len(),
+            1
+        );
         assert!(revoke(dir.path(), &admin.access_token).unwrap());
     }
 
