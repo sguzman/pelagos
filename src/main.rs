@@ -151,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state_for_auth = state_dir.clone();
     let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
+    let listening_address = listener.local_addr()?;
     if args.discover {
         if address.ip().is_loopback() {
             return Err("--discover requires an HTTP LAN bind such as --bind 0.0.0.0".into());
@@ -158,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let udp = discovery::bind_default().await?;
         let discovery_id = id.clone();
         tokio::spawn(async move {
-            if let Err(error) = discovery::serve(udp, address.port(), discovery_id).await {
+            if let Err(error) = discovery::serve(udp, listening_address.port(), discovery_id).await {
                 tracing::error!(%error, "UDP discovery stopped");
             }
         });
@@ -167,10 +168,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "opt-in Jellyfin UDP discovery active"
         );
     }
-    info!(%address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
+    info!(%listening_address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
     axum::serve(
         listener,
-        app::router(Arc::new(app::AppState::with_auth_dir(id, state_for_auth))),
+        app::router(Arc::new(
+            app::AppState::with_auth_dir(id, state_for_auth).with_listen_addr(listening_address),
+        )),
     )
     .await?;
     Ok(())
