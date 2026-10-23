@@ -229,6 +229,61 @@ pub fn refresh_registered(state_dir: &Path) -> Result<usize> {
     Ok(reports.len())
 }
 
+/// Result of unregistering a virtual library by its unique display basename.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryRemoval {
+    Removed,
+    Missing,
+    Ambiguous,
+}
+
+/// Remove only Pelagos catalog records and explicit user-library grants.
+/// ATTACH keeps both private SQLite files in one rollback-journal transaction
+/// so a deleted root cannot regain stale grants when later registered again.
+/// Source media files are never deleted, even for an offline library root.
+pub fn unregister_by_name(state_dir: &Path, name: &str) -> Result<LibraryRemoval> {
+    let mut db = connect(state_dir)?;
+    let auth_file = state_dir.join("pelagos-auth.sqlite3");
+    if !auth_file.is_file() {
+        return Err("authentication database is unavailable".into());
+    }
+    db.execute(
+        "ATTACH DATABASE ?1 AS permission_store",
+        params![path_text(&auth_file)?],
+    )?;
+    let tx = db.transaction()?;
+    let matching = {
+        let mut stmt = tx.prepare("SELECT root FROM libraries ORDER BY root")?;
+        let all = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        all.into_iter()
+            .filter(|root| {
+                Path::new(root)
+                    .file_name()
+                    .and_then(|part| part.to_str())
+                    == Some(name)
+            })
+            .collect::<Vec<_>>()
+    };
+    let root = match matching.as_slice() {
+        [] => return Ok(LibraryRemoval::Missing),
+        [only] => only,
+        _ => return Ok(LibraryRemoval::Ambiguous),
+    };
+    tx.execute(
+        "DELETE FROM permission_store.pelagos_library_access WHERE root=?1",
+        params![root],
+    )?;
+    tx.execute(
+        "DELETE FROM media_files WHERE library_root=?1",
+        params![root],
+    )?;
+    tx.execute("DELETE FROM libraries WHERE root=?1", params![root])?;
+    tx.commit()?;
+    Ok(LibraryRemoval::Removed)
+}
+
 /// Return an indexed library without rescanning or modifying source media.
 /// A library root must still exist; stale records are available only after a successful index.
 pub fn list(state_dir: &Path, root: &Path) -> Result<Vec<IndexedItem>> {

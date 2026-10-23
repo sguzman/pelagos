@@ -112,7 +112,9 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Library/PhysicalPaths", get(library_physical_paths))
         .route(
             "/Library/VirtualFolders",
-            get(library_virtual_folders).post(create_virtual_folder),
+            get(library_virtual_folders)
+                .post(create_virtual_folder)
+                .delete(remove_virtual_folder),
         )
         .route("/Library/Refresh", axum::routing::post(refresh_library))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
@@ -909,6 +911,48 @@ async fn create_virtual_folder(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoveVirtualFolderQuery {
+    name: Option<String>,
+    refresh_library: Option<bool>,
+}
+
+/// Administrator-only pinned delete subset. Never deletes source media.
+/// Clear grants together with catalog membership to avoid stale authorization.
+async fn remove_virtual_folder(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<RemoveVirtualFolderQuery>,
+    body: Bytes,
+) -> Result<StatusCode, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.refresh_library == Some(true) || !body.is_empty() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let name = query.name.ok_or(StatusCode::BAD_REQUEST)?;
+    if name.is_empty()
+        || name.len() > 255
+        || name.trim() != name
+        || name.chars().any(char::is_control)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    match tokio::task::spawn_blocking(move || catalog::unregister_by_name(&dir, &name))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+    {
+        catalog::LibraryRemoval::Removed => Ok(StatusCode::NO_CONTENT),
+        catalog::LibraryRemoval::Missing => Err(StatusCode::NOT_FOUND),
+        catalog::LibraryRemoval::Ambiguous => Err(StatusCode::CONFLICT),
+    }
 }
 
 async fn library_virtual_folders(
