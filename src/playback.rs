@@ -190,9 +190,14 @@ async fn playback_info(
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
     let (_, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     // Unknown negotiation criteria cannot be promised as implemented.
-    // Jellyfin's EnableDirectStream and EnableTranscoding indicate what a
-    // client permits, not a requirement to provide those modes. A client that
-    // allows direct play can still receive a direct-only source.
+    // Jellyfin's fallback booleans describe allowed capabilities, not
+    // requested conversions. Record the permissions but only advertise direct
+    // play until remuxing and transcoding are actually implemented.
+    tracing::debug!(
+        direct_stream_allowed = req.enable_direct_stream.unwrap_or(true),
+        transcoding_allowed = req.enable_transcoding.unwrap_or(true),
+        "client fallback permissions do not imply source capability"
+    );
     if req.enable_direct_play == Some(false) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
