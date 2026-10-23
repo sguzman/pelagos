@@ -42,6 +42,10 @@ pub struct ItemDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub series_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub series_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub season_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub index_number: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_index_number: Option<u16>,
@@ -127,6 +131,8 @@ fn virtual_root(server_id: &str) -> ItemDto {
         size: None,
         container: None,
         series_name: None,
+        series_id: None,
+        season_id: None,
         index_number: None,
         parent_index_number: None,
         user_data: None,
@@ -244,6 +250,13 @@ fn map_item(
         .as_ref()
         .and_then(|hint| hint.episode_title.clone())
         .unwrap_or(name);
+    let series_id = episode.as_ref().and_then(|_| {
+        Path::new(&file.relative_path)
+            .parent()
+            .and_then(Path::parent)
+            .map(|path| stable_id(&file.root, &format!("folder:{}", path.display())))
+    });
+    let season_id = episode.as_ref().map(|_| parent_id.clone());
     ItemDto {
         id: stable_id(&file.root, &file.relative_path),
         name,
@@ -257,6 +270,8 @@ fn map_item(
             .extension()
             .map(|ext| ext.to_string_lossy().to_ascii_lowercase()),
         series_name: episode.as_ref().map(|hint| hint.series_name.clone()),
+        series_id,
+        season_id,
         index_number: episode.as_ref().map(|hint| hint.episode),
         parent_index_number: episode.as_ref().map(|hint| hint.season),
         user_data: None,
@@ -368,6 +383,12 @@ fn catalog_nodes(
                         size: None,
                         container: None,
                         series_name: None,
+                        series_id: index_number.and_then(|_| {
+                            folder.parent().map(|series| {
+                                stable_id(&root, &format!("folder:{}", series.display()))
+                            })
+                        }),
+                        season_id: None,
                         index_number,
                         parent_index_number: None,
                         user_data: None,
