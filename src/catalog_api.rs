@@ -71,6 +71,8 @@ struct ItemQuery {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Items", get(items))
+        .route("/Items/Root", get(items_root))
+        .route("/Users/{user_id}/Items/Root", get(items_root_legacy))
         .route("/Items/{item_id}", get(item))
         .route("/Items/{item_id}/Ancestors", get(ancestors))
         .route("/Users/{user_id}/Items", get(user_items))
@@ -83,6 +85,65 @@ pub fn router() -> Router<Arc<AppState>> {
 #[serde(rename_all = "camelCase")]
 struct AncestorsQuery {
     user_id: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RootQuery {
+    user_id: Option<String>,
+}
+
+/// Same virtual root ID across authenticated clients and daemon restarts;
+/// unrelated to any physical library path or the caller's personal token.
+fn virtual_root_id(server_id: &str) -> String {
+    stable_id(server_id, "pelagos:virtual-user-root:v1")
+}
+
+fn virtual_root(server_id: &str) -> ItemDto {
+    ItemDto {
+        id: virtual_root_id(server_id),
+        name: "Media".to_owned(),
+        item_type: "Folder".to_owned(),
+        media_type: None,
+        is_folder: true,
+        server_id: server_id.to_owned(),
+        parent_id: None,
+        size: None,
+        container: None,
+        user_data: None,
+        image_tags: None,
+    }
+}
+
+async fn root_for_user(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    query_user: Option<String>,
+    path_user: Option<String>,
+) -> Result<Json<ItemDto>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if query_user.as_deref().is_some_and(|id| id != user.id)
+        || path_user.as_deref().is_some_and(|id| id != user.id)
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json(virtual_root(state.server_id())))
+}
+
+async fn items_root(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<RootQuery>,
+) -> Result<Json<ItemDto>, StatusCode> {
+    root_for_user(state, headers, query.user_id, None).await
+}
+
+async fn items_root_legacy(
+    State(state): State<Arc<AppState>>,
+    RoutePath(user_id): RoutePath<String>,
+    headers: HeaderMap,
+) -> Result<Json<ItemDto>, StatusCode> {
+    root_for_user(state, headers, None, Some(user_id)).await
 }
 
 /// Pinned Jellyfin v12.3 ancestor order is immediate parent first.
@@ -180,7 +241,7 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         media_type: None,
         is_folder: true,
         server_id: server_id.to_owned(),
-        parent_id: None,
+        parent_id: Some(virtual_root_id(server_id)),
         size: None,
         container: None,
         user_data: None,
@@ -195,7 +256,7 @@ fn catalog_nodes(
     roots: Vec<String>,
     server_id: &str,
 ) -> Vec<ItemDto> {
-    let mut result = Vec::new();
+    let mut result = vec![virtual_root(server_id)];
     let mut seen = HashSet::new();
     let indexed_images = files
         .iter()
@@ -475,11 +536,13 @@ mod tests {
             },
         ];
         let tree = catalog_nodes(files, vec!["/media/movies".to_owned()], "server");
-        assert_eq!(tree.len(), 5);
+        assert_eq!(tree.len(), 6);
         let root = tree
             .iter()
             .find(|item| item.item_type == "CollectionFolder")
             .unwrap();
+        let virtual_root = tree.iter().find(|item| item.name == "Media").unwrap();
+        assert_eq!(root.parent_id.as_deref(), Some(virtual_root.id.as_str()));
         let series = tree.iter().find(|item| item.name == "Series").unwrap();
         let episode = tree.iter().find(|item| item.name == "Episode").unwrap();
         assert_eq!(series.parent_id.as_deref(), Some(root.id.as_str()));
