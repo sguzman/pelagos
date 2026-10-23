@@ -49,11 +49,7 @@ async fn counts_respect_library_grants_and_personal_favorites_without_classifica
     ] {
         std::fs::write(media.join(path), data).unwrap();
     }
-    std::fs::write(
-        private.join("Secret (2021)/Secret (2021).mp4"),
-        b"private",
-    )
-    .unwrap();
+    std::fs::write(private.join("Secret (2021)/Secret (2021).mp4"), b"private").unwrap();
     catalog::index(&state, &media).unwrap();
     catalog::index(&state, &private).unwrap();
 
@@ -73,18 +69,13 @@ async fn counts_respect_library_grants_and_personal_favorites_without_classifica
         call(&router, "GET", "/Items/Counts", None).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    let empty = json(
-        call(&router, "GET", "/Items/Counts", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let empty = json(call(&router, "GET", "/Items/Counts", Some(&viewer.access_token)).await).await;
     assert_eq!(empty["ItemCount"], 0);
     assert_eq!(empty["MovieCount"], 0);
     auth::grant_library(&state, "viewer", &media).unwrap();
 
-    let counts = json(
-        call(&router, "GET", "/Items/Counts", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let counts =
+        json(call(&router, "GET", "/Items/Counts", Some(&viewer.access_token)).await).await;
     assert_eq!(counts["ItemCount"], 5);
     assert_eq!(counts["MovieCount"], 1);
     assert_eq!(counts["SeriesCount"], 1);
@@ -104,25 +95,17 @@ async fn counts_respect_library_grants_and_personal_favorites_without_classifica
     assert!(counts.get("TotalRecordCount").is_none());
     assert!(counts.get("Path").is_none());
 
-    let items = json(
-        call(&router, "GET", "/Items", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let items = json(call(&router, "GET", "/Items", Some(&viewer.access_token)).await).await;
     let ids = items["Items"].as_array().unwrap();
     let id = |name: &str| {
-        ids.iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        ids.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
     };
     let movie = id("Film");
     let episode = id("Pilot");
-    let views = json(
-        call(&router, "GET", "/UserViews", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let views = json(call(&router, "GET", "/UserViews", Some(&viewer.access_token)).await).await;
     let collection = views["Items"][0]["Id"].as_str().unwrap();
     let folders = json(
         call(
@@ -209,10 +192,8 @@ async fn counts_respect_library_grants_and_personal_favorites_without_classifica
         .status(),
         StatusCode::FORBIDDEN
     );
-    let admin_counts = json(
-        call(&router, "GET", "/Items/Counts", Some(&admin.access_token)).await,
-    )
-    .await;
+    let admin_counts =
+        json(call(&router, "GET", "/Items/Counts", Some(&admin.access_token)).await).await;
     assert_eq!(admin_counts["ItemCount"], 6);
     assert_eq!(admin_counts["MovieCount"], 2);
     let admin_favorites = json(
