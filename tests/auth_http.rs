@@ -142,7 +142,6 @@ async fn jellyfin_client_header_survives_login_session_response() {
     assert_eq!(result["SessionInfo"]["ServerId"], "server");
 }
 
-
 #[tokio::test]
 async fn sessions_list_obeys_user_scope_and_explicitly_rejects_unimplemented_filters() {
     let state = tempfile::tempdir().unwrap();
