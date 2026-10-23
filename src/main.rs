@@ -44,9 +44,15 @@ enum Command {
     /// Create a local Pelagos user, reading the password from standard input only.
     UserAdd { username: String },
     /// Allow an existing local user to read one explicitly named media library.
-    LibraryGrant { username: String, directory: PathBuf },
+    LibraryGrant {
+        username: String,
+        directory: PathBuf,
+    },
     /// Remove an existing user-library read grant.
-    LibraryRevoke { username: String, directory: PathBuf },
+    LibraryRevoke {
+        username: String,
+        directory: PathBuf,
+    },
     /// List items in an already indexed library.
     Catalog { directory: PathBuf },
     /// Inspect one media file with the installed FFprobe executable.
@@ -114,7 +120,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("created user: {} ({})", user.name, user.id);
         return Ok(());
     }
-    if let Some(Command::LibraryGrant { username, directory }) = &args.command {
+    if let Some(Command::LibraryGrant {
+        username,
+        directory,
+    }) = &args.command
+    {
         let state_dir = args
             .state_dir
             .clone()
@@ -123,7 +133,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("library grant created: {created}");
         return Ok(());
     }
-    if let Some(Command::LibraryRevoke { username, directory }) = &args.command {
+    if let Some(Command::LibraryRevoke {
+        username,
+        directory,
+    }) = &args.command
+    {
         let state_dir = args
             .state_dir
             .clone()

@@ -186,7 +186,6 @@ pub(crate) async fn authenticated(
     }
 }
 
-
 /// Resolve the authenticated user's readable roots without exposing grants to
 /// unauthenticated callers. None means administrator access to all indexed roots.
 pub(crate) async fn library_scope(
@@ -196,12 +195,11 @@ pub(crate) async fn library_scope(
     let (user, _) = authenticated(state.clone(), headers).await?;
     let dir = state_dir(&state)?;
     let state_dir = dir.clone();
-    let allowed = tokio::task::spawn_blocking(move || {
-        auth::visible_library_roots(&state_dir, &user)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let allowed =
+        tokio::task::spawn_blocking(move || auth::visible_library_roots(&state_dir, &user))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok((dir, allowed))
 }
 

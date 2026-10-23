@@ -47,22 +47,12 @@ async fn library_grants_are_enforced_for_every_catalog_and_direct_play_surface()
 
     auth::create_user(&state, "admin", "admin-local-test-password").unwrap();
     auth::create_user(&state, "viewer", "viewer-local-test-password").unwrap();
-    let administrator = auth::authenticate(
-        &state,
-        "admin",
-        "admin-local-test-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
-    let viewer = auth::authenticate(
-        &state,
-        "viewer",
-        "viewer-local-test-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
+    let administrator = auth::authenticate(&state, "admin", "admin-local-test-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate(&state, "viewer", "viewer-local-test-password", "server")
+        .unwrap()
+        .unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
@@ -92,9 +82,13 @@ async fn library_grants_are_enforced_for_every_catalog_and_direct_play_surface()
     let none_views = read_json(get(&router, "/UserViews", &viewer.access_token).await).await;
     assert_eq!(none_views["TotalRecordCount"], 0);
     assert_eq!(
-        get(&router, &format!("/Items/{secret_id}"), &viewer.access_token)
-            .await
-            .status(),
+        get(
+            &router,
+            &format!("/Items/{secret_id}"),
+            &viewer.access_token
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
 

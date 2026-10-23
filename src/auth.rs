@@ -2,8 +2,8 @@
 //! Passwords use Argon2id PHC strings, token secrets are random and only SHA-256
 //! digests are stored. This is a foundational auth implementation, not policy parity.
 use std::{
-    error::Error,
     collections::HashSet,
+    error::Error,
     fs,
     path::{Path, PathBuf},
 };
@@ -360,7 +360,6 @@ pub fn list_sessions(
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
-
 /// Local CLI administration: grant one explicitly named user read access to one
 /// canonical library root. A newly created non-admin account has no library access.
 pub fn grant_library(state_dir: &Path, username: &str, root: &Path) -> Result<bool> {
@@ -403,10 +402,7 @@ pub fn revoke_library(state_dir: &Path, username: &str, root: &Path) -> Result<b
 
 /// None means an administrator may access every indexed root; Some(set) gives
 /// the exact canonical roots explicitly permitted to a non-administrator.
-pub fn visible_library_roots(
-    state_dir: &Path,
-    user: &User,
-) -> Result<Option<HashSet<String>>> {
+pub fn visible_library_roots(state_dir: &Path, user: &User) -> Result<Option<HashSet<String>>> {
     if user.policy.is_disabled {
         return Ok(Some(HashSet::new()));
     }
@@ -569,7 +565,6 @@ mod tests {
         assert!(revoke(dir.path(), &admin.access_token).unwrap());
     }
 
-
     #[test]
     fn library_grants_are_deny_by_default_and_can_be_revoked() {
         let dir = tempfile::tempdir().unwrap();
@@ -578,7 +573,12 @@ mod tests {
         let admin = create_user(dir.path(), "admin", "admin-test-passphrase").unwrap();
         let viewer = create_user(dir.path(), "viewer", "viewer-test-passphrase").unwrap();
         assert!(visible_library_roots(dir.path(), &admin).unwrap().is_none());
-        assert!(visible_library_roots(dir.path(), &viewer).unwrap().unwrap().is_empty());
+        assert!(
+            visible_library_roots(dir.path(), &viewer)
+                .unwrap()
+                .unwrap()
+                .is_empty()
+        );
         assert!(grant_library(dir.path(), "viewer", &media).unwrap());
         assert!(!grant_library(dir.path(), "viewer", &media).unwrap());
         let canonical = fs::canonicalize(&media).unwrap();
@@ -590,7 +590,12 @@ mod tests {
         );
         assert!(!grant_library(dir.path(), "unknown", &media).is_ok());
         assert!(revoke_library(dir.path(), "viewer", &media).unwrap());
-        assert!(visible_library_roots(dir.path(), &viewer).unwrap().unwrap().is_empty());
+        assert!(
+            visible_library_roots(dir.path(), &viewer)
+                .unwrap()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
