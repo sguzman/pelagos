@@ -62,7 +62,9 @@ fn validate(doc: &Value) -> Result<(usize, usize), String> {
             }
             let line = a["source_line"].as_u64().ok_or("missing source line")?;
             if line == 0 || !source_lines.insert(line) {
-                return Err(format!("{name}: duplicate or invalid attribute source line"));
+                return Err(format!(
+                    "{name}: duplicate or invalid attribute source line"
+                ));
             }
             match a["path"].as_str() {
                 Some(path) if path.starts_with('/') && !path.contains("//") => {}
