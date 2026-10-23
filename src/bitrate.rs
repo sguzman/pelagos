@@ -72,9 +72,10 @@ async fn bitrate_test(
     }
     let body = Body::from_stream(ReaderStream::new(RandomReader { remaining: size }));
     let mut response = Response::new(body);
-    response
-        .headers_mut()
-        .insert(CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
     response
         .headers_mut()
         .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));

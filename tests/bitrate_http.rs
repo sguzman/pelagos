@@ -34,7 +34,10 @@ async fn bitrate_test_requires_login_and_returns_exact_uncacheable_random_bytes(
         .unwrap()
         .unwrap()
         .access_token;
-    let router = app::router(Arc::new(AppState::with_auth_dir("server".to_owned(), state)));
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
 
     assert_eq!(
         get(&router, "/Playback/BitrateTest?size=37", None)
@@ -45,7 +48,10 @@ async fn bitrate_test_requires_login_and_returns_exact_uncacheable_random_bytes(
 
     let sample = get(&router, "/Playback/BitrateTest?size=37", Some(&token)).await;
     assert_eq!(sample.status(), StatusCode::OK);
-    assert_eq!(sample.headers()[header::CONTENT_TYPE], "application/octet-stream");
+    assert_eq!(
+        sample.headers()[header::CONTENT_TYPE],
+        "application/octet-stream"
+    );
     assert_eq!(sample.headers()[header::CONTENT_LENGTH], "37");
     assert_eq!(sample.headers()[header::CACHE_CONTROL], "no-store");
     let bytes = to_bytes(sample.into_body(), 40).await.unwrap();
@@ -59,7 +65,10 @@ async fn bitrate_test_requires_login_and_returns_exact_uncacheable_random_bytes(
     let default = get(&router, "/Playback/BitrateTest", Some(&token)).await;
     assert_eq!(default.status(), StatusCode::OK);
     assert_eq!(default.headers()[header::CONTENT_LENGTH], "102400");
-    assert_eq!(to_bytes(default.into_body(), 110_000).await.unwrap().len(), 102_400);
+    assert_eq!(
+        to_bytes(default.into_body(), 110_000).await.unwrap().len(),
+        102_400
+    );
 
     let maximum = get(
         &router,

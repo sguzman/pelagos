@@ -11,7 +11,9 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{artwork, auth_api, bitrate, catalog_api, playback, playstate, search, streaming, user_data};
+use crate::{
+    artwork, auth_api, bitrate, catalog_api, playback, playstate, search, streaming, user_data,
+};
 
 #[derive(Debug)]
 pub struct AppState {
