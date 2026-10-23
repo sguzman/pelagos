@@ -66,6 +66,15 @@ struct ItemQuery {
     media_types: Option<String>,
     is_movie: Option<bool>,
     is_series: Option<bool>,
+    user_id: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    enable_images: Option<bool>,
+    enable_user_data: Option<bool>,
+    enable_total_record_count: Option<bool>,
+    fields: Option<String>,
+    image_type_limit: Option<usize>,
+    enable_image_types: Option<String>,
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -361,6 +370,22 @@ async fn query_items(
     headers: HeaderMap,
     query: ItemQuery,
 ) -> Result<Json<QueryResult>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.sort_by.as_deref().is_some_and(|key| key != "SortName")
+        || query
+            .sort_order
+            .as_deref()
+            .is_some_and(|order| !matches!(order, "Ascending" | "Descending"))
+        || query.enable_total_record_count == Some(false)
+        || query.fields.is_some()
+        || query.image_type_limit.is_some()
+        || query.enable_image_types.is_some()
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let mut all = accessible_nodes(state.clone(), headers.clone()).await?;
     match query.parent_id.as_deref() {
         Some(parent) => {
@@ -405,12 +430,29 @@ async fn query_items(
                     .is_some_and(|kind| types.contains(kind))
             })
     });
-    all.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
+    all.sort_by(|a, b| {
+        let order = if query.sort_by.as_deref() == Some("SortName") {
+            a.name.to_lowercase().cmp(&b.name.to_lowercase())
+        } else {
+            a.name.cmp(&b.name)
+        };
+        order.then_with(|| a.id.cmp(&b.id))
+    });
+    if query.sort_order.as_deref() == Some("Descending") {
+        all.reverse();
+    }
     let total_record_count = all.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
     let mut page: Vec<ItemDto> = all.into_iter().skip(start_index).take(limit).collect();
-    attach_user_data(&state, headers, &mut page).await?;
+    if query.enable_images == Some(false) {
+        for item in &mut page {
+            item.image_tags = None;
+        }
+    }
+    if query.enable_user_data != Some(false) {
+        attach_user_data(&state, headers, &mut page).await?;
+    }
     Ok(Json(QueryResult {
         items: page,
         total_record_count,
