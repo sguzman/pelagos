@@ -71,10 +71,8 @@ async fn recognized_type_flags_surface_series_and_movies_without_unscoped_folder
     auth::grant_library(&state, "viewer", &allowed).unwrap();
     let default = json(get(&router, "/Items", Some(&viewer.access_token)).await).await;
     assert_eq!(default["TotalRecordCount"], 2);
-    let selected = json(
-        get(&router, "/Items?isSeries=true", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let selected =
+        json(get(&router, "/Items?isSeries=true", Some(&viewer.access_token)).await).await;
     assert_eq!(selected["TotalRecordCount"], 1);
     assert_eq!(selected["Items"][0]["Type"], "Series");
     assert_eq!(selected["Items"][0]["Name"], "Signal");
@@ -89,16 +87,17 @@ async fn recognized_type_flags_surface_series_and_movies_without_unscoped_folder
     .await;
     assert_eq!(typed["TotalRecordCount"], 1);
     assert_eq!(typed["Items"][0]["Id"], selected["Items"][0]["Id"]);
-    let no_series = json(
-        get(&router, "/Items?isSeries=false", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let no_series =
+        json(get(&router, "/Items?isSeries=false", Some(&viewer.access_token)).await).await;
     assert_eq!(no_series["TotalRecordCount"], 2);
-    assert!(no_series["Items"].as_array().unwrap().iter().all(|i| i["Type"] != "Series"));
-    let movie = json(
-        get(&router, "/Items?isMovie=true", Some(&viewer.access_token)).await,
-    )
-    .await;
+    assert!(
+        no_series["Items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|i| i["Type"] != "Series")
+    );
+    let movie = json(get(&router, "/Items?isMovie=true", Some(&viewer.access_token)).await).await;
     assert_eq!(movie["TotalRecordCount"], 1);
     assert_eq!(movie["Items"][0]["Name"], "Film");
     let excluded = json(
@@ -166,10 +165,7 @@ async fn recognized_type_flags_surface_series_and_movies_without_unscoped_folder
     );
 
     auth::revoke_library(&state, "viewer", &allowed).unwrap();
-    let gone = json(
-        get(&router, "/Items?isSeries=true", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let gone = json(get(&router, "/Items?isSeries=true", Some(&viewer.access_token)).await).await;
     assert_eq!(gone["TotalRecordCount"], 0);
     let hidden = json(
         get(
