@@ -248,9 +248,10 @@ async fn image_infos(
     };
     let details = tokio::task::spawn_blocking(move || {
         let tag = image_tag(&image);
-        let size = std::fs::symlink_metadata(
-            Path::new(&image.root).join(&image.relative_path)
-        ).ok().filter(|meta| meta.file_type().is_file()).map(|meta| meta.len());
+        let size = std::fs::symlink_metadata(Path::new(&image.root).join(&image.relative_path))
+            .ok()
+            .filter(|meta| meta.file_type().is_file())
+            .map(|meta| meta.len());
         tag.zip(size)
     })
     .await
