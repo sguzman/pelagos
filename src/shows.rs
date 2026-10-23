@@ -237,7 +237,10 @@ async fn next_up(
             .then_with(|| a.index_number.cmp(&b.index_number))
             .then_with(|| a.id.cmp(&b.id))
     });
-    let ids = episodes.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+    let ids = episodes
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let user_id = user.id;
     let saved = tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))

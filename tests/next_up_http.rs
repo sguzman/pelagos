@@ -40,7 +40,10 @@ async fn selected_series_next_up_respects_episode_order_resume_and_library_grant
     std::fs::create_dir_all(allowed.join("Signal/Season 02")).unwrap();
     std::fs::create_dir_all(private.join("Hidden/Season 01")).unwrap();
     for (path, data) in [
-        ("Signal/Season 01/Signal - S01E01 - Dawn.mp4", b"one".as_slice()),
+        (
+            "Signal/Season 01/Signal - S01E01 - Dawn.mp4",
+            b"one".as_slice(),
+        ),
         ("Signal/Season 01/Signal - S01E02 - Noon.mp4", b"two"),
         ("Signal/Season 01/Signal - S01E03 - Dusk.mp4", b"three"),
         ("Signal/Season 02/Signal - S02E01 - Morning.mp4", b"four"),
@@ -78,10 +81,7 @@ async fn selected_series_next_up_respects_episode_order_resume_and_library_grant
     .await;
     let records = admin_series["Items"].as_array().unwrap();
     let id_for = |name: &str| {
-        records
-            .iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        records.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
