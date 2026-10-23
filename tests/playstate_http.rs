@@ -28,7 +28,11 @@ async fn call(
         req = req.header(header::CONTENT_TYPE, "application/json");
     }
     let body = payload.map_or_else(Body::empty, |v| Body::from(v.to_string()));
-    router.clone().oneshot(req.body(body).unwrap()).await.unwrap()
+    router
+        .clone()
+        .oneshot(req.body(body).unwrap())
+        .await
+        .unwrap()
 }
 
 async fn item_state(router: &Router, id: &str, token: &str) -> Value {
@@ -157,7 +161,10 @@ async fn direct_play_start_progress_and_stop_persist_resume_position() {
         .status(),
         StatusCode::NO_CONTENT
     );
-    let restarted = app::router(Arc::new(AppState::with_auth_dir("server".to_owned(), state.clone())));
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
     assert_eq!(
         item_state(&restarted, &id, &viewer.access_token).await["PlaybackPositionTicks"],
         500000000

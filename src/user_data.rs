@@ -168,12 +168,7 @@ fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Resul
 
 /// Persist an authorized direct-play resume position without changing the
 /// watched/favorite flags. Completion thresholds need full media runtimes.
-pub fn save_position(
-    state_dir: &Path,
-    user_id: &str,
-    item_id: &str,
-    ticks: i64,
-) -> Result<()> {
+pub fn save_position(state_dir: &Path, user_id: &str, item_id: &str, ticks: i64) -> Result<()> {
     if ticks < 0 {
         return Err("negative playback ticks are invalid".into());
     }
@@ -321,28 +316,35 @@ pub fn router() -> Router<Arc<AppState>> {
 mod tests {
     use super::*;
 
-
     #[test]
     fn resume_position_persists_without_marking_watched() {
         let dir = tempfile::tempdir().unwrap();
         save_position(dir.path(), "user", "video", 12_340_000).unwrap();
         assert_eq!(
-            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            read(dir.path(), "user", "video")
+                .unwrap()
+                .playback_position_ticks,
             12_340_000
         );
         assert!(!read(dir.path(), "user", "video").unwrap().played);
         assert_eq!(
-            read(dir.path(), "other", "video").unwrap().playback_position_ticks,
+            read(dir.path(), "other", "video")
+                .unwrap()
+                .playback_position_ticks,
             0
         );
         assert!(save_position(dir.path(), "user", "video", -1).is_err());
         assert_eq!(
-            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            read(dir.path(), "user", "video")
+                .unwrap()
+                .playback_position_ticks,
             12_340_000
         );
         set_flag(dir.path(), "user", "video", Flag::Played(true)).unwrap();
         assert_eq!(
-            read(dir.path(), "user", "video").unwrap().playback_position_ticks,
+            read(dir.path(), "user", "video")
+                .unwrap()
+                .playback_position_ticks,
             0
         );
     }
