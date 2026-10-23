@@ -305,7 +305,10 @@ fn write_update(
     };
     let favorite = update.is_favorite.unwrap_or(prior.is_favorite);
     let newly_played = played && !prior.played;
-    let new_activity = newly_played || update.playback_position_ticks.is_some_and(|ticks| ticks > 0);
+    let new_activity = newly_played
+        || update
+            .playback_position_ticks
+            .is_some_and(|ticks| ticks > 0);
     tx.execute(
         "INSERT OR IGNORE INTO item_user_data(user_id,item_id) VALUES(?1,?2)",
         params![user_id, item_id],
