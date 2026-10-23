@@ -30,7 +30,13 @@ struct StreamQuery {
 }
 
 fn media_type(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
+    match path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "mp4" | "m4v" => "video/mp4",
         "mkv" => "video/x-matroska",
         "webm" => "video/webm",
@@ -83,10 +89,13 @@ fn parse_range(value: &str, size: u64) -> Option<ByteRange> {
 }
 
 fn response_headers(response: &mut Response, length: u64, mime: &str) -> Result<(), StatusCode> {
-    response.headers_mut().insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    response
+        .headers_mut()
+        .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
     response.headers_mut().insert(
         CONTENT_LENGTH,
-        HeaderValue::from_str(&length.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        HeaderValue::from_str(&length.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
     response.headers_mut().insert(
         CONTENT_TYPE,
@@ -124,7 +133,9 @@ async fn serve_file(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .into_iter()
-        .find(|row| row.kind == "video" && catalog_api::stable_id(&row.root, &row.relative_path) == item_id)
+        .find(|row| {
+            row.kind == "video" && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
+        })
         .ok_or(StatusCode::NOT_FOUND)?;
 
     let root = tokio::fs::canonicalize(&matched.root)
@@ -212,9 +223,18 @@ mod tests {
 
     #[test]
     fn byte_ranges_reject_invalid_and_support_suffix() {
-        assert_eq!(parse_range("bytes=2-5", 10), Some(ByteRange { start: 2, end: 5 }));
-        assert_eq!(parse_range("bytes=-3", 10), Some(ByteRange { start: 7, end: 9 }));
-        assert_eq!(parse_range("bytes=8-", 10), Some(ByteRange { start: 8, end: 9 }));
+        assert_eq!(
+            parse_range("bytes=2-5", 10),
+            Some(ByteRange { start: 2, end: 5 })
+        );
+        assert_eq!(
+            parse_range("bytes=-3", 10),
+            Some(ByteRange { start: 7, end: 9 })
+        );
+        assert_eq!(
+            parse_range("bytes=8-", 10),
+            Some(ByteRange { start: 8, end: 9 })
+        );
         assert_eq!(parse_range("bytes=20-", 10), None);
         assert_eq!(parse_range("bytes=1-3,5-7", 10), None);
         assert_eq!(parse_range("bytes=-0", 10), None);
