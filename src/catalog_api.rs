@@ -281,7 +281,7 @@ async fn user_views(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<QueryResult>, StatusCode> {
-    let dir = admin_state(state.clone(), headers).await?;
+    let (dir, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     let mut roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
