@@ -258,12 +258,7 @@ pub fn unregister_by_name(state_dir: &Path, name: &str) -> Result<LibraryRemoval
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         all.into_iter()
-            .filter(|root| {
-                Path::new(root)
-                    .file_name()
-                    .and_then(|part| part.to_str())
-                    == Some(name)
-            })
+            .filter(|root| Path::new(root).file_name().and_then(|part| part.to_str()) == Some(name))
             .collect::<Vec<_>>()
     };
     let root = match matching.as_slice() {
