@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`█░░░░░░░░░ 5%` across 80 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`█░░░░░░░░░ 6%` across 82 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39950651357](https://github.com/sguzman/pelagos/actions/runs/39950651357) — formatting, clippy, Rust tests and automatic roadmap validation.
+**Latest passing CI:** [run 39953180557](https://github.com/sguzman/pelagos/actions/runs/39953180557) — formatting, Clippy, Rust tests, roadmap/source/API inventories.
 
 ## 🚀 Current starter
 
@@ -30,6 +30,8 @@
 cargo run -- --bind 127.0.0.1 --port 8097
 # Read-only offline inventory; no server started, no writes to media:
 cargo run -- scan /path/to/authorized/media
+# Optional FFprobe metadata inspection (requires the system's ffprobe):
+cargo run -- probe /path/to/authorized/media.mp4
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
@@ -41,6 +43,6 @@ Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/st
 
 Rust owns HTTP, protocols, indexing, metadata, state, playback negotiations, and FFmpeg supervision. A lightweight browser admin shell is included as a scaffold. The system supports Linux-first development, with EndeavourOS/Hyprland a primary target. The existing user-installed Jellyfin server remains independent and untouched.
 
-[Architecture](docs/ARCHITECTURE.md) · [Compatibility](docs/COMPATIBILITY.md) · [Provenance and licensing](docs/PROVENANCE.md) · [Tracking](docs/ISSUES.md).
+[Architecture](docs/ARCHITECTURE.md) · [Pinned API attributes](docs/API_CONTRACTS.md) · [Compatibility](docs/COMPATIBILITY.md) · [Provenance and licensing](docs/PROVENANCE.md) · [Tracking](docs/ISSUES.md).
 
 Pelagos is independent of and not endorsed by Jellyfin. This repository retains its original MIT license for independently authored implementation; Jellyfin's GPL-2.0 source must not be copied/translated without meeting derivative-work licensing obligations.

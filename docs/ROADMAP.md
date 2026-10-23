@@ -2,9 +2,9 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 5%` across 80 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 6%` across 82 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 26%`
+## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 29%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -54,7 +54,7 @@
   - [x] CI validates synthetic media detection, symlink avoidance and unchanged file contents — GitHub Actions 39950651357: format, clippy, tests and roadmap verification passed
   - [ ] Live Linux scan verifies a real user-authorized library safely
 
-### 🧪 P2 — Test framework — `██░░░░░░░░ 17%`
+### 🧪 P2 — Test framework — `███░░░░░░░ 27%`
 
 - 📊 **T010 — Ledger generator and CI guard** — `███████░░░ 67%`
   - [x] Implement machine ledger, calculated percentages and acceptance evidence — src/bin/pelagos-roadmap.rs; docs/progress.json; docs/ROADMAP.md
@@ -72,6 +72,10 @@
   - [ ] Implement keyboard, responsive, contrast and three-mode browser screenshots
   - [ ] Automated tests and Jellyfin baseline fixture verify keyboard, responsive, contrast and three-mode browser screenshots
   - [ ] Production or real-client acceptance validates keyboard, responsive, contrast and three-mode browser screenshots
+- 📡 **T014 — Pinned HTTP controller attribute inventory** — `███████░░░ 67%`
+  - [x] Inventory every Jellyfin v12.3 root API controller and HTTP attribute with source SHA — docs/api-contracts.json; docs/API_CONTRACTS.md — 60 pinned controllers, 419 method attributes
+  - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
+  - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
 ## 🔌 M1 — Jellyfin protocol and API parity — `░░░░░░░░░░ 0%`
 
@@ -195,11 +199,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify favorite, rating, playlist editing and metadata override round trips
   - [ ] Production or real-client acceptance validates favorite, rating, playlist editing and metadata override round trips
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `░░░░░░░░░░ 0%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 5%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `░░░░░░░░░░ 0%`
+### ▶️ P9 — Streaming engine — `█░░░░░░░░░ 13%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -217,6 +221,10 @@
   - [ ] Implement container remux, alternate versions, segment boundaries and timestamps
   - [ ] Automated tests and Jellyfin baseline fixture verify container remux, alternate versions, segment boundaries and timestamps
   - [ ] Production or real-client acceptance validates container remux, alternate versions, segment boundaries and timestamps
+- 🔬 **T304 — Bounded FFprobe process integration** — `███████░░░ 67%`
+  - [x] Rust invokes FFprobe read-only with bounded output, timeout and no shell — src/probe.rs; src/main.rs — probe CLI and isolated subprocess bridge
+  - [x] CI passes synthetic FFprobe success, failure, malformed output and deadline regression tests — GitHub Actions 39952135417 — FFprobe process unit tests, Clippy and formatting passed
+  - [ ] Real FFprobe executable and real media stream/metadata profiles pass platform acceptance
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

@@ -34,3 +34,7 @@ Prefer a single Rust package with clearly separated modules until concrete scali
 ## Read-only diagnostics
 
 The Rust-only `pelagos scan <directory>` subcommand enumerates recognized file extensions, sizes and relative paths, sorted deterministically. It never writes source media, never follows file or directory symlinks inside the library root, does not run Jellyfin, and does not start HTTP. This is a testable inventory diagnostic only: no persistent indexing, metadata inference, user library, remote client delivery or FFprobe analysis is claimed yet. Synthetic fixtures and a symlink boundary test run in GitHub CI.
+
+## Initial read-only FFprobe bridge
+
+`cargo run -- probe /path/to/file.mkv` invokes system `ffprobe` with explicit argv, a process timeout, bounded output and JSON decoding. It never runs a shell or transcodes media. Synthetic tests verify error paths; real hardware/audio/video metadata mapping and Jellyfin `MediaStream` compatibility are still open. This does not make playback functional.

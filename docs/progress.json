@@ -324,6 +324,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T014",
+              "emoji": "📡",
+              "name": "Pinned HTTP controller attribute inventory",
+              "checks": [
+                {
+                  "title": "Inventory every Jellyfin v12.3 root API controller and HTTP attribute with source SHA",
+                  "passed": true,
+                  "evidence": "docs/api-contracts.json; docs/API_CONTRACTS.md — 60 pinned controllers, 419 method attributes"
+                },
+                {
+                  "title": "Rust CI rejects missing, malformed or silently changed pinned controller inventory",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39953180557 — pelagos-api-matrix test and check pass"
+                },
+                {
+                  "title": "Differential OpenAPI and real-client verification resolves route and DTO coverage",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
@@ -957,6 +979,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T304",
+              "emoji": "🔬",
+              "name": "Bounded FFprobe process integration",
+              "checks": [
+                {
+                  "title": "Rust invokes FFprobe read-only with bounded output, timeout and no shell",
+                  "passed": true,
+                  "evidence": "src/probe.rs; src/main.rs — probe CLI and isolated subprocess bridge"
+                },
+                {
+                  "title": "CI passes synthetic FFprobe success, failure, malformed output and deadline regression tests",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39952135417 — FFprobe process unit tests, Clippy and formatting passed"
+                },
+                {
+                  "title": "Real FFprobe executable and real media stream/metadata profiles pass platform acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

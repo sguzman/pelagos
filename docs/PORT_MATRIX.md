@@ -25,6 +25,8 @@
 | `SharedVersion.cs` | 1 | 1 | 0 | 0 |
 | `src` | 410 | 410 | 0 | 0 |
 
+The complete root API **controller attribute** inventory separately records 60/60 version-pinned controller source files and 419 HTTP method annotations ([source matrix](api-contracts.json), [review](API_CONTRACTS.md)). This is discovery metadata, **not accepted route/API parity**.
+
 ## Acceptance process
 
 1. Inventory every upstream source file and record its SHA and owning Rust replacement(s).
