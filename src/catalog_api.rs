@@ -620,12 +620,11 @@ async fn query_items(
         let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
         let user_id = user.id.clone();
         let ids = all.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
-        let personal = tokio::task::spawn_blocking(move || {
-            user_data::read_many(&dir, &user_id, &ids)
-        })
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let personal =
+            tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         all = all
             .into_iter()
             .zip(personal)

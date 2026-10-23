@@ -53,7 +53,9 @@ async fn played_and_favorite_filters_apply_before_paging_without_cross_user_stat
         state.clone(),
     )));
     assert_eq!(
-        call(&router, "GET", "/Items?isPlayed=true", None).await.status(),
+        call(&router, "GET", "/Items?isPlayed=true", None)
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     auth::grant_library(&state, "viewer", &allowed).unwrap();
@@ -176,7 +178,10 @@ async fn played_and_favorite_filters_apply_before_paging_without_cross_user_stat
     assert_eq!(search_false["SearchHints"][0]["Name"], "Delta");
     for route in [
         format!("/Items?isFavorite=true&userId={}", admin.user.id),
-        format!("/Search/Hints?searchTerm=a&isPlayed=true&userId={}", admin.user.id),
+        format!(
+            "/Search/Hints?searchTerm=a&isPlayed=true&userId={}",
+            admin.user.id
+        ),
     ] {
         assert_eq!(
             call(&router, "GET", &route, Some(&viewer.access_token))
