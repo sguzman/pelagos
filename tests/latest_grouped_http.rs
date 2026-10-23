@@ -88,8 +88,6 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
         StatusCode::UNAUTHORIZED
     );
     for unsupported in [
-        "/Items/Latest",
-        "/Items/Latest?groupItems=true",
         "/Items/Latest?groupItems=true&includeItemTypes=Audio",
     ] {
         assert_eq!(
@@ -117,6 +115,17 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
     )
     .await;
     assert_eq!(mixed_without_movies, grouped_result);
+    let default_video_only = json(
+        call(
+            &router,
+            "GET",
+            "/Items/Latest",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(default_video_only, grouped_result);
     assert_eq!(grouped_result.as_array().unwrap().len(), 2);
     assert_eq!(grouped_result[0]["Type"], "Series");
     assert_eq!(grouped_result[0]["Name"], "Signal");
