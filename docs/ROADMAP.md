@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 33%` across 146 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 33%` across 147 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -234,11 +234,11 @@
   - [x] Full CI verifies combined true/false filters, typed media search, search-folder distinctions, ordering, cross-user denial, restarts and library revocation — GitHub Actions 40016204498 — formatting, Clippy, full Rust unit/HTTP suites and source/roadmap checks passed
   - [ ] Unmodified Jellyfin clients validate inherited per-series played state, provider metadata interactions and complete upstream ItemQuery filter parity
 
-## 📚 M2 — Full media library and metadata — `█████░░░░░ 45%`
+## 📚 M2 — Full media library and metadata — `█████░░░░░ 46%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
-### 📂 P6 — Filesystem and items — `███░░░░░░░ 34%`
+### 📂 P6 — Filesystem and items — `████░░░░░░ 37%`
 
 - 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
   - [ ] Implement multi-root libraries, watcher updates and rescan correctness
@@ -272,6 +272,10 @@
   - [x] Store immutable first-index timestamps on newly cataloged files, migrate v1/v2 histories conservatively and keep timestamps fixed during rescans — src/catalog.rs — schema v3 with last-seen backfill, dedicated latest index and timestamp-preserving conflict updates
   - [x] Full CI verifies initial ordering, deterministic ties, rescans, removal/readdition, backwards migration and forward-version safety — GitHub Actions 40015196184 — Rust formatting, Clippy, unit/integration suite and repository guards passed
   - [ ] Large-library migration benchmarking, known external creation-time reconciliation and Jellyfin upstream DateCreated compatibility are verified
+- 🔄 **T208 — Administrator-triggered atomic refresh of registered media libraries** — `███████░░░ 67%`
+  - [x] Implement privileged pinned Library/Refresh subset with registered-root-only read-only scans and one transaction for multi-library index changes — src/catalog.rs refresh_registered; src/catalog_api.rs refresh_library; pinned Jellyfin v12.3 LibraryController.RefreshLibrary
+  - [x] Rust CI tests admin/anonymous authorization, new/stale media, registered roots only, offline all-or-none failure, redirected symlink refusal and restart — GitHub Actions 40039692258: cargo fmt, Clippy, full Rust unit/HTTP integration tests, pinned controller and roadmap checks passed
+  - [ ] Asynchronous Jellyfin job semantics, cancellation, all operation failures, high-scale races and unmodified client acceptance verified
 
 ### 🧩 P7 — Metadata systems — `███░░░░░░░ 34%`
 

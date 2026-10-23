@@ -1326,6 +1326,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T208",
+              "emoji": "🔄",
+              "name": "Administrator-triggered atomic refresh of registered media libraries",
+              "checks": [
+                {
+                  "title": "Implement privileged pinned Library/Refresh subset with registered-root-only read-only scans and one transaction for multi-library index changes",
+                  "passed": true,
+                  "evidence": "src/catalog.rs refresh_registered; src/catalog_api.rs refresh_library; pinned Jellyfin v12.3 LibraryController.RefreshLibrary"
+                },
+                {
+                  "title": "Rust CI tests admin/anonymous authorization, new/stale media, registered roots only, offline all-or-none failure, redirected symlink refusal and restart",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40039692258: cargo fmt, Clippy, full Rust unit/HTTP integration tests, pinned controller and roadmap checks passed"
+                },
+                {
+                  "title": "Asynchronous Jellyfin job semantics, cancellation, all operation failures, high-scale races and unmodified client acceptance verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
