@@ -179,7 +179,6 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     assert_eq!(rejected.status(), StatusCode::NOT_IMPLEMENTED);
 }
 
-
 #[cfg(unix)]
 #[tokio::test]
 async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
@@ -248,7 +247,10 @@ async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
         format!("/Audio/{id}/stream?static=true")
     );
     assert_eq!(payload["MediaSources"][0]["RunTimeTicks"], 1_255_000_000);
-    assert_eq!(payload["MediaSources"][0]["MediaStreams"][0]["Codec"], "flac");
+    assert_eq!(
+        payload["MediaSources"][0]["MediaStreams"][0]["Codec"],
+        "flac"
+    );
     assert_eq!(payload["MediaSources"][0]["SupportsDirectPlay"], true);
     assert_eq!(payload["MediaSources"][0]["SupportsTranscoding"], false);
 

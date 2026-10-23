@@ -174,7 +174,11 @@ async fn media_file(
     if !path.starts_with(&root) {
         return Err(StatusCode::FORBIDDEN);
     }
-    let kind = if found.kind == "audio" { "audio" } else { "video" };
+    let kind = if found.kind == "audio" {
+        "audio"
+    } else {
+        "video"
+    };
     Ok((path, kind))
 }
 
@@ -255,18 +259,22 @@ mod tests {
         assert_eq!(media.direct_stream_url, "/Videos/abc/stream?static=true");
     }
 
-
     #[test]
     fn audio_sources_use_the_audio_stream_route() {
         let source = probe::ProbeReport {
             path: PathBuf::from("sound.flac"),
             size_bytes: 10,
             format: Some(json!({"duration":"12.5"})),
-            streams: vec![json!({"index":0,"codec_type":"audio","codec_name":"flac","sample_rate":"96000","channels":2})],
+            streams: vec![
+                json!({"index":0,"codec_type":"audio","codec_name":"flac","sample_rate":"96000","channels":2}),
+            ],
             chapters: vec![],
         };
         let media = source_from_probe("track-id", "audio", Path::new("sound.flac"), &source);
-        assert_eq!(media.direct_stream_url, "/Audio/track-id/stream?static=true");
+        assert_eq!(
+            media.direct_stream_url,
+            "/Audio/track-id/stream?static=true"
+        );
         assert_eq!(media.run_time_ticks, Some(125_000_000));
         assert!(media.supports_direct_play);
         assert!(!media.supports_transcoding);
