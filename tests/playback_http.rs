@@ -81,7 +81,6 @@ async fn playback_requires_auth_and_rejects_unsupported_modes() {
     );
 }
 
-
 #[cfg(unix)]
 #[tokio::test]
 async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
@@ -116,8 +115,8 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     .unwrap()
     .unwrap()
     .access_token;
-    let app_state = AppState::with_auth_dir("server".to_owned(), state_dir)
-        .with_probe_executable(executable);
+    let app_state =
+        AppState::with_auth_dir("server".to_owned(), state_dir).with_probe_executable(executable);
     let router = app::router(Arc::new(app_state));
 
     let catalog_response = request(&router, "GET", "/Items", Some(&token), "").await;
@@ -135,7 +134,10 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     assert_eq!(info["MediaSources"][0]["Container"], "mp4");
     assert_eq!(info["MediaSources"][0]["RunTimeTicks"], 612_500_000);
     assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Codec"], "h264");
-    assert_eq!(info["MediaSources"][0]["MediaStreams"][1]["SampleRate"], 48000);
+    assert_eq!(
+        info["MediaSources"][0]["MediaStreams"][1]["SampleRate"],
+        48000
+    );
     assert_eq!(info["MediaSources"][0]["SupportsTranscoding"], false);
     assert_eq!(info["MediaSources"][0]["SupportsDirectPlay"], true);
     assert!(info["MediaSources"][0].get("Path").is_none());
