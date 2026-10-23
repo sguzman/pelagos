@@ -92,6 +92,8 @@ async fn virtual_root_is_stable_browsable_and_grant_scoped() {
     )
     .await;
     assert_eq!(direct["Id"], root_id);
+    assert_eq!(direct, root);
+    assert_eq!(root["UserData"]["Played"], false);
     let no_grants = json(
         get(
             &router,
