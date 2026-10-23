@@ -66,6 +66,8 @@ async fn query_results_deny_ungranted_users_and_page_deterministically() {
     assert_eq!(all["TotalRecordCount"], 2);
     assert_eq!(all["Items"][0]["Name"], "Alpha");
     assert_eq!(all["Items"][1]["Name"], "Bravo");
+    assert_eq!(all["Items"][0]["Container"], "mp4");
+    assert_eq!(all["Items"][1]["Container"], "mkv");
     assert!(all["Items"][0].get("Path").is_none());
 
     let page = json(get(&router, "/Items?startIndex=1&limit=1", Some(&admin_token)).await).await;
@@ -80,6 +82,7 @@ async fn query_results_deny_ungranted_users_and_page_deterministically() {
     let views = json(get(&router, "/UserViews", Some(&admin_token)).await).await;
     assert_eq!(views["TotalRecordCount"], 1);
     assert_eq!(views["Items"][0]["Name"], "Movies");
+    assert!(views["Items"][0].get("Container").is_none());
     assert!(views["Items"][0].get("Path").is_none());
 }
 
@@ -188,6 +191,7 @@ async fn item_type_and_media_filters_are_consistent_with_search() {
     .await;
     assert_eq!(audio["TotalRecordCount"], 1);
     assert_eq!(audio["Items"][0]["Name"], "Song");
+    assert_eq!(audio["Items"][0]["Container"], "flac");
     let video = json(
         get(
             &router,
