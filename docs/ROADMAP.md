@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 32%` across 142 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 32%` across 143 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `████░░░░░░ 37%`
+### 👥 P4 — Authentication and user state — `████░░░░░░ 40%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -162,6 +162,10 @@
   - [x] Serve pinned GET /Users/{userId} for authenticated account only, matching /Users/Me without exposing other users — src/auth_api.rs; tests/user_lookup_http.rs — self lookup, inaccessible account 404, token validation
   - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
   - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
+- 🔑 **T119 — Durable per-user original-media download permission independent of library grants** — `███████░░░ 67%`
+  - [x] Implement persistent default-deny per-user EnableContentDownloading state, separate download CLI grant/revoke operations and permission-aware authenticated download requests — src/auth.rs; src/main.rs; src/streaming.rs; pinned Jellyfin v12.3 Policies.Download and PermissionKind.EnableContentDownloading
+  - [x] Rust CI validates ordinary-account grant/revoke on active sessions, restart persistence, user-policy DTO, separate root authorization and original media downloads — GitHub Actions 40033786005: complete Rust integration/unit suites, Clippy, formatting, roadmap and pinned source/route checks passed
+  - [ ] All pinned Jellyfin CanDownload user/item-policy cases and unmodified clients pass differential and production acceptance
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
@@ -378,8 +382,8 @@
   - [x] Return pinned Jellyfin collection QueryResult for authorized indexed items, with truthful empty membership and fail-closed unsupported fields — src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController.GetItemCollections; BoxSet indexing not yet implemented
   - [x] CI verifies admin and user authorization, missing/private IDs, paging, account isolation, restart and grant revocation — GitHub Actions 40031984883: full Rust test suite, formatting, Clippy, roadmap and pinned source/API contracts passed
   - [ ] Indexed real BoxSet memberships and unmodified Jellyfin TV client acceptance of item collections
-- 📥 **T239 — Conservative administrator-only original-media Jellyfin Download route** — `███████░░░ 67%`
-  - [x] Implement administrator-restricted original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames — src/streaming.rs; pinned Jellyfin v12.3 LibraryController.GetDownload and Policies.Download
+- 📥 **T239 — Confined original-media Jellyfin Download transport and attachment headers** — `███████░░░ 67%`
+  - [x] Implement authenticated original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames — src/streaming.rs; pinned Jellyfin v12.3 LibraryController.GetDownload and Policies.Download
   - [x] Rust CI verifies administrator/non-administrator permissions, supported MIME and byte ranges, Unicode disposition, sidecar/photo exclusion and outside-root symlink rejection — GitHub Actions 40033133007: cargo fmt, Clippy, complete Rust suite, roadmap and pinned protocol/source guards passed
   - [ ] Full Jellyfin Download permission policy, real-client transfers and production acceptance are demonstrated
 

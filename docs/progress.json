@@ -770,6 +770,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T119",
+              "emoji": "🔑",
+              "name": "Durable per-user original-media download permission independent of library grants",
+              "checks": [
+                {
+                  "title": "Implement persistent default-deny per-user EnableContentDownloading state, separate download CLI grant/revoke operations and permission-aware authenticated download requests",
+                  "passed": true,
+                  "evidence": "src/auth.rs; src/main.rs; src/streaming.rs; pinned Jellyfin v12.3 Policies.Download and PermissionKind.EnableContentDownloading"
+                },
+                {
+                  "title": "Rust CI validates ordinary-account grant/revoke on active sessions, restart persistence, user-policy DTO, separate root authorization and original media downloads",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40033786005: complete Rust integration/unit suites, Clippy, formatting, roadmap and pinned source/route checks passed"
+                },
+                {
+                  "title": "All pinned Jellyfin CanDownload user/item-policy cases and unmodified clients pass differential and production acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -1878,10 +1900,10 @@
             {
               "id": "T239",
               "emoji": "📥",
-              "name": "Conservative administrator-only original-media Jellyfin Download route",
+              "name": "Confined original-media Jellyfin Download transport and attachment headers",
               "checks": [
                 {
-                  "title": "Implement administrator-restricted original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames",
+                  "title": "Implement authenticated original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames",
                   "passed": true,
                   "evidence": "src/streaming.rs; pinned Jellyfin v12.3 LibraryController.GetDownload and Policies.Download"
                 },
