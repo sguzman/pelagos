@@ -857,6 +857,50 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T128",
+              "emoji": "🧬",
+              "name": "Permission-scoped Jellyfin item ancestor navigation",
+              "checks": [
+                {
+                  "title": "Implement pinned Items/{itemId}/Ancestors order with user ownership, accessible folder chain and UserData",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; tests/ancestors_http.rs — direct-parent-first chain from the authorized item graph"
+                },
+                {
+                  "title": "CI verifies ancestor ordering, root behavior, 401/403/404 responses, grants and immediate revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39997380191 — fmt, Clippy, Rust HTTP/unit tests, compatibility inventory and roadmap guard all passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV/web clients validate ancestor navigation and full BaseItemDto behavior",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T129",
+              "emoji": "⭐",
+              "name": "Authenticated Jellyfin UserData item reads and legacy route",
+              "checks": [
+                {
+                  "title": "Expose pinned UserItems/{itemId}/UserData GET and Users/{userId}/Items/{itemId}/UserData GET from private per-user SQLite state",
+                  "passed": true,
+                  "evidence": "src/user_data.rs; tests/user_data_http.rs — authorized current-user reads, independent from Jellyfin state"
+                },
+                {
+                  "title": "CI verifies uninitialized state, watched/favorite persistence, cross-account denial and grant revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39997380191 — complete Rust CI passed with GET regressions"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients verify read/write UserData DTO parity and synchronization semantics",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
