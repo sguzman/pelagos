@@ -66,8 +66,8 @@ async fn latest_for_user(
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let included = filter_types(query.include_item_types.as_deref())?
-        .filter(|types| !types.is_empty());
+    let included =
+        filter_types(query.include_item_types.as_deref())?.filter(|types| !types.is_empty());
     // Pinned Jellyfin v12.3: Episodes group under Series; Movies and generic
     // Videos have no LatestItemsIndexContainer. We can also honor default
     // grouping when *all accessible media* are video, even without an explicit
@@ -86,8 +86,7 @@ async fn latest_for_user(
     if grouped
         && included.is_none()
         && nodes.iter().any(|item| {
-            !item.is_folder
-                && matches!(item.media_type.as_deref(), Some("Audio" | "Photo"))
+            !item.is_folder && matches!(item.media_type.as_deref(), Some("Audio" | "Photo"))
         })
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
