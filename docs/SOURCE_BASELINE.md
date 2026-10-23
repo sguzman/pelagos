@@ -11,3 +11,7 @@ The target is **all built-in C# server functionality**, not just the public API.
 ## Baseline update policy
 
 Pin all differential fixtures and API schemas to this release. Later upstream versions enter as explicit upgrade tracks rather than silently redefining the MVP. File/class inventory, REST routes, behavior, migrations and default configuration all need cross-references to Rust owners and parity tests. No feature is presumed compatible based on shared endpoint names alone.
+
+## Exhaustive C# file inventory
+
+GitHub v12.3 tree `5d01346d1cc857fc7c3c4d581205eea95dda3c0d` has 2247 C# files, including 1932 server-source files and 315 test/fuzz reference files. The complete pinned path+blob-SHA list is maintained in [`port-matrix.json`](port-matrix.json). All 1932 server candidates require ownership triage, behavior coverage and evidence before asserting full C# replacement.

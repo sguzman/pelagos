@@ -1,22 +1,36 @@
-# 🧭 Full C# server port inventory
+# 🧭 Jellyfin C# source port inventory
 
-Reference: [Jellyfin Server v12.3](SOURCE_BASELINE.md). Status is intentionally conservative. Every upstream file, type, API controller and behavior needs an ownership mapping before declaring completeness. This is a **domain-level inventory**, not yet the exhaustive class-by-class mapping.
+**Baseline:** [Jellyfin Server v12.3](SOURCE_BASELINE.md) at pinned Git tree `5d01346d1cc857fc7c3c4d581205eea95dda3c0d`. Generated from the complete Git tree (GitHub returned `truncated=false`).
 
-| C# source domain | Rust target responsibility | Status | Milestone |
-| --- | --- | --- | --- |
-| Jellyfin.Server / core host | Lifecycle, config, dependency wiring | ⚪ Scaffold only | M0 / M5 |
-| Jellyfin.Api / controllers / WebSockets | REST contracts, events, client compatibility | 🟡 Public info stub only | M1 |
-| Jellyfin.Data / MediaBrowser.Model | Core entities and DTOs | ⚪ Not ported | M1 / M2 |
-| MediaBrowser.Common / Controller | Base services, auth, users, sessions | ⚪ Not ported | M1 / M5 |
-| Emby.Naming | Media naming and resolvers | ⚪ Not ported | M2 |
-| Emby.Photos | Image/photo metadata | ⚪ Not ported | M2 / M4 |
-| Emby.Server.Implementations | Persistence, scans, server services | ⚪ Not ported | M0 / M2 |
-| Jellyfin.Server.Implementations | Core hosting and server implementations | ⚪ Not ported | M0 / M5 |
-| MediaBrowser.LocalMetadata / XbmcMetadata | NFO, sidecar and XML metadata | ⚪ Not ported | M2 |
-| MediaBrowser.Providers | Metadata sources, artwork and merging | ⚪ Not ported | M2 |
-| MediaBrowser.MediaEncoding | Probe, audio/video encoding and streaming | ⚪ Not ported | M3 |
-| MediaBrowser.Controller LiveTv / SyncPlay / Subtitles / Trickplay | Advanced playback and TV features | ⚪ Not ported | M3 / M4 |
-| QuickConnect / Devices / Authentication / Security | Client pairing, auth and policies | ⚪ Not ported | M1 / M5 |
-| Plugins / Tasks / Backup | Extensions, scheduling, restore | ⚪ Not ported | M5 |
+**Authoritative file list:** [`port-matrix.json`](port-matrix.json) contains all **2247** C# paths and upstream blob SHAs, their roles, statuses, and Rust replacement references. **1932** are production source candidates; **315** are upstream tests/fuzz references, not additional application modules.
 
-Mandatory follow-up: generate machine-readable **file-by-file**, **API-route-by-route**, and **behavior-by-behavior** matrices pinned to source SHA. Completeness requires coverage, matching acceptance fixtures, and no unresolved deviations. Do not mistake a list of domains for complete mapping.
+**Strict accepted port coverage: `0 / 1932 = 0%`.** Two production files have *partial* Rust analogs, which **do not count as ported**. No file is marked completed. Mapping a source file does not prove behavioral parity.
+
+| Root module | C# server sources | Unported | Partial | Accepted |
+| --- | ---: | ---: | ---: | ---: |
+| `Emby.Naming` | 48 | 48 | 0 | 0 |
+| `Emby.Photos` | 2 | 2 | 0 | 0 |
+| `Emby.Server.Implementations` | 156 | 156 | 0 | 0 |
+| `Jellyfin.Api` | 169 | 168 | 1 | 0 |
+| `Jellyfin.Data` | 26 | 26 | 0 | 0 |
+| `Jellyfin.Server` | 89 | 89 | 0 | 0 |
+| `Jellyfin.Server.Implementations` | 67 | 67 | 0 | 0 |
+| `MediaBrowser.Common` | 41 | 41 | 0 | 0 |
+| `MediaBrowser.Controller` | 387 | 387 | 0 | 0 |
+| `MediaBrowser.LocalMetadata` | 15 | 15 | 0 | 0 |
+| `MediaBrowser.MediaEncoding` | 27 | 27 | 0 | 0 |
+| `MediaBrowser.Model` | 307 | 306 | 1 | 0 |
+| `MediaBrowser.Providers` | 159 | 159 | 0 | 0 |
+| `MediaBrowser.XbmcMetadata` | 28 | 28 | 0 | 0 |
+| `SharedVersion.cs` | 1 | 1 | 0 | 0 |
+| `src` | 410 | 410 | 0 | 0 |
+
+## Acceptance process
+
+1. Inventory every upstream source file and record its SHA and owning Rust replacement(s).
+2. Derive routes, DTOs, states and side effects from the pinned version into behavioral/API contract matrices.
+3. Implement independently in Rust, preserving GPL/MI​​T licensing boundaries ([provenance](PROVENANCE.md)).
+4. Require passing Rust unit, integration and client/differential tests before upgrading any source status to accepted.
+5. Resolve upstream file additions/removals explicitly when changing the baseline tag. A v12.3 acceptance gate may not silently float to a different upstream version.
+
+Reference tests are useful for differential behavior but not proof of production port coverage. The source matrix is one axis of acceptance; **unmodified Jellyfin Smart TV playback remains a separate mandatory gate** ([matrix](COMPATIBILITY.md)).
