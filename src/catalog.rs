@@ -343,10 +343,122 @@ mod tests {
         let version: i64 = first
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         assert_eq!(library_roots(&state).unwrap(), vec!["/existing".to_owned()]);
         assert_eq!(all_files(&state).unwrap()[0].relative_path, "A.mp4");
         assert_eq!(library_roots(&state).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn first_indexed_timestamps_survive_rescans_and_reset_only_after_readdition() {
+        let fixture = tempfile::tempdir().unwrap();
+        let state = fixture.path().join("state");
+        let movies = fixture.path().join("Movies");
+        fs::create_dir(&movies).unwrap();
+        fs::write(movies.join("Alpha.mp4"), b"original").unwrap();
+        index(&state, &movies).unwrap();
+        let root = path_text(&fs::canonicalize(&movies).unwrap())
+            .unwrap()
+            .to_owned();
+        let db = connect(&state).unwrap();
+        db.execute(
+            "UPDATE media_files SET first_indexed_unix=100 WHERE relative_path='Alpha.mp4'",
+            [],
+        )
+        .unwrap();
+        fs::write(movies.join("Beta.mkv"), b"later").unwrap();
+        index(&state, &movies).unwrap();
+        let keys = latest_file_keys(&state).unwrap();
+        assert_eq!(
+            keys,
+            vec![
+                (root.clone(), "Beta.mkv".to_owned()),
+                (root.clone(), "Alpha.mp4".to_owned())
+            ]
+        );
+        let preserved: i64 = connect(&state)
+            .unwrap()
+            .query_row(
+                "SELECT first_indexed_unix FROM media_files
+                 WHERE library_root=?1 AND relative_path='Alpha.mp4'",
+                params![root],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(preserved, 100);
+
+        fs::remove_file(movies.join("Alpha.mp4")).unwrap();
+        assert_eq!(index(&state, &movies).unwrap().stale_removed, 1);
+        fs::write(movies.join("Alpha.mp4"), b"new").unwrap();
+        index(&state, &movies).unwrap();
+        let readded: i64 = connect(&state)
+            .unwrap()
+            .query_row(
+                "SELECT first_indexed_unix FROM media_files WHERE relative_path='Alpha.mp4'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(readded > 100);
+    }
+
+    #[test]
+    fn v2_catalog_migrates_legacy_last_seen_without_reassigning_on_rescan() {
+        let fixture = tempfile::tempdir().unwrap();
+        let state = fixture.path().join("state");
+        let root = fixture.path().join("Library");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("Legacy.mkv"), b"video").unwrap();
+        let canonical = path_text(&fs::canonicalize(&root).unwrap())
+            .unwrap()
+            .to_owned();
+        let path = database_path(&state).unwrap();
+        let db = Connection::open(path).unwrap();
+        db.execute_batch(
+            "CREATE TABLE media_files (
+                library_root TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                last_seen_at INTEGER NOT NULL,
+                PRIMARY KEY (library_root, relative_path)
+             );
+             CREATE TABLE libraries(root TEXT PRIMARY KEY NOT NULL);
+             PRAGMA user_version=2;",
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO media_files(library_root,relative_path,kind,size_bytes,last_seen_at)
+             VALUES(?1,'Legacy.mkv','video',5,1234)",
+            params![canonical],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO libraries(root) VALUES(?1)",
+            params![canonical],
+        )
+        .unwrap();
+        drop(db);
+        assert_eq!(latest_file_keys(&state).unwrap().len(), 1);
+        let prior: i64 = connect(&state)
+            .unwrap()
+            .query_row(
+                "SELECT first_indexed_unix FROM media_files WHERE relative_path='Legacy.mkv'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(prior, 1234);
+        index(&state, &root).unwrap();
+        let after: i64 = connect(&state)
+            .unwrap()
+            .query_row(
+                "SELECT first_indexed_unix FROM media_files WHERE relative_path='Legacy.mkv'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(after, prior);
     }
 
     #[test]
