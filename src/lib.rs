@@ -3,6 +3,7 @@ pub mod app;
 pub mod auth;
 pub mod auth_api;
 pub mod catalog;
+pub mod catalog_api;
 pub mod discovery;
 pub mod identity;
 pub mod media;

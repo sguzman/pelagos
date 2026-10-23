@@ -8,7 +8,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::auth_api;
+use crate::{auth_api, catalog_api};
 
 #[derive(Debug)]
 pub struct AppState {
@@ -50,6 +50,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/System/Info/Public", get(public_info))
         .route("/System/Ping", get(ping).post(ping))
         .merge(auth_api::router())
+        .merge(catalog_api::router())
         .with_state(state)
 }
 

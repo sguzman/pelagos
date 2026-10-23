@@ -164,6 +164,41 @@ pub fn list(state_dir: &Path, root: &Path) -> Result<Vec<IndexedItem>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+
+#[derive(Debug, Clone)]
+pub struct CatalogFile {
+    pub root: String,
+    pub relative_path: String,
+    pub kind: String,
+    pub size_bytes: i64,
+}
+
+/// Read-only aggregate of Pelagos' catalog across explicitly indexed library roots.
+pub fn all_files(state_dir: &Path) -> Result<Vec<CatalogFile>> {
+    let db = connect(state_dir)?;
+    let mut query = db.prepare(
+        "SELECT library_root, relative_path, kind, size_bytes
+         FROM media_files ORDER BY library_root, relative_path",
+    )?;
+    let rows = query.query_map([], |row| {
+        Ok(CatalogFile {
+            root: row.get(0)?,
+            relative_path: row.get(1)?,
+            kind: row.get(2)?,
+            size_bytes: row.get(3)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+pub fn library_roots(state_dir: &Path) -> Result<Vec<String>> {
+    let db = connect(state_dir)?;
+    let mut query =
+        db.prepare("SELECT DISTINCT library_root FROM media_files ORDER BY library_root")?;
+    let rows = query.query_map([], |row| row.get(0))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

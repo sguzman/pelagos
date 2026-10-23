@@ -93,7 +93,7 @@ fn session_token(headers: &HeaderMap) -> Option<String> {
     None
 }
 
-async fn authenticated(
+pub(crate) async fn authenticated(
     state: Arc<AppState>,
     headers: HeaderMap,
 ) -> Result<(User, String), StatusCode> {
