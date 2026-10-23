@@ -572,6 +572,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T114",
+              "emoji": "🔐",
+              "name": "Argon2id local credentials and persistent API tokens",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Rust creates private accounts, hashes passwords with Argon2id and stores only token digests",
+                  "passed": true,
+                  "evidence": "src/auth.rs; src/main.rs — first local user admin, 256-bit random tokens and revocation"
+                },
+                {
+                  "title": "CI verifies login, logout, invalid/disabled accounts, token storage and unauthorized HTTP access",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39956568616 — native HTTP/user/token tests, Clippy and format passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin clients and security/abuse audit validate full auth behavior",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -659,6 +681,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T124",
+              "emoji": "🗂️",
+              "name": "Authenticated preliminary Jellyfin item routes",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement administrator-only Items/ID and user views from Pelagos SQLite",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; src/app.rs — items, paging, search and library views; absolute paths withheld"
+                },
+                {
+                  "title": "CI passes synthetic HTTP catalog pagination and account isolation tests",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39957337582 — library HTTP and credential integration tests passed"
+                },
+                {
+                  "title": "Real Jellyfin clients validate full BaseItemDto, authorization and item query coverage",
+                  "passed": false
+                }
+              ]
             }
           ]
         }
@@ -928,6 +972,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T225",
+              "emoji": "🧭",
+              "name": "Virtual folder tree and recursive item navigation",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement stable collection/folder IDs and ParentId hierarchy from indexed filenames",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs — folder nodes, direct child and recursive file queries"
+                },
+                {
+                  "title": "CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries",
+                  "passed": false
+                }
+              ]
             }
           ]
         }

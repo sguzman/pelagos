@@ -6,7 +6,7 @@
 
 **Identity:** `#1DB2C0` · `oklch(70% 0.115 205)` ([color decision](docs/COLOR.md)). **Administration appearance:** ◐ System (default) / ☀ Light / ☾ Dark, with the selector at the top right.
 
-> **Pre-alpha scaffolding, not yet Jellyfin compatible.** The server boots a provisional API, health endpoint and admin UI. Read-only scanning, FFprobe inspection and a private SQLite catalog are available via CLI, but the catalog is not exposed as a Jellyfin library yet, and authentication, transcoding, user-account migration and Smart TV playback are not implemented. Full compatibility is an acceptance goal, not a current claim.
+> **Pre-alpha, not yet Jellyfin compatible.** Rust login, item browsing, virtual folders, read-only scanning, FFprobe and SQLite indexing now exist. Users/Items responses are incomplete, catalog browsing is admin-only, and there is still no client-accepted authentication, Quick Connect, streaming, transcoding, user-data migration or Smart TV playback. Full compatibility is a mandatory acceptance goal, not a current claim.
 
 ## 🎯 MVP means the COMPLETE Jellyfin Server port
 
@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`█░░░░░░░░░ 8%` across 84 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`█░░░░░░░░░ 10%` across 87 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39954730665](https://github.com/sguzman/pelagos/actions/runs/39954730665) — formatting, Clippy, Rust/UDP/SQLite tests, roadmap and pinned inventory validations.
+**Latest passing CI:** [run 39957906828](https://github.com/sguzman/pelagos/actions/runs/39957906828) — formatting, Clippy, Rust authentication/catalog tests, pinned upstream matrices and evidence-ledger validation.
 
 ## 🚀 Current starter
 
@@ -35,6 +35,9 @@ cargo run -- probe /path/to/authorized/media.mp4
 # Populate the separate Pelagos SQLite catalog without changing source media:
 cargo run -- index /path/to/authorized/media
 cargo run -- catalog /path/to/authorized/media
+# CLI account bootstrap: user-add reads a password securely from standard input.
+# Supply it using a trusted password source piped to:
+# cargo run -- user-add admin
 # Opt-in LAN discovery (does NOT enable login or TV streaming):
 cargo run -- --bind 0.0.0.0 --port 8097 --discover
 cargo fmt --all -- --check
@@ -42,7 +45,9 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 ```
 
-Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/status`. The unauthenticated prototype deliberately defaults to **loopback-only** and port 8097, avoiding the usual Jellyfin port 8096. UDP discovery is opt-in, on port 7359, only responds to LAN/loopback peers and cannot run alongside another service already bound to that UDP port. Do not expose this build to untrusted networks. Requires a normal Rust toolchain; no Python tooling is required.
+Open `http://127.0.0.1:8097/web/`. JSON diagnostics: `/health`, `/api/pelagos/status`. The partially authenticated prototype deliberately defaults to **loopback-only** and port 8097, avoiding the usual Jellyfin port 8096. UDP discovery is opt-in, on port 7359, only responds to LAN/loopback peers and cannot run alongside another service already bound to that UDP port. Do not expose this build to untrusted networks. Requires a normal Rust toolchain; no Python tooling is required.
+
+The provisional HTTP routes include `POST /Users/AuthenticateByName`, `GET /Users/Me`, `POST /Sessions/Logout`, `GET /UserViews`, `GET /Items`, `GET /Items/{id}` and `GET /Users/{user_id}/Items`. The catalog routes require administrator credentials until fine-grained library permissions exist. A response bearing a Jellyfin-style schema is **not** proof an unmodified TV client works.
 
 ## 🦀 Architecture and independence
 

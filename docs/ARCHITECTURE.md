@@ -46,3 +46,9 @@ The Rust-only `pelagos scan <directory>` subcommand enumerates recognized file e
 ## LAN service discovery
 
 `--bind 0.0.0.0 --discover` explicitly enables the v12.3 Jellyfin UDP discovery phrase and `ServerDiscoveryInfo` JSON reply on UDP port 7359. System chooses a route-specific local interface IP for the reply and ignores non-LAN source addresses. The default remains loopback-only and discovery-disabled. A discovery packet or client visibility is NOT authentication, browsing or media playback; these require further server implementation. Do not expose pre-alpha HTTP admin surfaces to untrusted networks.
+
+## Authenticated SQLite catalog API (pre-alpha)
+
+`pelagos user-add USERNAME` reads a passphrase from standard input (not command-line arguments), applies Argon2id and stores a separate `pelagos-auth.sqlite3` database with SHA-256 digests of randomly generated API tokens. The first account is an administrator, subsequent accounts are non-admin. The initial `/Users/AuthenticateByName` route and `X-Emby-Token` / `MediaBrowser Token=` authorization header handling are backed by synthetic HTTP tests. User policy, revocation beyond single logout, session metadata, Quick Connect, rate limiting, and unmodified client acceptance remain open; this prototype must not be exposed to untrusted networks.
+
+The read-only `/Items`, `/Items/{id}` and `/UserViews` endpoints map private SQLite filenames into stable IDs, synthetic virtual folders and `ParentId` relationships; `parentId` and `recursive` queries can navigate arbitrary synthetic nested directories. These are partial DTOs, deliberately conceal absolute library paths, and require admin privileges. They do **not** yet supply provider metadata, art, Jellyfin-compatible episodes/seasons, normal user access, media streams or playback.

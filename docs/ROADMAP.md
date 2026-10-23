@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 8%` across 84 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 10%` across 87 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `█░░░░░░░░░ 5%`
+## 🔌 M1 — Jellyfin protocol and API parity — `█░░░░░░░░░ 13%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -108,7 +108,7 @@
   - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
   - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
 
-### 👥 P4 — Authentication and user state — `░░░░░░░░░░ 0%`
+### 👥 P4 — Authentication and user state — `█░░░░░░░░░ 13%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -126,8 +126,12 @@
   - [ ] Implement watch states, resume positions, history and user configuration
   - [ ] Automated tests and Jellyfin baseline fixture verify watch states, resume positions, history and user configuration
   - [ ] Production or real-client acceptance validates watch states, resume positions, history and user configuration
+- 🔐 **T114 — Argon2id local credentials and persistent API tokens** — `███████░░░ 67%`
+  - [x] Rust creates private accounts, hashes passwords with Argon2id and stores only token digests — src/auth.rs; src/main.rs — first local user admin, 256-bit random tokens and revocation
+  - [x] CI verifies login, logout, invalid/disabled accounts, token storage and unauthorized HTTP access — GitHub Actions 39956568616 — native HTTP/user/token tests, Clippy and format passed
+  - [ ] Unmodified Jellyfin clients and security/abuse audit validate full auth behavior
 
-### 🧭 P5 — General API contracts — `░░░░░░░░░░ 0%`
+### 🧭 P5 — General API contracts — `█░░░░░░░░░ 13%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -145,8 +149,12 @@
   - [ ] Implement unmodified Android TV, webOS/Tizen and Roku client login fixtures
   - [ ] Automated tests and Jellyfin baseline fixture verify unmodified Android TV, webOS/Tizen and Roku client login fixtures
   - [ ] Production or real-client acceptance validates unmodified Android TV, webOS/Tizen and Roku client login fixtures
+- 🗂️ **T124 — Authenticated preliminary Jellyfin item routes** — `███████░░░ 67%`
+  - [x] Implement administrator-only Items/ID and user views from Pelagos SQLite — src/catalog_api.rs; src/app.rs — items, paging, search and library views; absolute paths withheld
+  - [x] CI passes synthetic HTTP catalog pagination and account isolation tests — GitHub Actions 39957337582 — library HTTP and credential integration tests passed
+  - [ ] Real Jellyfin clients validate full BaseItemDto, authorization and item query coverage
 
-## 📚 M2 — Full media library and metadata — `░░░░░░░░░░ 0%`
+## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 5%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -188,7 +196,7 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify language, localization, provider IDs and sort-title rules
   - [ ] Production or real-client acceptance validates language, localization, provider IDs and sort-title rules
 
-### 🎼 P8 — Library feature APIs — `░░░░░░░░░░ 0%`
+### 🎼 P8 — Library feature APIs — `█░░░░░░░░░ 13%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -206,6 +214,10 @@
   - [ ] Implement favorite, rating, playlist editing and metadata override round trips
   - [ ] Automated tests and Jellyfin baseline fixture verify favorite, rating, playlist editing and metadata override round trips
   - [ ] Production or real-client acceptance validates favorite, rating, playlist editing and metadata override round trips
+- 🧭 **T225 — Virtual folder tree and recursive item navigation** — `███████░░░ 67%`
+  - [x] Implement stable collection/folder IDs and ParentId hierarchy from indexed filenames — src/catalog_api.rs — folder nodes, direct child and recursive file queries
+  - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
+  - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 5%`
 
