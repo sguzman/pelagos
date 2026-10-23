@@ -13,7 +13,7 @@ use crate::media::{self, MediaKind};
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const DB_NAME: &str = "pelagos.sqlite3";
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, Serialize)]
 pub struct IndexedItem {
@@ -98,6 +98,17 @@ fn connect(state_dir: &Path) -> Result<Connection> {
              COMMIT;",
         )?;
     }
+    if version < 3 {
+        db.execute_batch(
+            "BEGIN IMMEDIATE;
+             ALTER TABLE media_files ADD COLUMN first_indexed_unix INTEGER NOT NULL DEFAULT 0;
+             UPDATE media_files SET first_indexed_unix=last_seen_at;
+             CREATE INDEX IF NOT EXISTS idx_media_files_first_indexed
+                 ON media_files(first_indexed_unix DESC, library_root, relative_path);
+             PRAGMA user_version=3;
+             COMMIT;",
+        )?;
+    }
     Ok(db)
 }
 
@@ -126,8 +137,9 @@ pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
     )?;
     {
         let mut put = tx.prepare(
-            "INSERT INTO media_files (library_root, relative_path, kind, size_bytes)
-             VALUES (?1, ?2, ?3, ?4)
+            "INSERT INTO media_files
+                (library_root, relative_path, kind, size_bytes, first_indexed_unix)
+             VALUES (?1, ?2, ?3, ?4, unixepoch())
              ON CONFLICT(library_root, relative_path) DO UPDATE SET
                 kind = excluded.kind,
                 size_bytes = excluded.size_bytes,
@@ -204,6 +216,19 @@ pub fn all_files(state_dir: &Path) -> Result<Vec<CatalogFile>> {
             size_bytes: row.get(3)?,
         })
     })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Stable newest-first ordering by when Pelagos first indexed each file,
+/// not its last library rescan. v1/v2 imports preserve only the best known
+/// historical last-seen timestamp until a true first-indexed value exists.
+pub fn latest_file_keys(state_dir: &Path) -> Result<Vec<(String, String)>> {
+    let db = connect(state_dir)?;
+    let mut query = db.prepare(
+        "SELECT library_root, relative_path FROM media_files
+         ORDER BY first_indexed_unix DESC, library_root ASC, relative_path ASC",
+    )?;
+    let rows = query.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
