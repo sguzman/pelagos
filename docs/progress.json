@@ -1918,6 +1918,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T240",
+              "emoji": "🎵",
+              "name": "Scoped Jellyfin theme-media responses with pinned named local extras",
+              "checks": [
+                {
+                  "title": "Implement permission-scoped ThemeSongs, ThemeVideos, and ThemeMedia DTOs with recognized direct theme audio, theme-music and backdrops and pinned SortName ordering",
+                  "passed": true,
+                  "evidence": "src/theme.rs; src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController, BaseItem.GetThemeSongs/GetThemeVideos and Emby.Naming NamingOptions.VideoExtraRules"
+                },
+                {
+                  "title": "Rust HTTP CI covers empty and real theme-media DTOs, indexed audio/video playback, sort order, cross-user checks, library grants/revocation, restart and unsupported inheritance",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40037734907: complete Rust unit/integration suite, formatting, Clippy, evidence-backed roadmap and pinned contract guards passed"
+                },
+                {
+                  "title": "Full inherited theme handling, expanded extras and unmodified Jellyfin clients pass differential and production acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }

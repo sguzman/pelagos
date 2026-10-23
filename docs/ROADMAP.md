@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 32%` across 144 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 33%` across 145 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -234,7 +234,7 @@
   - [x] Full CI verifies combined true/false filters, typed media search, search-folder distinctions, ordering, cross-user denial, restarts and library revocation — GitHub Actions 40016204498 — formatting, Clippy, full Rust unit/HTTP suites and source/roadmap checks passed
   - [ ] Unmodified Jellyfin clients validate inherited per-series played state, provider metadata interactions and complete upstream ItemQuery filter parity
 
-## 📚 M2 — Full media library and metadata — `████░░░░░░ 44%`
+## 📚 M2 — Full media library and metadata — `█████░░░░░ 45%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -308,7 +308,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `█████░░░░░ 53%`
+### 🎼 P8 — Library feature APIs — `█████░░░░░ 54%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -386,6 +386,10 @@
   - [x] Implement authenticated original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames — src/streaming.rs; pinned Jellyfin v12.3 LibraryController.GetDownload and Policies.Download
   - [x] Rust CI verifies administrator/non-administrator permissions, supported MIME and byte ranges, Unicode disposition, sidecar/photo exclusion and outside-root symlink rejection — GitHub Actions 40033133007: cargo fmt, Clippy, complete Rust suite, roadmap and pinned protocol/source guards passed
   - [ ] Full Jellyfin Download permission policy, real-client transfers and production acceptance are demonstrated
+- 🎵 **T240 — Scoped Jellyfin theme-media responses with pinned named local extras** — `███████░░░ 67%`
+  - [x] Implement permission-scoped ThemeSongs, ThemeVideos, and ThemeMedia DTOs with recognized direct theme audio, theme-music and backdrops and pinned SortName ordering — src/theme.rs; src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController, BaseItem.GetThemeSongs/GetThemeVideos and Emby.Naming NamingOptions.VideoExtraRules
+  - [x] Rust HTTP CI covers empty and real theme-media DTOs, indexed audio/video playback, sort order, cross-user checks, library grants/revocation, restart and unsupported inheritance — GitHub Actions 40037734907: complete Rust unit/integration suite, formatting, Clippy, evidence-backed roadmap and pinned contract guards passed
+  - [ ] Full inherited theme handling, expanded extras and unmodified Jellyfin clients pass differential and production acceptance
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 35%`
 

@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 32%` across 144 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 33%` across 145 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40034407511](https://github.com/sguzman/pelagos/actions/runs/40034407511) — strict malformed/repeated byte-range header rejection for file and download routes, full Rust tests, formatting, Clippy and pinned contract checks.
+**Latest passing CI:** [run 40037734907](https://github.com/sguzman/pelagos/actions/runs/40037734907) — permission-scoped local theme song/backdrop discovery, pinned theme DTOs, direct playback, SortName regression and full Rust CI/contract gates.
 
 ## 🚀 Current starter
 
@@ -92,6 +92,8 @@ The pinned `GET /Shows/NextUp` has an explicitly **per-series** subset: callers 
 The general `GET /Shows/NextUp` feed now additionally understands `parentId` for a permitted library root and an inclusive `nextUpDateCutoff` in UTC timestamp format. Parent scoping traverses only indexed authorized media nodes; unsupported nested folder/series intersections are explicit 501 responses and inaccessible roots are 404. The cutoff is applied before paging and its parser rejects malformed UTC dates and invalid calendar days. Offset-aware timestamp variations, nested parent views, and unmodified Jellyfin clients are still open.
 
 Pelagos now also serves a pinned, administrator-only **read-only** `GET /Library/VirtualFolders` inventory from its indexed roots, with stable identifiers shared with `Library/MediaFolders`, actual root paths in the privileged `Locations` field and support for indexed empty libraries. The response omits unmodeled `CollectionType`, `LibraryOptions`, and refresh metadata; administrator library creation/rename/delete and real Jellyfin admin client acceptance remain incomplete.
+
+Pelagos now supports a narrow, **genuine indexed-local-media** subset of pinned `GET /Items/{itemId}/ThemeSongs`, `/ThemeVideos` and `/ThemeMedia`. For authorized movie folders or recognized series, direct audio named `theme`, audio inside `theme-music`, and videos inside `backdrops` are returned as media DTOs with `ExtraType=ThemeSong` or `ThemeVideo`; returned IDs are synthetic-tested against direct-play routes. `SortName` ascending/descending is recognized, while inherited themes and unsupported sorting return 501. A music track in the collection root is not silently attached to unrelated movies. No metadata provider, arbitrary extras rule, complete parent traversal, or unmodified client acceptance is claimed. ([CI 40037734907](https://github.com/sguzman/pelagos/actions/runs/40037734907)).
 
 ## 🦀 Architecture and independence
 
