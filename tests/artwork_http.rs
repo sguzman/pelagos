@@ -203,3 +203,70 @@ async fn swapped_primary_poster_symlink_is_rejected() {
     .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
+
+
+#[tokio::test]
+async fn media_cover_sidecars_do_not_clutter_photo_browsing() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    let media = fixture.path().join("Media");
+    let photos = fixture.path().join("Photos");
+    std::fs::create_dir_all(&media).unwrap();
+    std::fs::create_dir_all(&photos).unwrap();
+    std::fs::write(media.join("Movie.mp4"), b"video").unwrap();
+    std::fs::write(media.join("Movie.jpg"), b"title art").unwrap();
+    std::fs::write(media.join("poster.png"), b"movie poster").unwrap();
+    std::fs::write(media.join("Portrait.jpg"), b"photo").unwrap();
+    std::fs::write(photos.join("cover.png"), b"independent photo").unwrap();
+    catalog::index(&state, &media).unwrap();
+    catalog::index(&state, &photos).unwrap();
+    auth::create_user(&state, "admin", "art-gallery-test-password").unwrap();
+    let token = auth::authenticate(&state, "admin", "art-gallery-test-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let photos = json(
+        get(
+            &router,
+            "/Items?mediaTypes=Photo",
+            "GET",
+            Some(&token),
+        )
+        .await,
+    )
+    .await;
+    let names = photos["Items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["Name"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["Portrait", "cover"]);
+    assert_eq!(photos["TotalRecordCount"], 2);
+
+    let videos = json(
+        get(
+            &router,
+            "/Items?mediaTypes=Video",
+            "GET",
+            Some(&token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(videos["TotalRecordCount"], 1);
+    let film = &videos["Items"][0];
+    assert_eq!(film["Name"], "Movie");
+    assert!(film["ImageTags"]["Primary"].as_str().is_some());
+    let route = format!("/Items/{}/Images/Primary", film["Id"].as_str().unwrap());
+    let poster = get(&router, &route, "GET", Some(&token)).await;
+    assert_eq!(poster.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(poster.into_body(), 64).await.unwrap().as_ref(),
+        b"title art"
+    );
+}
