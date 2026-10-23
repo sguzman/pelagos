@@ -181,7 +181,7 @@ pub fn authenticate(
         return Ok(None);
     }
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes)?;
+    getrandom::fill(&mut bytes).map_err(|error| std::io::Error::other(error.to_string()))?;
     let token: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     let digest = digest_token(&token);
     let tx = db.transaction()?;
