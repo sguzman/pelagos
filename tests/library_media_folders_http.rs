@@ -64,7 +64,23 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
             .status(),
         StatusCode::FORBIDDEN
     );
+    assert_eq!(
+        get(&router, "/Library/PhysicalPaths", None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get(&router, "/Library/PhysicalPaths", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
     auth::grant_library(&state, "viewer", &movies).unwrap();
+    assert_eq!(
+        get(&router, "/Library/PhysicalPaths", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
     assert_eq!(
         get(&router, "/Library/MediaFolders", Some(&viewer.access_token),)
             .await
@@ -91,6 +107,28 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
         assert!(item.get("Path").is_none());
         assert!(item.get("UserData").is_none());
     }
+    let paths = json(
+        get(&router, "/Library/PhysicalPaths", Some(&admin.access_token)).await,
+    )
+    .await;
+    let mut expected_paths = vec![
+        std::fs::canonicalize(&empty).unwrap().to_string_lossy().into_owned(),
+        std::fs::canonicalize(&movies).unwrap().to_string_lossy().into_owned(),
+    ];
+    expected_paths.sort();
+    assert_eq!(paths, serde_json::json!(expected_paths));
+    assert!(!paths.to_string().contains("Film.mkv"));
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    assert_eq!(
+        json(
+            get(&restarted, "/Library/PhysicalPaths", Some(&admin.access_token)).await,
+        )
+        .await,
+        paths
+    );
     let root = json(get(&router, "/Items/Root", Some(&admin.access_token)).await).await;
     assert_eq!(items[0]["ParentId"], root["Id"]);
     assert_eq!(items[1]["ParentId"], root["Id"]);
