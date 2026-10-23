@@ -548,8 +548,9 @@ mod tests {
         let version: i64 = first
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert_eq!(library_roots(&state).unwrap(), vec!["/existing".to_owned()]);
+        assert_eq!(library_entries(&state).unwrap()[0].name, "existing");
         assert_eq!(all_files(&state).unwrap()[0].relative_path, "A.mp4");
         assert_eq!(library_roots(&state).unwrap().len(), 1);
     }
