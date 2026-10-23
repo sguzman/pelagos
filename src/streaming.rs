@@ -163,6 +163,7 @@ async fn serve_file(
     query: StreamQuery,
     head_only: bool,
     kind: &'static str,
+    requested_container: Option<String>,
 ) -> Result<Response, StatusCode> {
     if query.static_play != Some(true) {
         return Err(StatusCode::NOT_IMPLEMENTED);
@@ -182,6 +183,24 @@ async fn serve_file(
                 && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
+
+    // A Jellyfin stream.<container> URL must not silently remux. Only return
+    // the already indexed source when its original extension matches.
+    if let Some(requested) = requested_container {
+        let valid = requested.len() <= 16
+            && !requested.is_empty()
+            && requested.bytes().all(|byte| byte.is_ascii_alphanumeric());
+        if !valid {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let original = Path::new(&matched.relative_path)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        if !requested.eq_ignore_ascii_case(original) {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
 
     let (opened, actual, size) = tokio::task::spawn_blocking(move || {
         open_confined(Path::new(&matched.root), Path::new(&matched.relative_path))
@@ -229,10 +248,12 @@ async fn serve_file(
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Videos/{item_id}/stream", get(stream).head(head_stream))
+        .route("/Videos/{item_id}/{file_name}", get(stream_named).head(head_stream_named))
         .route(
             "/Audio/{item_id}/stream",
             get(audio_stream).head(head_audio_stream),
         )
+        .route("/Audio/{item_id}/{file_name}", get(audio_named).head(head_audio_named))
 }
 
 async fn stream(
@@ -241,7 +262,7 @@ async fn stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "video").await
+    serve_file(state, item_id, headers, query, false, "video", None).await
 }
 
 async fn head_stream(
@@ -250,7 +271,7 @@ async fn head_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "video").await
+    serve_file(state, item_id, headers, query, true, "video", None).await
 }
 
 async fn audio_stream(
@@ -259,7 +280,7 @@ async fn audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "audio").await
+    serve_file(state, item_id, headers, query, false, "audio", None).await
 }
 
 async fn head_audio_stream(
@@ -268,7 +289,55 @@ async fn head_audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "audio").await
+    serve_file(state, item_id, headers, query, true, "audio", None).await
+}
+
+fn container_name(filename: &str) -> Result<String, StatusCode> {
+    filename
+        .strip_prefix("stream.")
+        .filter(|ext| !ext.is_empty())
+        .map(str::to_owned)
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn stream_named(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, filename)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, false, "video", Some(container_name(&filename)?))
+        .await
+}
+
+async fn head_stream_named(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, filename)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, true, "video", Some(container_name(&filename)?))
+        .await
+}
+
+async fn audio_named(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, filename)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, false, "audio", Some(container_name(&filename)?))
+        .await
+}
+
+async fn head_audio_named(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item_id, filename)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, true, "audio", Some(container_name(&filename)?))
+        .await
 }
 
 #[cfg(test)]
@@ -319,6 +388,15 @@ mod tests {
             open_confined(&root, Path::new("video.mp4")).unwrap_err(),
             StatusCode::FORBIDDEN
         );
+    }
+
+
+    #[test]
+    fn extension_routes_accept_only_stream_prefix() {
+        assert_eq!(container_name("stream.mp4").unwrap(), "mp4");
+        assert_eq!(container_name("stream.flac").unwrap(), "flac");
+        assert_eq!(container_name("video.mp4").unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(container_name("stream.").unwrap_err(), StatusCode::NOT_FOUND);
     }
 
     #[test]
