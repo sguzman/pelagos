@@ -64,6 +64,42 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
     let id = movie["Id"].as_str().unwrap();
     let first_tag = movie["ImageTags"]["Primary"].as_str().unwrap().to_owned();
     assert_eq!(first_tag.len(), 32);
+    let info_route = format!("/Items/{id}/Images");
+    let infos = json(
+        get(
+            &router,
+            &info_route,
+            "GET",
+            Some(&administrator.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(infos.as_array().unwrap().len(), 1);
+    assert_eq!(infos[0]["ImageType"], "Primary");
+    assert_eq!(infos[0]["ImageIndex"], Value::Null);
+    assert_eq!(infos[0]["ImageTag"], first_tag);
+    assert_eq!(infos[0]["Size"], 9);
+    assert!(infos[0].get("Path").is_none());
+    assert!(infos[0].get("Width").is_none());
+    let missing = get(
+        &router,
+        "/Items/00000000000000000000000000000000/Images",
+        "GET",
+        Some(&administrator.access_token),
+    )
+    .await;
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        get(&router, &info_route, "GET", None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        get(&router, &info_route, "GET", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     let path = format!("/Items/{id}/Images/Primary");
     assert_eq!(
         get(&router, &path, "GET", None).await.status(),
