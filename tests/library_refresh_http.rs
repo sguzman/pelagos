@@ -89,14 +89,13 @@ async fn refresh_is_admin_only_and_atomically_updates_existing_roots() {
     assert_eq!(audio.len(), 2);
     assert!(audio.iter().any(|v| v.relative_path == "Next.mp3"));
     assert_eq!(catalog::library_roots(&state).unwrap().len(), 2);
-    assert!(!catalog::all_files(&state)
-        .unwrap()
-        .iter()
-        .any(|v| v.relative_path == "Private.mp4"));
-    assert_eq!(
-        std::fs::read(movies.join("B.mkv")).unwrap(),
-        b"new-film"
+    assert!(
+        !catalog::all_files(&state)
+            .unwrap()
+            .iter()
+            .any(|v| v.relative_path == "Private.mp4")
     );
+    assert_eq!(std::fs::read(movies.join("B.mkv")).unwrap(), b"new-film");
 
     // All roots must pass preflight before even one existing root is changed.
     std::fs::remove_file(music.join("Song.flac")).unwrap();
@@ -168,5 +167,8 @@ async fn refresh_rejects_registered_root_redirected_to_another_directory() {
     let records = catalog::all_files(&state).unwrap();
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].relative_path, "Movie.mkv");
-    assert_eq!(std::fs::read(outside.join("Secret.mp4")).unwrap(), b"private");
+    assert_eq!(
+        std::fs::read(outside.join("Secret.mp4")).unwrap(),
+        b"private"
+    );
 }
