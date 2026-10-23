@@ -107,7 +107,6 @@ async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
 }
 
-
 #[tokio::test]
 async fn jellyfin_client_header_survives_login_session_response() {
     let state = tempfile::tempdir().unwrap();

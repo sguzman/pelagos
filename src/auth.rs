@@ -371,7 +371,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn clients_receive_persistent_session_metadata_with_token_revocation() {
         let dir = tempfile::tempdir().unwrap();
@@ -391,8 +390,14 @@ mod tests {
         )
         .unwrap()
         .unwrap();
-        assert_eq!(result.session_info.client.as_deref(), Some("Jellyfin Android TV"));
-        assert_eq!(result.session_info.device_id.as_deref(), Some("tv-device-1"));
+        assert_eq!(
+            result.session_info.client.as_deref(),
+            Some("Jellyfin Android TV")
+        );
+        assert_eq!(
+            result.session_info.device_id.as_deref(),
+            Some("tv-device-1")
+        );
         assert_eq!(result.session_info.user_name, "viewer");
         assert_eq!(result.session_info.user_id, result.user.id);
         assert!(!result.session_info.supports_remote_control);

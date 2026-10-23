@@ -224,7 +224,6 @@ mod tests {
         assert!(session_token(&HeaderMap::new()).is_none());
     }
 
-
     #[test]
     fn quoted_device_metadata_preserves_commas_and_sanitizes_controls() {
         let mut headers = HeaderMap::new();
