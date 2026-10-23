@@ -65,7 +65,10 @@ async fn indexed_items_report_no_unmodeled_boxsets_without_exposing_other_librar
     let route = format!("/Items/{film}/Collections");
     let secret_route = format!("/Items/{secret}/Collections");
 
-    assert_eq!(call(&router, &route, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        call(&router, &route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         call(&router, &route, Some(&viewer.access_token))
             .await
