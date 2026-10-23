@@ -1,7 +1,7 @@
-//! A bounded, ungrouped subset of Jellyfin v12.3 latest media discovery.
+//! A bounded subset of Jellyfin v12.3 latest media discovery.
 //! Date ordering is based on Pelagos' own first-indexed catalog timestamp.
-//! The pinned grouped default, advanced fields and per-library presentation
-//! remain unsupported rather than being silently misrepresented.
+//! The pinned TV Episode -> Series grouping is supported when explicitly
+//! type-scoped; music/album grouping and advanced fields remain unsupported.
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
