@@ -125,9 +125,7 @@ fn primary_for_id<'a>(
 /// Cover files linked to a video/audio library are artwork, not standalone
 /// photographs in browsing/search. Independent photos retain their own items.
 /// Files remain indexed and available to the authenticated artwork endpoints.
-pub(crate) fn sidecar_keys(
-    files: &[catalog::CatalogFile],
-) -> HashSet<(String, String)> {
+pub(crate) fn sidecar_keys(files: &[catalog::CatalogFile]) -> HashSet<(String, String)> {
     let mut media_directories = HashSet::new();
     let mut media_titles = HashSet::new();
     for file in files {
@@ -137,11 +135,7 @@ pub(crate) fn sidecar_keys(
         let path = Path::new(&file.relative_path);
         let parent = path.parent().unwrap_or_else(|| Path::new(""));
         if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) {
-            media_titles.insert((
-                file.root.clone(),
-                parent.to_path_buf(),
-                stem.to_lowercase(),
-            ));
+            media_titles.insert((file.root.clone(), parent.to_path_buf(), stem.to_lowercase()));
         }
         for directory in parent.ancestors() {
             media_directories.insert((file.root.clone(), directory.to_path_buf()));
@@ -159,19 +153,16 @@ pub(crate) fn sidecar_keys(
             let name = path.file_stem()?.to_str()?.to_lowercase();
             let folder_art = matches!(name.as_str(), "poster" | "folder" | "cover")
                 && media_directories.contains(&(image.root.clone(), parent.to_path_buf()));
-            let title_art = media_titles.contains(&(
-                image.root.clone(),
-                parent.to_path_buf(),
-                name.clone(),
-            )) || name.strip_suffix("-poster").is_some_and(|title| {
-                media_titles.contains(&(
-                    image.root.clone(),
-                    parent.to_path_buf(),
-                    title.to_owned(),
-                ))
-            });
-            (folder_art || title_art)
-                .then(|| (image.root.clone(), image.relative_path.clone()))
+            let title_art =
+                media_titles.contains(&(image.root.clone(), parent.to_path_buf(), name.clone()))
+                    || name.strip_suffix("-poster").is_some_and(|title| {
+                        media_titles.contains(&(
+                            image.root.clone(),
+                            parent.to_path_buf(),
+                            title.to_owned(),
+                        ))
+                    });
+            (folder_art || title_art).then(|| (image.root.clone(), image.relative_path.clone()))
         })
         .collect()
 }
@@ -385,7 +376,6 @@ mod tests {
             size_bytes: 8,
         }
     }
-
 
     #[test]
     fn media_sidecars_are_hidden_without_hiding_independent_photos() {

@@ -204,7 +204,6 @@ async fn swapped_primary_poster_symlink_is_rejected() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
-
 #[tokio::test]
 async fn media_cover_sidecars_do_not_clutter_photo_browsing() {
     let fixture = tempfile::tempdir().unwrap();
@@ -229,16 +228,7 @@ async fn media_cover_sidecars_do_not_clutter_photo_browsing() {
         "server".to_owned(),
         state,
     )));
-    let photos = json(
-        get(
-            &router,
-            "/Items?mediaTypes=Photo",
-            "GET",
-            Some(&token),
-        )
-        .await,
-    )
-    .await;
+    let photos = json(get(&router, "/Items?mediaTypes=Photo", "GET", Some(&token)).await).await;
     let names = photos["Items"]
         .as_array()
         .unwrap()
@@ -248,16 +238,7 @@ async fn media_cover_sidecars_do_not_clutter_photo_browsing() {
     assert_eq!(names, vec!["Portrait", "cover"]);
     assert_eq!(photos["TotalRecordCount"], 2);
 
-    let videos = json(
-        get(
-            &router,
-            "/Items?mediaTypes=Video",
-            "GET",
-            Some(&token),
-        )
-        .await,
-    )
-    .await;
+    let videos = json(get(&router, "/Items?mediaTypes=Video", "GET", Some(&token)).await).await;
     assert_eq!(videos["TotalRecordCount"], 1);
     let film = &videos["Items"][0];
     assert_eq!(film["Name"], "Movie");
