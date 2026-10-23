@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 use crate::{
     app::AppState,
-    auth_api, catalog,
+    artwork, auth_api, catalog,
     query_filters::{filter_types, media_types},
     user_data,
 };
@@ -39,6 +39,8 @@ pub struct ItemDto {
     pub size: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_data: Option<user_data::UserItemData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_tags: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,7 +90,12 @@ pub(crate) fn stable_id(root: &str, name: &str) -> String {
         .to_string()
 }
 
-fn map_item(file: catalog::CatalogFile, server_id: &str, parent_id: String) -> ItemDto {
+fn map_item(
+    file: catalog::CatalogFile,
+    server_id: &str,
+    parent_id: String,
+    primary_tag: Option<String>,
+) -> ItemDto {
     let name = Path::new(&file.relative_path)
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -109,6 +116,7 @@ fn map_item(file: catalog::CatalogFile, server_id: &str, parent_id: String) -> I
         parent_id: Some(parent_id),
         size: Some(file.size_bytes),
         user_data: None,
+        image_tags: primary_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
 }
 
@@ -126,6 +134,7 @@ fn root_item(root: &str, server_id: &str) -> ItemDto {
         parent_id: None,
         size: None,
         user_data: None,
+        image_tags: None,
     }
 }
 
@@ -138,6 +147,7 @@ fn catalog_nodes(
 ) -> Vec<ItemDto> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
+    let indexed_images = files.iter().filter(|f| f.kind == "image").cloned().collect::<Vec<_>>();
     for root in roots {
         let root_id = stable_id(&root, "");
         if seen.insert(root_id) {
@@ -168,12 +178,16 @@ fn catalog_nodes(
                         parent_id: Some(parent_id.clone()),
                         size: None,
                         user_data: None,
+                        image_tags: None,
+        image_tags: None,
                     });
                 }
                 parent_id = folder_id;
             }
         }
-        result.push(map_item(file, server_id, parent_id));
+        let primary = artwork::primary_for_file(&indexed_images, &file)
+            .and_then(artwork::image_tag);
+        result.push(map_item(file, server_id, parent_id, primary));
     }
     result
 }
@@ -373,6 +387,7 @@ async fn user_views(
             parent_id: None,
             size: None,
             user_data: None,
+        image_tags: None,
         })
         .collect::<Vec<_>>();
     Ok(Json(QueryResult {

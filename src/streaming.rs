@@ -130,7 +130,7 @@ fn invalid_range(size: u64) -> Response {
 /// Verify the exact opened file, not an earlier pathname validation.
 /// The descriptor remains pinned to the checked inode even if a path is swapped.
 #[cfg(target_os = "linux")]
-fn open_confined(
+pub(crate) fn open_confined(
     root: &Path,
     relative: &Path,
 ) -> Result<(std::fs::File, PathBuf, u64), StatusCode> {
