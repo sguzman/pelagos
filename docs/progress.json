@@ -1830,6 +1830,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T237",
+              "emoji": "🎬",
+              "name": "Pinned grouped latest Movie, Episode and video-only shelf requests",
+              "checks": [
+                {
+                  "title": "Implement parent-container parity for video-only latest item types and permission-scoped default grouping without inventing audio/photo albums",
+                  "passed": true,
+                  "evidence": "src/latest.rs; pinned Jellyfin v12.3 BaseItem.LatestItemsIndexContainer, TV/Episode.cs and UserViewManager.cs"
+                },
+                {
+                  "title": "Rust CI verifies grouped Movie/Episode/Video feeds, default video-only results, mixed-media refusal, ordering, count, legacy route and library permissions",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40031375693: formatting, Clippy, complete Rust tests, roadmap and pinned contract checks passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin Smart TV apps and production deployments accept latest Movie/Episode and default video-only shelves",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }

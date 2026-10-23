@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 31%` across 139 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 31%` across 140 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40023874352](https://github.com/sguzman/pelagos/actions/runs/40023874352) — admin-only read-only VirtualFolderInfo inventory, stable root IDs, rights checks, Rust unit/HTTP suites, formatting and pinned source gates.
+**Latest passing CI:** [run 40031375693](https://github.com/sguzman/pelagos/actions/runs/40031375693) — typed Movie/Episode/Video and permission-scoped default latest grouping, privacy/refusal cases, complete Rust tests, formatting, Clippy, evidence-ledger and pinned contract checks.
 
 ## 🚀 Current starter
 
@@ -80,7 +80,7 @@ Pelagos now persists a first-indexed timestamp in catalog schema v3, preserving 
 
 `GET /Items` and `GET /Search/Hints` now honor `isPlayed` and `isFavorite` from the authenticated account's persisted user data. Filtering occurs before limits and pagination; explicit `enableUserData=false` suppresses returned personal state without disabling correct filtering. No parent or series-wide watched-state inference is claimed. Tests verify that library revocation and account isolation apply equally to these filtered views.
 
-The latest-media API now supports Jellyfin's Episode-to-Series grouping when explicitly restricted to `includeItemTypes=Episode` (with default `groupItems=true` or explicit true). A Series replaces its individual episodes when multiple matching episodes exist, with a truthful `ChildCount`; a singleton remains an Episode. Group counts are computed before applying the requested result limit. Other default/mixed latest grouping still returns 501 until audio albums, photo albums, and full collection-type rules are modeled. This is native HTTP-tested, **not** unmodified-client acceptance.
+The latest-media API supports pinned Episode-to-Series grouping for explicit Episode queries and mixed recognized Movie/Episode/Video requests, plus the default `groupItems=true` when all media visible to the viewer is video. Multiple episodes replace their cards with a Series and accurate `ChildCount`; a singleton stays an Episode. Movie and generic Video cards remain individual items, and group counts are computed before pagination. Grouped requests involving Audio or Photo (which require unsupported album entities) return 501 instead of inventing results. These are synthetic Rust HTTP-tested subsets, **not** unmodified-client acceptance.
 
 The pinned `GET /Shows/NextUp` has an explicitly **per-series** subset: callers supply `seriesId`, and Pelagos selects the first recognized unplayed episode after the highest watched season/episode index. `enableResumable=false` can suppress the selected episode if it has saved progress; `startIndex`, `limit`, `enableImages` and `enableUserData` are scoped to the authenticated viewer. Broad NextUp discovery, episode versions, specials, cutoff and rewatching remain unsupported, and unmodified-client compatibility is not claimed.
 

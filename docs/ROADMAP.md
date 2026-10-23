@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 31%` across 139 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 31%` across 140 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -230,7 +230,7 @@
   - [x] Full CI verifies combined true/false filters, typed media search, search-folder distinctions, ordering, cross-user denial, restarts and library revocation — GitHub Actions 40016204498 — formatting, Clippy, full Rust unit/HTTP suites and source/roadmap checks passed
   - [ ] Unmodified Jellyfin clients validate inherited per-series played state, provider metadata interactions and complete upstream ItemQuery filter parity
 
-## 📚 M2 — Full media library and metadata — `████░░░░░░ 42%`
+## 📚 M2 — Full media library and metadata — `████░░░░░░ 43%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -304,7 +304,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `█████░░░░░ 50%`
+### 🎼 P8 — Library feature APIs — `█████░░░░░ 51%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -370,6 +370,10 @@
   - [x] Support nextUpDateCutoff for general watched-series discovery with strict UTC parsing, real calendar validation and inclusive nanosecond-precision comparison — src/shows.rs — safe UTC key parser, explicit bad-date response, series-cutoff filtering before paging
   - [x] CI verifies exact cutoff, fraction boundary, invalid calendar days, leap dates, Unicode input safety, sorting and supported option combinations — GitHub Actions 40023231676 — dedicated parser tests and multi-series HTTP regressions alongside full Rust validation
   - [ ] Jellyfin offset-aware DateTime variations, alternate historical episode versions and unmodified web/Smart TV cutoff behavior verified
+- 🎬 **T237 — Pinned grouped latest Movie, Episode and video-only shelf requests** — `███████░░░ 67%`
+  - [x] Implement parent-container parity for video-only latest item types and permission-scoped default grouping without inventing audio/photo albums — src/latest.rs; pinned Jellyfin v12.3 BaseItem.LatestItemsIndexContainer, TV/Episode.cs and UserViewManager.cs
+  - [x] Rust CI verifies grouped Movie/Episode/Video feeds, default video-only results, mixed-media refusal, ordering, count, legacy route and library permissions — GitHub Actions 40031375693: formatting, Clippy, complete Rust tests, roadmap and pinned contract checks passed
+  - [ ] Unmodified Jellyfin Smart TV apps and production deployments accept latest Movie/Episode and default video-only shelves
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 
