@@ -190,10 +190,11 @@ struct NextUpQuery {
     enable_rewatching: Option<bool>,
 }
 
-/// Conservative per-series slice of pinned Jellyfin v12.3 Shows/NextUp.
-/// Only locally recognized episodes with explicit season and episode indices
-/// participate. Rewatching, specials interleaving and alternate editions are
-/// not modeled; those options must not silently return misleading results.
+/// Conservative pinned Jellyfin v12.3 Shows/NextUp subset.
+/// Without seriesId, only watched series with a recorded play timestamp enter
+/// the suggestions, ordered by recent playback. Only locally recognized
+/// season-indexed episodes participate; rewatching, specials, alternate
+/// editions and provider metadata are not modeled.
 async fn next_up(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -214,19 +215,23 @@ async fn next_up(
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let series_id = query.series_id.ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let series_id = query.series_id.as_deref();
     let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
-    if !nodes
-        .iter()
-        .any(|item| item.id == series_id && item.item_type == "Series")
-    {
-        return Err(StatusCode::NOT_FOUND);
+    if let Some(series_id) = series_id {
+        if !nodes
+            .iter()
+            .any(|item| item.id == series_id && item.item_type == "Series")
+        {
+            return Err(StatusCode::NOT_FOUND);
+        }
     }
     let mut episodes = nodes
         .into_iter()
         .filter(|item| {
             item.item_type == "Episode"
-                && item.series_id.as_deref() == Some(series_id.as_str())
+                && item.series_id.as_deref().is_some_and(|id| {
+                    series_id.is_none_or(|selected| selected == id)
+                })
                 && item.parent_index_number.is_some_and(|season| season > 0)
                 && item.index_number.is_some()
         })
@@ -247,32 +252,50 @@ async fn next_up(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let positions = episodes
-        .iter()
-        .zip(saved.iter())
-        .filter(|(_, data)| data.played)
-        .map(|(item, _)| {
-            (
-                item.parent_index_number.unwrap_or(0),
-                item.index_number.unwrap_or(0),
-            )
-        })
-        .max();
-    let mut first_next = episodes
-        .into_iter()
-        .zip(saved)
-        .find(|(item, data)| {
+    let mut groups = std::collections::BTreeMap::<
+        String,
+        Vec<(catalog_api::ItemDto, user_data::UserItemData)>,
+    >::new();
+    for (item, data) in episodes.into_iter().zip(saved) {
+        if let Some(id) = item.series_id.as_ref() {
+            groups.entry(id.clone()).or_default().push((item, data));
+        }
+    }
+    let mut suggestions = Vec::new();
+    for (_, group) in groups {
+        let last_played_date = group
+            .iter()
+            .filter(|(_, data)| data.played)
+            .filter_map(|(_, data)| data.last_played_date.clone())
+            .max();
+        // Jellyfin's unscoped NextUp series selection is based on series
+        // with playback history. Explicit seriesId is allowed to start from
+        // the first episode even without a watched episode.
+        if series_id.is_none() && last_played_date.is_none() {
+            continue;
+        }
+        let highest_watched = group
+            .iter()
+            .filter(|(_, data)| data.played)
+            .map(|(item, _)| {
+                (
+                    item.parent_index_number.unwrap_or(0),
+                    item.index_number.unwrap_or(0),
+                )
+            })
+            .max();
+        let next = group.into_iter().find(|(item, data)| {
             !data.played
-                && positions.is_none_or(|position| {
+                && highest_watched.is_none_or(|position| {
                     (
                         item.parent_index_number.unwrap_or(0),
                         item.index_number.unwrap_or(0),
                     ) > position
                 })
-        })
-        .and_then(|(mut item, data)| {
+        });
+        if let Some((mut item, data)) = next {
             if query.enable_resumable == Some(false) && data.playback_position_ticks > 0 {
-                return None;
+                continue;
             }
             if query.enable_user_data != Some(false) {
                 item.user_data = Some(data);
@@ -280,22 +303,29 @@ async fn next_up(
             if query.enable_images == Some(false) {
                 item.image_tags = None;
             }
-            Some(item)
-        });
-    let total_record_count = usize::from(first_next.is_some());
+            suggestions.push((last_played_date, item));
+        }
+    }
+    suggestions.sort_by(|a, b| {
+        b.0.cmp(&a.0)
+            .then_with(|| a.1.series_id.cmp(&b.1.series_id))
+            .then_with(|| a.1.id.cmp(&b.1.id))
+    });
+    let total_record_count = suggestions.len();
     let start_index = query.start_index.unwrap_or(0);
     let limit = query.limit.unwrap_or(100).min(200);
-    let items = if start_index == 0 && limit > 0 {
-        first_next.take().into_iter().collect()
-    } else {
-        Vec::new()
-    };
+    let items = suggestions
+        .into_iter()
+        .skip(start_index)
+        .take(limit)
+        .map(|(_, item)| item)
+        .collect();
     Ok(Json(ShowResult {
         items,
         total_record_count,
         start_index,
     }))
-}
+}}
 
 async fn seasons(
     State(state): State<Arc<AppState>>,
