@@ -88,6 +88,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(streaming::router())
         .merge(playback::router())
         .merge(search::router())
+        .merge(shows::router())
         .merge(user_data::router())
         .merge(playstate::router())
         .merge(resume::router())
