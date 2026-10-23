@@ -101,6 +101,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Items/Root", get(items_root_legacy))
         .route("/Items/{item_id}", get(item))
         .route("/Items/{item_id}/Ancestors", get(ancestors))
+        .route("/Items/{item_id}/Collections", get(item_collections))
         .route("/Users/{user_id}/Items", get(user_items))
         .route("/Users/{user_id}/Items/{item_id}", get(user_item))
         .route("/UserViews", get(user_views))
@@ -731,6 +732,44 @@ async fn item(
         .ok_or(StatusCode::NOT_FOUND)?;
     attach_user_data(&state, headers, std::slice::from_mut(&mut found)).await?;
     Ok(Json(found))
+}
+
+/// Jellyfin v12.3 returns the BoxSets containing an item. Pelagos has no
+/// indexed BoxSet entities yet, so an accessible item has a truthful empty
+/// membership list. A missing or inaccessible item must not be distinguished.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ItemCollectionsQuery {
+    user_id: Option<String>,
+    start_index: Option<usize>,
+    limit: Option<usize>,
+    fields: Option<String>,
+}
+
+async fn item_collections(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<ItemCollectionsQuery>,
+) -> Result<Json<QueryResult>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    // We cannot project unmodeled metadata or imply collections exist.
+    if query.fields.is_some() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let nodes = accessible_nodes(state, headers).await?;
+    if !nodes.iter().any(|item| item.id == item_id) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let _limit = query.limit;
+    Ok(Json(QueryResult {
+        items: Vec::new(),
+        total_record_count: 0,
+        start_index: query.start_index.unwrap_or(0),
+    }))
 }
 
 async fn user_item(
