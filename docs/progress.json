@@ -1874,6 +1874,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T239",
+              "emoji": "📥",
+              "name": "Conservative administrator-only original-media Jellyfin Download route",
+              "checks": [
+                {
+                  "title": "Implement administrator-restricted original audio/video Download using Linux descriptor confinement, byte ranges, private caching and safe attachment filenames",
+                  "passed": true,
+                  "evidence": "src/streaming.rs; pinned Jellyfin v12.3 LibraryController.GetDownload and Policies.Download"
+                },
+                {
+                  "title": "Rust CI verifies administrator/non-administrator permissions, supported MIME and byte ranges, Unicode disposition, sidecar/photo exclusion and outside-root symlink rejection",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40033133007: cargo fmt, Clippy, complete Rust suite, roadmap and pinned protocol/source guards passed"
+                },
+                {
+                  "title": "Full Jellyfin Download permission policy, real-client transfers and production acceptance are demonstrated",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }

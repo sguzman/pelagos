@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 32%` across 141 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 32%` across 142 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40031984883](https://github.com/sguzman/pelagos/actions/runs/40031984883) — scoped empty item collection membership, authorization/paging/revocation regressions, full Rust tests, formatting, Clippy and pinned contract checks.
+**Latest passing CI:** [run 40033133007](https://github.com/sguzman/pelagos/actions/runs/40033133007) — restricted original-media downloads, safe attachment headers, byte ranges, Linux path confinement, full Rust tests, formatting, Clippy and pinned source/contract checks.
 
 ## 🚀 Current starter
 
@@ -74,7 +74,7 @@ Conservative local Movie recognition now requires the video filename and contain
 
 Personal watched/favorite/resume metadata now loads via bounded SQLite batches rather than a separate query for every media item; regression coverage includes 900+ IDs and enforces isolation and input-order preservation. The pinned `GET /Library/PhysicalPaths` provides administrators only with configured indexed filesystem roots, while ordinary media DTOs remain pathless. Neither change establishes full upstream migration or real client parity.
 
-Pelagos now serves pinned `GET /Items/{itemId}/File` and HEAD using its indexed, authorized, Linux descriptor-confined original-media reader. Byte ranges, video/audio/photo MIME types, and library revocation are synthetic-tested. This **does not** enable the separate `/Items/{itemId}/Download` policy, transcoding, or actual Jellyfin client acceptance.
+Pelagos serves pinned `GET /Items/{itemId}/File` and HEAD using its indexed, authorized, Linux descriptor-confined original-media reader. Byte ranges, video/audio/photo MIME types, and library revocation are synthetic-tested. The separate pinned `GET /Items/{itemId}/Download` now supports **administrator-only** original audio/video attachments with safe UTF-8 Content-Disposition, byte ranges, private no-store responses and symlink-escape protection. Jellyfin's broader `EnableContentDownloading` policy and `CanDownload` behavior, download telemetry, transcoding and unmodified-client acceptance remain unimplemented/unverified.
 
 Pelagos now persists a first-indexed timestamp in catalog schema v3, preserving existing items across rescans rather than misrepresenting every refresh as newly added. Pinned `GET /Items/Latest` and legacy user route provide permission-scoped, newest-first **ungrouped** media when callers explicitly use `groupItems=false`. Upstream defaults to grouped shelves; unsupported/default grouping returns 501 until genuine grouping is implemented. Historical v1/v2 data uses the last-seen timestamp as the best available backfill, not a claimed original creation date.
 
