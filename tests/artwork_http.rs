@@ -25,6 +25,26 @@ async fn get(router: &Router, path: &str, method: &str, token: Option<&str>) -> 
         .unwrap()
 }
 
+async fn conditional(
+    router: &Router,
+    path: &str,
+    token: &str,
+    etag: &str,
+) -> Response {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(path)
+                .header("X-Emby-Token", token)
+                .header(header::IF_NONE_MATCH, etag)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 async fn json(response: Response) -> Value {
     let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
     serde_json::from_slice(&bytes).unwrap()
@@ -126,16 +146,37 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
     assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
     assert_eq!(
         response.headers()[header::CACHE_CONTROL],
-        "private, max-age=0"
+        "private, no-cache"
     );
+    let etag = response.headers()[header::ETAG].to_str().unwrap().to_owned();
+    assert_eq!(etag, format!("\"{first_tag}\""));
     assert_eq!(
         to_bytes(response.into_body(), 100).await.unwrap().as_ref(),
         b"TITLE ART"
     );
+    let not_modified = conditional(&router, &path, &viewer.access_token, &etag).await;
+    assert_eq!(not_modified.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(not_modified.headers()[header::ETAG], etag);
+    assert!(
+        to_bytes(not_modified.into_body(), 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    // An edit with a different size must invalidate the old validator even
+    // if the media index has not been rescanned.
+    std::fs::write(library.join("Film.jpg"), b"UPDATED TITLE ART").unwrap();
+    let changed = conditional(&router, &path, &viewer.access_token, &etag).await;
+    assert_eq!(changed.status(), StatusCode::OK);
+    assert_ne!(changed.headers()[header::ETAG], etag);
+    assert_eq!(
+        to_bytes(changed.into_body(), 100).await.unwrap().as_ref(),
+        b"UPDATED TITLE ART"
+    );
 
     let response = get(&router, &path, "HEAD", Some(&viewer.access_token)).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_LENGTH], "9");
+    assert_eq!(response.headers()[header::CONTENT_LENGTH], "17");
     assert!(
         to_bytes(response.into_body(), 100)
             .await
