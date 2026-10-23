@@ -82,6 +82,10 @@ async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     assert_eq!(authenticated["User"]["Policy"]["IsAdministrator"], true);
     let token = authenticated["AccessToken"].as_str().unwrap().to_owned();
     assert_eq!(token.len(), 64);
+    assert_eq!(authenticated["SessionInfo"]["UserName"], "viewer");
+    assert_eq!(authenticated["SessionInfo"]["UserId"], authenticated["User"]["Id"]);
+    assert_eq!(authenticated["SessionInfo"]["IsActive"], true);
+    assert_eq!(authenticated["SessionInfo"]["SupportsRemoteControl"], false);
 
     let unauthenticated = send(&router, "GET", "/Users/Me", Body::empty(), None).await;
     assert_eq!(unauthenticated.status(), StatusCode::UNAUTHORIZED);
@@ -101,4 +105,38 @@ async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     assert_eq!(exit.status(), StatusCode::NO_CONTENT);
     let invalid = send(&router, "GET", "/Users/Me", Body::empty(), Some(&token)).await;
     assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
+}
+
+
+#[tokio::test]
+async fn jellyfin_client_header_survives_login_session_response() {
+    let state = tempfile::tempdir().unwrap();
+    auth::create_user(state.path(), "viewer", "long-credential-test-password").unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.path().to_path_buf(),
+    )));
+    let header =
+        r#"MediaBrowser Client="Jellyfin Android TV", Device="Living, Room", DeviceId="tv-test", Version="2.0""#;
+    let response = router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/Users/AuthenticateByName")
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, header)
+                .body(Body::from(
+                    r#"{"Username":"viewer","Pw":"long-credential-test-password"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let result = json_response(response).await;
+    assert_eq!(result["SessionInfo"]["Client"], "Jellyfin Android TV");
+    assert_eq!(result["SessionInfo"]["DeviceName"], "Living, Room");
+    assert_eq!(result["SessionInfo"]["DeviceId"], "tv-test");
+    assert_eq!(result["SessionInfo"]["ApplicationVersion"], "2.0");
+    assert_eq!(result["SessionInfo"]["ServerId"], "server");
 }
