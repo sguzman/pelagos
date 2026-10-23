@@ -274,7 +274,6 @@ mod tests {
         assert!(list(&state, &source).unwrap().is_empty());
     }
 
-
     #[test]
     fn empty_libraries_remain_registered_after_clean_rescans() {
         let fixture = tempfile::tempdir().unwrap();
