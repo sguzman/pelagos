@@ -578,7 +578,13 @@ async fn query_items(
                 }
             });
         }
-        None => all.retain(|item| !item.is_folder),
+        None => all.retain(|item| {
+            !item.is_folder
+                || (query.is_series == Some(true) && item.item_type == "Series")
+                || query.include_item_types.as_deref().is_some_and(|types| {
+                    types.split(',').any(|kind| kind.trim() == item.item_type)
+                })
+        }),
     }
     let included = filter_types(query.include_item_types.as_deref())?;
     let excluded = filter_types(query.exclude_item_types.as_deref())?;
