@@ -89,3 +89,7 @@ Pelagos now implements preliminary pinned `GET /UserItems/Resume` and legacy `GE
 ## Stable virtual root and item query option subset (synthetic only)
 
 An authenticated virtual user root is now available through Jellyfin's pinned `/Items/Root` and legacy `/Users/{userId}/Items/Root`. Its ID is stable across restarts; its authorized collection children and item ancestor chains are connected, with no source paths exposed. The `/Items` browse subset accepts SortName and descending order, scoped `userId`, and `enableImages=false` / `enableUserData=false` flags; unsupported sort names and unavailable extra DTO field projections explicitly return 501. Permission, paging and identity tests passed [CI 40002822616](https://github.com/sguzman/pelagos/actions/runs/40002822616). No unmodified Jellyfin TV client or full pinned DTO comparison has validated this behavior.
+
+## Administrator media-folder listing (synthetic only)
+
+`GET /Library/MediaFolders` now requires an administrator account and lists only currently indexed, non-hidden Pelagos collection roots (including empty libraries), with no absolute path values in item DTOs. The existing Pelagos catalog does not implement Jellyfin's hidden or disabled library configuration. Cross-account authorization, empty-library and filter regression tests passed [CI 40003332448](https://github.com/sguzman/pelagos/actions/runs/40003332448); no unmodified Jellyfin admin UI or pinned-server comparison has validated full behavior.
