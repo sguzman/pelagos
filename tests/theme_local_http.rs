@@ -140,7 +140,10 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
     .await;
     assert_eq!(playable_song.status(), StatusCode::OK);
     assert_eq!(
-        to_bytes(playable_song.into_body(), 64).await.unwrap().as_ref(),
+        to_bytes(playable_song.into_body(), 64)
+            .await
+            .unwrap()
+            .as_ref(),
         b"media"
     );
     let backdrop_id = videos["Items"][0]["Id"].as_str().unwrap();
