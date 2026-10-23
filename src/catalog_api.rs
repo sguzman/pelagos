@@ -278,6 +278,9 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         parent_id: Some(virtual_root_id(server_id)),
         size: None,
         container: None,
+        series_name: None,
+        index_number: None,
+        parent_index_number: None,
         user_data: None,
         image_tags: image_tag.map(|tag| [("Primary".to_owned(), tag)].into()),
     }
