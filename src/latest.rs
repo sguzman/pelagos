@@ -60,17 +60,35 @@ async fn latest_for_user(
     {
         return Err(StatusCode::FORBIDDEN);
     }
-    // Jellyfin defaults to grouping episodes/music. Pelagos has not
-    // implemented that rule, so callers must explicitly request ungrouped.
-    if query.group_items != Some(false)
-        || query.fields.is_some()
+    if query.fields.is_some()
         || query.image_type_limit.is_some()
         || query.enable_image_types.is_some()
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let included = filter_types(query.include_item_types.as_deref())?;
+    // The pinned source groups episodes under their series, but audio/photo
+    // require album entities Pelagos does not model yet. Only the explicit
+    // Episode query can enable genuine grouping; all other grouped requests
+    // refuse instead of inventing a generic grouping convention.
+    let group_episodes = query.group_items != Some(false);
+    if group_episodes
+        && !included
+            .as_ref()
+            .is_some_and(|types| types.len() == 1 && types.contains("Episode"))
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
+    let series = if group_episodes {
+        nodes
+            .iter()
+            .filter(|item| item.item_type == "Series")
+            .map(|item| (item.id.clone(), item.clone()))
+            .collect::<HashMap<_, _>>()
+    } else {
+        HashMap::new()
+    };
     if let Some(parent) = query.parent_id.as_deref() {
         if !nodes.iter().any(|item| item.id == parent && item.is_folder) {
             return Err(StatusCode::NOT_FOUND);
@@ -113,29 +131,61 @@ async fn latest_for_user(
         .iter()
         .map(|item| item.id.clone())
         .collect::<Vec<_>>();
-    let user_id = user.id;
+    let user_id = user.id.clone();
     let saved = tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let limit = query.limit.unwrap_or(20).min(200);
-    let mut result = Vec::new();
     if limit == 0 {
-        return Ok(Json(result));
+        return Ok(Json(Vec::new()));
     }
-    for (mut item, data) in ordered.drain(..).zip(saved) {
+    let mut result = Vec::<catalog_api::ItemDto>::new();
+    let mut groups = HashMap::<String, usize>::new();
+    for (item, data) in ordered.drain(..).zip(saved) {
         if query.is_played.is_some_and(|played| data.played != played) {
             continue;
         }
-        if query.enable_images == Some(false) {
-            item.image_tags = None;
-        }
-        if query.enable_user_data != Some(false) {
-            item.user_data = Some(data);
+        if group_episodes {
+            if let Some(series_id) = item.series_id.as_ref() {
+                if let Some(series_item) = series.get(series_id) {
+                    if let Some(&index) = groups.get(series_id) {
+                        if result[index].item_type == "Episode" {
+                            let mut container = series_item.clone();
+                            container.child_count = Some(2);
+                            result[index] = container;
+                        } else {
+                            let count = result[index].child_count.unwrap_or(1);
+                            result[index].child_count = Some(count + 1);
+                        }
+                        continue;
+                    }
+                    groups.insert(series_id.clone(), result.len());
+                }
+            }
         }
         result.push(item);
-        if result.len() >= limit {
-            break;
+    }
+    // The pinned controller limits *groups*, not the source episode count.
+    // Finish accumulating ChildCount before truncation, so a limit of one
+    // still reports the accurate group size.
+    result.truncate(limit);
+    if query.enable_images == Some(false) {
+        for item in &mut result {
+            item.image_tags = None;
+        }
+    }
+    if query.enable_user_data != Some(false) && !result.is_empty() {
+        let ids = result.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        let state_dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+        let user_id = user.id;
+        let user_states =
+            tokio::task::spawn_blocking(move || user_data::read_many(&state_dir, &user_id, &ids))
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        for (item, data) in result.iter_mut().zip(user_states) {
+            item.user_data = Some(data);
         }
     }
     Ok(Json(result))
