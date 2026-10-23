@@ -35,6 +35,14 @@ enum Command {
         directory: PathBuf,
     },
     /// Inspect one media file with the installed FFprobe executable.
+    /// Synchronize one read-only filesystem scan into Pelagos' private SQLite index.
+    Index {
+        directory: PathBuf,
+    },
+    /// List items in an already indexed library.
+    Catalog {
+        directory: PathBuf,
+    },
     Probe {
         /// File to examine (never rewritten).
         file: PathBuf,
@@ -62,6 +70,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(Command::Probe { file, ffprobe }) = &args.command {
         let report = pelagos::probe::probe(file, ffprobe, pelagos::probe::DEFAULT_TIMEOUT).await?;
         println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if let Some(Command::Index { directory }) = &args.command {
+        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let result = pelagos::catalog::index(&state_dir, directory)?;
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        return Ok(());
+    }
+    if let Some(Command::Catalog { directory }) = &args.command {
+        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let result = pelagos::catalog::list(&state_dir, directory)?;
+        println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
     }
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);
