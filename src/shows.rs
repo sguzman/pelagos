@@ -92,18 +92,19 @@ async fn show_items(
             if episodes {
                 item.item_type == "Episode"
                     && item.series_id.as_deref() == Some(series_id.as_str())
-                    && query.season.is_none_or(|season| {
-                        item.parent_index_number == Some(season)
-                    })
-                    && query.season_id.as_ref().is_none_or(|id| {
-                        item.season_id.as_deref() == Some(id)
-                    })
+                    && query
+                        .season
+                        .is_none_or(|season| item.parent_index_number == Some(season))
+                    && query
+                        .season_id
+                        .as_ref()
+                        .is_none_or(|id| item.season_id.as_deref() == Some(id))
             } else {
                 item.item_type == "Season"
                     && item.parent_id.as_deref() == Some(series_id.as_str())
-                    && query.is_special_season.is_none_or(|special| {
-                        (item.index_number == Some(0)) == special
-                    })
+                    && query
+                        .is_special_season
+                        .is_none_or(|special| (item.index_number == Some(0)) == special)
             }
         })
         .collect::<Vec<_>>();
@@ -147,12 +148,10 @@ async fn show_items(
         let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
         let ids = page.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
         let user_id = user.id;
-        let data = tokio::task::spawn_blocking(move || {
-            user_data::read_many(&dir, &user_id, &ids)
-        })
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let data = tokio::task::spawn_blocking(move || user_data::read_many(&dir, &user_id, &ids))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         for (item, data) in page.iter_mut().zip(data) {
             item.user_data = Some(data);
         }
