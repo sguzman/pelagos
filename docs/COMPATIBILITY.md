@@ -73,3 +73,7 @@ Authenticated `GET /Playback/BitrateTest?size=N` now returns non-cacheable rando
 ## Authenticated system information
 
 `GET /System/Info` now returns a private, authenticated Jellyfin-shaped subset consistent with public server identity, without claiming WebSockets, monitoring or self-restart, and without leaking state directory paths ([CI 39995545838](https://github.com/sguzman/pelagos/actions/runs/39995545838)). Real TV handshake remains **Not tested**.
+
+## Scoped ancestor navigation and direct UserData GET (synthetic only)
+
+The pinned `/Items/{itemId}/Ancestors` response returns the immediate parent first, followed by its authorized parent chain, including a visible library root. New `/UserItems/{itemId}/UserData` and legacy `/Users/{userId}/Items/{itemId}/UserData` GET endpoints read independently stored user state. [CI 39997380191](https://github.com/sguzman/pelagos/actions/runs/39997380191) verifies authentication, cross-user isolation, 404 for inaccessible media, order, defaults and grant revocation. Real Jellyfin clients, DTO parity and third-party metadata remain **Not tested**.
