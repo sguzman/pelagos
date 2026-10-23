@@ -1,0 +1,852 @@
+{
+  "schema": 1,
+  "baseline": {
+    "repository": "jellyfin/jellyfin",
+    "tag": "v12.3",
+    "commit": "06de749d435e2d0be0c5119a41f2300fdd7143e5"
+  },
+  "scope": "Preliminary route-attribute extraction, not OpenAPI parity. Includes only listed controllers; require source review, detailed query/body/error/schema mapping and client tests.",
+  "expected_controller_count": 60,
+  "controllers": [
+    {
+      "controller": "SystemController",
+      "source_path": "Jellyfin.Api/Controllers/SystemController.cs",
+      "upstream_blob_sha": "450225c3713828a65d6e0b6369195568c9626619",
+      "route_prefix": "System",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/System/Info",
+          "source_line": 67
+        },
+        {
+          "method": "GET",
+          "path": "/System/Info/Storage",
+          "source_line": 80
+        },
+        {
+          "method": "GET",
+          "path": "/System/Info/Public",
+          "source_line": 92
+        },
+        {
+          "method": "GET",
+          "path": "/System/Ping",
+          "source_line": 102
+        },
+        {
+          "method": "POST",
+          "path": "/System/Ping",
+          "source_line": 103
+        },
+        {
+          "method": "POST",
+          "path": "/System/Restart",
+          "source_line": 114
+        },
+        {
+          "method": "POST",
+          "path": "/System/Shutdown",
+          "source_line": 130
+        },
+        {
+          "method": "GET",
+          "path": "/System/Logs",
+          "source_line": 146
+        },
+        {
+          "method": "GET",
+          "path": "/System/Endpoint",
+          "source_line": 185
+        },
+        {
+          "method": "GET",
+          "path": "/System/Logs/Log",
+          "source_line": 206
+        }
+      ]
+    },
+    {
+      "controller": "UserController",
+      "source_path": "Jellyfin.Api/Controllers/UserController.cs",
+      "upstream_blob_sha": "657bda4d15e288402ac0ece8aa7a580964eecced",
+      "route_prefix": "Users",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Users",
+          "source_line": 91
+        },
+        {
+          "method": "GET",
+          "path": "/Users/Public",
+          "source_line": 107
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}",
+          "source_line": 127
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}",
+          "source_line": 151
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Authenticate",
+          "source_line": 178
+        },
+        {
+          "method": "POST",
+          "path": "/Users/AuthenticateByName",
+          "source_line": 209
+        },
+        {
+          "method": "POST",
+          "path": "/Users/AuthenticateWithQuickConnect",
+          "source_line": 245
+        },
+        {
+          "method": "POST",
+          "path": "/Users/Password",
+          "source_line": 270
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Password",
+          "source_line": 330
+        },
+        {
+          "method": "POST",
+          "path": "/Users",
+          "source_line": 351
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}",
+          "source_line": 391
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Policy",
+          "source_line": 412
+        },
+        {
+          "method": "POST",
+          "path": "/Users/Configuration",
+          "source_line": 467
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Configuration",
+          "source_line": 500
+        },
+        {
+          "method": "POST",
+          "path": "/Users/New",
+          "source_line": 517
+        },
+        {
+          "method": "POST",
+          "path": "/Users/ForgotPassword",
+          "source_line": 541
+        },
+        {
+          "method": "POST",
+          "path": "/Users/ForgotPassword/Pin",
+          "source_line": 566
+        },
+        {
+          "method": "GET",
+          "path": "/Users/Me",
+          "source_line": 581
+        }
+      ]
+    },
+    {
+      "controller": "QuickConnectController",
+      "source_path": "Jellyfin.Api/Controllers/QuickConnectController.cs",
+      "upstream_blob_sha": "5c7b38e137a4d5741df82a98d253880b68a642ee",
+      "route_prefix": "QuickConnect",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/QuickConnect/Enabled",
+          "source_line": 41
+        },
+        {
+          "method": "POST",
+          "path": "/QuickConnect/Initiate",
+          "source_line": 54
+        },
+        {
+          "method": "GET",
+          "path": "/QuickConnect/Connect",
+          "source_line": 77
+        },
+        {
+          "method": "POST",
+          "path": "/QuickConnect/Authorize",
+          "source_line": 104
+        }
+      ]
+    },
+    {
+      "controller": "ItemsController",
+      "source_path": "Jellyfin.Api/Controllers/ItemsController.cs",
+      "upstream_blob_sha": "385795e9f7f3338b0c2ce9ed9a97f5d67e381ea1",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items",
+          "source_line": 171
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items",
+          "source_line": 721
+        },
+        {
+          "method": "GET",
+          "path": "/UserItems/Resume",
+          "source_line": 921
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/Resume",
+          "source_line": 1027
+        },
+        {
+          "method": "GET",
+          "path": "/UserItems/{itemId}/UserData",
+          "source_line": 1072
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Items/{itemId}/UserData",
+          "source_line": 1109
+        },
+        {
+          "method": "POST",
+          "path": "/UserItems/{itemId}/UserData",
+          "source_line": 1128
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Items/{itemId}/UserData",
+          "source_line": 1169
+        }
+      ]
+    },
+    {
+      "controller": "LibraryController",
+      "source_path": "Jellyfin.Api/Controllers/LibraryController.cs",
+      "upstream_blob_sha": "39a6fbace870783b22f41ed964e55620a96fe78b",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/File",
+          "source_line": 109
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/ThemeSongs",
+          "source_line": 147
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/ThemeVideos",
+          "source_line": 221
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/ThemeMedia",
+          "source_line": 294
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Refresh",
+          "source_line": 337
+        },
+        {
+          "method": "DELETE",
+          "path": "/Items/{itemId}",
+          "source_line": 362
+        },
+        {
+          "method": "DELETE",
+          "path": "/Items",
+          "source_line": 406
+        },
+        {
+          "method": "GET",
+          "path": "/Items/Counts",
+          "source_line": 453
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Ancestors",
+          "source_line": 487
+        },
+        {
+          "method": "GET",
+          "path": "/Library/PhysicalPaths",
+          "source_line": 532
+        },
+        {
+          "method": "GET",
+          "path": "/Library/MediaFolders",
+          "source_line": 547
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Series/Added",
+          "source_line": 576
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Series/Updated",
+          "source_line": 577
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Movies/Added",
+          "source_line": 606
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Movies/Updated",
+          "source_line": 607
+        },
+        {
+          "method": "POST",
+          "path": "/Library/Media/Updated",
+          "source_line": 648
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Download",
+          "source_line": 669
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Collections",
+          "source_line": 735
+        },
+        {
+          "method": "GET",
+          "path": "/Artists/{itemId}/Similar",
+          "source_line": 800
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Similar",
+          "source_line": 801
+        },
+        {
+          "method": "GET",
+          "path": "/Albums/{itemId}/Similar",
+          "source_line": 802
+        },
+        {
+          "method": "GET",
+          "path": "/Shows/{itemId}/Similar",
+          "source_line": 803
+        },
+        {
+          "method": "GET",
+          "path": "/Movies/{itemId}/Similar",
+          "source_line": 804
+        },
+        {
+          "method": "GET",
+          "path": "/Trailers/{itemId}/Similar",
+          "source_line": 805
+        },
+        {
+          "method": "GET",
+          "path": "/Libraries/AvailableOptions",
+          "source_line": 864
+        }
+      ]
+    },
+    {
+      "controller": "MediaInfoController",
+      "source_path": "Jellyfin.Api/Controllers/MediaInfoController.cs",
+      "upstream_blob_sha": "aa942e76428c0711d2d0f24da5db339c1fa260c7",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/PlaybackInfo",
+          "source_line": 72
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/PlaybackInfo",
+          "source_line": 116
+        },
+        {
+          "method": "POST",
+          "path": "/LiveStreams/Open",
+          "source_line": 270
+        },
+        {
+          "method": "POST",
+          "path": "/LiveStreams/Close",
+          "source_line": 315
+        },
+        {
+          "method": "GET",
+          "path": "/Playback/BitrateTest",
+          "source_line": 329
+        }
+      ]
+    },
+    {
+      "controller": "PlaystateController",
+      "source_path": "Jellyfin.Api/Controllers/PlaystateController.cs",
+      "upstream_blob_sha": "4ff1eef4131d786ac709402e5df8b5d43e12406b",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/UserPlayedItems/{itemId}",
+          "source_line": 72
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/PlayedItems/{itemId}",
+          "source_line": 120
+        },
+        {
+          "method": "DELETE",
+          "path": "/UserPlayedItems/{itemId}",
+          "source_line": 139
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/PlayedItems/{itemId}",
+          "source_line": 185
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Playing",
+          "source_line": 201
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Playing/Progress",
+          "source_line": 217
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Playing/Ping",
+          "source_line": 233
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Playing/Stopped",
+          "source_line": 247
+        },
+        {
+          "method": "POST",
+          "path": "/PlayingItems/{itemId}",
+          "source_line": 275
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/PlayingItems/{itemId}",
+          "source_line": 321
+        },
+        {
+          "method": "POST",
+          "path": "/PlayingItems/{itemId}/Progress",
+          "source_line": 355
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/PlayingItems/{itemId}/Progress",
+          "source_line": 413
+        },
+        {
+          "method": "DELETE",
+          "path": "/PlayingItems/{itemId}",
+          "source_line": 445
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/PlayingItems/{itemId}",
+          "source_line": 490
+        }
+      ]
+    },
+    {
+      "controller": "SessionController",
+      "source_path": "Jellyfin.Api/Controllers/SessionController.cs",
+      "upstream_blob_sha": "84c2d90fb1ae9817f5cb6f965e8d5a69332069ac",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Sessions",
+          "source_line": 52
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Viewing",
+          "source_line": 80
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Playing",
+          "source_line": 119
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Playing/{command}",
+          "source_line": 162
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/System/{command}",
+          "source_line": 193
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Command/{command}",
+          "source_line": 219
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Command",
+          "source_line": 247
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/Message",
+          "source_line": 277
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/{sessionId}/User/{userId}",
+          "source_line": 306
+        },
+        {
+          "method": "DELETE",
+          "path": "/Sessions/{sessionId}/User/{userId}",
+          "source_line": 327
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Capabilities",
+          "source_line": 351
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Capabilities/Full",
+          "source_line": 384
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Viewing",
+          "source_line": 409
+        },
+        {
+          "method": "POST",
+          "path": "/Sessions/Logout",
+          "source_line": 427
+        },
+        {
+          "method": "GET",
+          "path": "/Auth/Providers",
+          "source_line": 441
+        },
+        {
+          "method": "GET",
+          "path": "/Auth/PasswordResetProviders",
+          "source_line": 455
+        }
+      ]
+    },
+    {
+      "controller": "ImageController",
+      "source_path": "Jellyfin.Api/Controllers/ImageController.cs",
+      "upstream_blob_sha": "d492a2f5bab5b23ecd06e57f9d222b90ca0afa45",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "POST",
+          "path": "/UserImage",
+          "source_line": 96
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Images/{imageType}",
+          "source_line": 159
+        },
+        {
+          "method": "POST",
+          "path": "/Users/{userId}/Images/{imageType}/{index}",
+          "source_line": 182
+        },
+        {
+          "method": "DELETE",
+          "path": "/UserImage",
+          "source_line": 205
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/Images/{imageType}",
+          "source_line": 251
+        },
+        {
+          "method": "DELETE",
+          "path": "/Users/{userId}/Images/{imageType}/{index}",
+          "source_line": 274
+        },
+        {
+          "method": "DELETE",
+          "path": "/Items/{itemId}/Images/{imageType}",
+          "source_line": 297
+        },
+        {
+          "method": "DELETE",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}",
+          "source_line": 325
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/Images/{imageType}",
+          "source_line": 352
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}",
+          "source_line": 395
+        },
+        {
+          "method": "POST",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}/Index",
+          "source_line": 440
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Images",
+          "source_line": 467
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Images/{imageType}",
+          "source_line": 552
+        },
+        {
+          "method": "HEAD",
+          "path": "/Items/{itemId}/Images/{imageType}",
+          "source_line": 553
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}",
+          "source_line": 630
+        },
+        {
+          "method": "HEAD",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}",
+          "source_line": 631
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}/{tag}/{format}/{maxWidth}/{maxHeight}/{percentPlayed}/{unplayedCount}",
+          "source_line": 708
+        },
+        {
+          "method": "HEAD",
+          "path": "/Items/{itemId}/Images/{imageType}/{imageIndex}/{tag}/{format}/{maxWidth}/{maxHeight}/{percentPlayed}/{unplayedCount}",
+          "source_line": 709
+        },
+        {
+          "method": "GET",
+          "path": "/Artists/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 786
+        },
+        {
+          "method": "HEAD",
+          "path": "/Artists/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 787
+        },
+        {
+          "method": "GET",
+          "path": "/Genres/{name}/Images/{imageType}",
+          "source_line": 864
+        },
+        {
+          "method": "HEAD",
+          "path": "/Genres/{name}/Images/{imageType}",
+          "source_line": 865
+        },
+        {
+          "method": "GET",
+          "path": "/Genres/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 942
+        },
+        {
+          "method": "HEAD",
+          "path": "/Genres/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 943
+        },
+        {
+          "method": "GET",
+          "path": "/MusicGenres/{name}/Images/{imageType}",
+          "source_line": 1020
+        },
+        {
+          "method": "HEAD",
+          "path": "/MusicGenres/{name}/Images/{imageType}",
+          "source_line": 1021
+        },
+        {
+          "method": "GET",
+          "path": "/MusicGenres/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1098
+        },
+        {
+          "method": "HEAD",
+          "path": "/MusicGenres/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1099
+        },
+        {
+          "method": "GET",
+          "path": "/Persons/{name}/Images/{imageType}",
+          "source_line": 1176
+        },
+        {
+          "method": "HEAD",
+          "path": "/Persons/{name}/Images/{imageType}",
+          "source_line": 1177
+        },
+        {
+          "method": "GET",
+          "path": "/Persons/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1254
+        },
+        {
+          "method": "HEAD",
+          "path": "/Persons/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1255
+        },
+        {
+          "method": "GET",
+          "path": "/Studios/{name}/Images/{imageType}",
+          "source_line": 1332
+        },
+        {
+          "method": "HEAD",
+          "path": "/Studios/{name}/Images/{imageType}",
+          "source_line": 1333
+        },
+        {
+          "method": "GET",
+          "path": "/Studios/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1410
+        },
+        {
+          "method": "HEAD",
+          "path": "/Studios/{name}/Images/{imageType}/{imageIndex}",
+          "source_line": 1411
+        },
+        {
+          "method": "GET",
+          "path": "/UserImage",
+          "source_line": 1475
+        },
+        {
+          "method": "HEAD",
+          "path": "/UserImage",
+          "source_line": 1476
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Images/{imageType}",
+          "source_line": 1554
+        },
+        {
+          "method": "HEAD",
+          "path": "/Users/{userId}/Images/{imageType}",
+          "source_line": 1555
+        },
+        {
+          "method": "GET",
+          "path": "/Users/{userId}/Images/{imageType}/{imageIndex}",
+          "source_line": 1610
+        },
+        {
+          "method": "HEAD",
+          "path": "/Users/{userId}/Images/{imageType}/{imageIndex}",
+          "source_line": 1611
+        },
+        {
+          "method": "GET",
+          "path": "/Branding/Splashscreen",
+          "source_line": 1647
+        },
+        {
+          "method": "POST",
+          "path": "/Branding/Splashscreen",
+          "source_line": 1721
+        },
+        {
+          "method": "DELETE",
+          "path": "/Branding/Splashscreen",
+          "source_line": 1758
+        }
+      ]
+    },
+    {
+      "controller": "VideosController",
+      "source_path": "Jellyfin.Api/Controllers/VideosController.cs",
+      "upstream_blob_sha": "29a92cdb906792a095217728f783e016efc5739e",
+      "route_prefix": "Videos",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/AdditionalParts",
+          "source_line": 94
+        },
+        {
+          "method": "DELETE",
+          "path": "/Videos/{itemId}/AlternateSources",
+          "source_line": 139
+        },
+        {
+          "method": "POST",
+          "path": "/Videos/MergeVersions",
+          "source_line": 183
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/stream",
+          "source_line": 314
+        },
+        {
+          "method": "HEAD",
+          "path": "/Videos/{itemId}/stream",
+          "source_line": 315
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/stream.{container}",
+          "source_line": 552
+        },
+        {
+          "method": "HEAD",
+          "path": "/Videos/{itemId}/stream.{container}",
+          "source_line": 553
+        }
+      ]
+    }
+  ]
+}
