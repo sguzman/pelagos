@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 25%` across 120 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 26%` across 121 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,11 +81,11 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 38%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 39%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
-### 🌐 P3 — System and transports — `██░░░░░░░░ 22%`
+### 🌐 P3 — System and transports — `███░░░░░░░ 29%`
 
 - 📡 **T100 — Discovery and public server info** — `░░░░░░░░░░ 0%`
   - [ ] Implement Jellyfin discovery, public system info and stable version negotiation
@@ -111,6 +111,10 @@
   - [x] Expose authenticated Jellyfin GET /System/Info consistent with public server ID; omit private filesystem paths and unimplemented runtime claims — src/app.rs — flattened PublicSystemInfo and conservative SystemInfo capabilities with authenticated boundary
   - [x] CI tests anonymous rejection, public/private identity agreement and honest system flags — GitHub Actions 39995545838 — full Rust system info and pinned controller regression tests passed
   - [ ] Unmodified Jellyfin Smart TV and administration clients accept the system-info responses
+- 🌐 **T106 — Safe concrete listener URL in Jellyfin system identity** — `███████░░░ 67%`
+  - [x] Advertise actual IPv4/IPv6 HTTP listener in System/Info/Public and authorized System/Info, keeping wildcard hosts unadvertised — src/app.rs; src/main.rs; tests/http.rs; tests/system_info_http.rs — concrete bind URL and matching system identity without Host trust
+  - [x] CI verifies loopback, LAN IPv4, bracketed IPv6, wildcard suppression, hostile Host input and actual bound port plumbing — GitHub Actions 40004088369 — formatting, Clippy, all Rust tests, roadmap and upstream contract guards passed
+  - [ ] Real Jellyfin web/TV app discovery and connection verifies advertised URL, proxy behavior and multi-interface host selection
 
 ### 👥 P4 — Authentication and user state — `████░░░░░░ 37%`
 
