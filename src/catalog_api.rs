@@ -31,6 +31,8 @@ pub struct ItemDto {
     #[serde(rename = "Type")]
     pub item_type: String,
     pub media_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_type: Option<String>,
     pub is_folder: bool,
     pub server_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -212,6 +214,7 @@ fn virtual_root(server_id: &str) -> ItemDto {
         name: "Media".to_owned(),
         item_type: "Folder".to_owned(),
         media_type: None,
+        extra_type: None,
         is_folder: true,
         server_id: server_id.to_owned(),
         parent_id: None,
@@ -358,6 +361,7 @@ fn map_item(
         name,
         item_type: item_type.to_owned(),
         media_type: Some(media_type.to_owned()),
+        extra_type: None,
         is_folder: false,
         server_id: server_id.to_owned(),
         parent_id: Some(parent_id),
@@ -386,6 +390,7 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
             .unwrap_or_else(|| "Library".to_owned()),
         item_type: "CollectionFolder".to_owned(),
         media_type: None,
+        extra_type: None,
         is_folder: true,
         server_id: server_id.to_owned(),
         parent_id: Some(virtual_root_id(server_id)),
@@ -479,6 +484,7 @@ fn catalog_nodes(
                         name: component.as_os_str().to_string_lossy().into_owned(),
                         item_type: folder_type.to_owned(),
                         media_type: None,
+                        extra_type: None,
                         is_folder: true,
                         server_id: server_id.to_owned(),
                         parent_id: Some(parent_id.clone()),
