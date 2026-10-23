@@ -38,7 +38,11 @@ async fn conservative_movies_are_filterable_private_and_keep_stable_media_identi
     for folder in ["Solaris (1972)", "Café (2024)", "Unrelated (2020)"] {
         std::fs::create_dir_all(movies.join(folder)).unwrap();
     }
-    std::fs::write(movies.join("Solaris (1972)/Solaris (1972).mkv"), b"synthetic").unwrap();
+    std::fs::write(
+        movies.join("Solaris (1972)/Solaris (1972).mkv"),
+        b"synthetic",
+    )
+    .unwrap();
     std::fs::write(movies.join("Café (2024)/Café (2024).mp4"), b"synthetic").unwrap();
     std::fs::write(movies.join("Unrelated (2020)/Loose (2020).mkv"), b"generic").unwrap();
     std::fs::write(movies.join("Unsorted.mp4"), b"generic").unwrap();
@@ -105,19 +109,17 @@ async fn conservative_movies_are_filterable_private_and_keep_stable_media_identi
     assert_eq!(source["Id"], movie_id);
     assert_eq!(source["ProductionYear"], 2024);
 
-    let by_flag = json(
-        get(&router, "/Items?isMovie=true", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let by_flag = json(get(&router, "/Items?isMovie=true", Some(&viewer.access_token)).await).await;
     assert_eq!(by_flag["TotalRecordCount"], 2);
-    let other = json(
-        get(&router, "/Items?isMovie=false", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let other = json(get(&router, "/Items?isMovie=false", Some(&viewer.access_token)).await).await;
     assert_eq!(other["TotalRecordCount"], 2);
-    assert!(other["Items"].as_array().unwrap().iter().all(|item| {
-        item["Type"] == "Video" && item.get("ProductionYear").is_none()
-    }));
+    assert!(
+        other["Items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| { item["Type"] == "Video" && item.get("ProductionYear").is_none() })
+    );
     let hints = json(
         get(
             &router,
