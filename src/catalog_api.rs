@@ -294,6 +294,8 @@ fn root_item(root: &str, server_id: &str, image_tag: Option<String>) -> ItemDto 
         size: None,
         container: None,
         series_name: None,
+        series_id: None,
+        season_id: None,
         index_number: None,
         parent_index_number: None,
         user_data: None,
