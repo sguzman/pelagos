@@ -10,7 +10,7 @@ use serde::Serialize;
 
 use crate::media::{self, MediaKind};
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const DB_NAME: &str = "pelagos.sqlite3";
 const SCHEMA_VERSION: i64 = 1;
