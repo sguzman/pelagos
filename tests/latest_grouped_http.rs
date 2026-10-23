@@ -91,7 +91,6 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
         "/Items/Latest",
         "/Items/Latest?groupItems=true",
         "/Items/Latest?groupItems=true&includeItemTypes=Audio",
-        "/Items/Latest?groupItems=true&includeItemTypes=Episode,Movie",
     ] {
         assert_eq!(
             call(&router, "GET", unsupported, Some(&viewer.access_token))
@@ -107,6 +106,17 @@ async fn latest_grouped_episodes_use_series_only_for_multiple_items_and_count_be
 
     let grouped_result =
         json(call(&router, "GET", grouped, Some(&viewer.access_token)).await).await;
+    let mixed_without_movies = json(
+        call(
+            &router,
+            "GET",
+            "/Items/Latest?includeItemTypes=Episode,Movie",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(mixed_without_movies, grouped_result);
     assert_eq!(grouped_result.as_array().unwrap().len(), 2);
     assert_eq!(grouped_result[0]["Type"], "Series");
     assert_eq!(grouped_result[0]["Name"], "Signal");
