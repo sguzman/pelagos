@@ -132,7 +132,6 @@ async fn folder_views_and_recursive_browse_match_parent_chain() {
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }
 
-
 #[tokio::test]
 async fn indexed_empty_library_remains_browsable_without_phantom_files() {
     let fixture = tempfile::tempdir().unwrap();
@@ -153,8 +152,7 @@ async fn indexed_empty_library_remains_browsable_without_phantom_files() {
     assert_eq!(views["TotalRecordCount"], 1);
     assert_eq!(views["Items"][0]["Name"], "EmptyMovies");
     let id = views["Items"][0]["Id"].as_str().unwrap();
-    let children =
-        json(get(&router, &format!("/Items?parentId={id}"), Some(&token)).await).await;
+    let children = json(get(&router, &format!("/Items?parentId={id}"), Some(&token)).await).await;
     assert_eq!(children["TotalRecordCount"], 0);
     assert!(children["Items"].as_array().unwrap().is_empty());
     let root_item = json(get(&router, &format!("/Items/{id}"), Some(&token)).await).await;
