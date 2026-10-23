@@ -67,7 +67,8 @@ pub fn episode_hint(relative_path: &Path) -> Option<EpisodeHint> {
     }
     let folder_season = season_folder_number(season_folder)?;
     let (season, episode, end) = episode_token(stem)?;
-    if folder_season != season {
+    if folder_season != season || episode_token(&stem[end..]).is_some() {
+        // Multi-episode filenames are not single episode identifiers.
         return None;
     }
     let title =
@@ -115,6 +116,8 @@ mod tests {
             "Show/Season 01/Show - S01E1234.mkv",
             "Show/Season 01/Feature Film.mkv",
             "Show/Season 01/Show - S01E01Part1.mkv",
+            "Show/Season 01/Show - S01E01 - S01E02.mkv",
+            "Show/Season 01/Show - S01E01 S01E03.mkv",
             "Show/Season 01/Show - S01E01.mp4/other.mkv",
         ] {
             assert!(episode_hint(Path::new(path)).is_none(), "{path}");
