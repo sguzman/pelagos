@@ -65,3 +65,7 @@ Media covers no longer populate unrelated Photo browsing/search results, while s
 ## Private artwork revalidation
 
 Primary images now support per-user scoped conditional ETag fetches and empty 304 responses; the validator changes when original size/mtime changes without a library rescan ([CI 39993608914](https://github.com/sguzman/pelagos/actions/runs/39993608914)). **Unmodified TV client not tested.**
+
+## Bandwidth test API
+
+Authenticated `GET /Playback/BitrateTest?size=N` now returns non-cacheable random data of the exact allowed requested length, without large buffering ([CI 39994640474](https://github.com/sguzman/pelagos/actions/runs/39994640474)). **Smart TV behavior not yet tested**.

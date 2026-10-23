@@ -116,3 +116,7 @@ FFprobe `MediaStreams` now expose a conservative larger Jellyfin-compatible subs
 ## Descriptor-backed private artwork caching
 
 Primary artwork responses derive a quoted ETag from the original image's library, relative path, opened-file size and modification timestamp, using the **already confined opened descriptor**. Access checks and Linux handle validation still run for conditional requests. Matching `If-None-Match` returns 304 with an empty body, ETag, and `Cache-Control: private, no-cache`; changed sources return image bytes and an updated ETag. Synthetic regressions passed [CI 39993608914](https://github.com/sguzman/pelagos/actions/runs/39993608914); no real TV caching claim.
+
+## Jellyfin bitrate-test HTTP transport
+
+Pinned Jellyfin v12.3's authenticated `GET /Playback/BitrateTest` now responds with `application/octet-stream` and exactly the requested number of random bytes (default 102400; allowed 1 through 100000000), `Cache-Control: no-store` and matching Content-Length. A Rust Tokio AsyncRead produces at most 16 KiB of fresh randomness per poll; the server never allocates the complete response or invokes FFmpeg for a bandwidth probe. Invalid sizes return 400. [CI 39994640474](https://github.com/sguzman/pelagos/actions/runs/39994640474) validates authentication, sizes, streaming and errors. Real client bandwidth estimation remains untested.

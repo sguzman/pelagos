@@ -1595,6 +1595,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T335",
+              "emoji": "📡",
+              "name": "Authenticated bounded Jellyfin bitrate-test transport",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement size-validated GET /Playback/BitrateTest with non-cacheable random data streamed in bounded chunks and an exact Content-Length",
+                  "passed": true,
+                  "evidence": "src/bitrate.rs — direct Rust random-reader, no 100 MB response allocation or shell tooling"
+                },
+                {
+                  "title": "CI validates authentication, default 102400 bytes, maximum 100000000, exact stream length, random payload and invalid-size responses",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39994640474 — authenticated HTTP and bounded generator tests plus Clippy/format passed"
+                },
+                {
+                  "title": "Unmodified Smart TV clients verify playback bitrate estimation against real network conditions",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
