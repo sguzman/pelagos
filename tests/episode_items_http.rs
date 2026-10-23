@@ -110,6 +110,8 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
     assert_eq!(season["Items"][0]["Type"], "Season");
     assert_eq!(season["Items"][0]["IndexNumber"], 1);
     let season_id = season["Items"][0]["Id"].as_str().unwrap();
+    assert_eq!(season["Items"][0]["SeriesId"], series_id);
+    assert!(season["Items"][0].get("SeasonId").is_none());
     let episodes = json(
         get(
             &router,
@@ -125,6 +127,8 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
     assert_eq!(arrival["Type"], "Episode");
     assert_eq!(arrival["MediaType"], "Video");
     assert_eq!(arrival["SeriesName"], "Signal");
+    assert_eq!(arrival["SeriesId"], series_id);
+    assert_eq!(arrival["SeasonId"], season_id);
     assert_eq!(arrival["IndexNumber"], 2);
     assert_eq!(arrival["ParentIndexNumber"], 1);
     assert_eq!(arrival["ParentId"], season_id);
@@ -136,6 +140,8 @@ async fn recognized_episode_names_build_series_and_season_dtos_without_guessing_
         .unwrap();
     assert_eq!(featurette["Type"], "Video");
     assert!(featurette.get("SeriesName").is_none());
+    assert!(featurette.get("SeriesId").is_none());
+    assert!(featurette.get("SeasonId").is_none());
 
     let only_episodes = json(
         get(
