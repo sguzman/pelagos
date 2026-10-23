@@ -1,4 +1,9 @@
-use std::{io::{self, IsTerminal, Read}, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{
+    io::{self, IsTerminal, Read},
+    net::SocketAddr,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use clap::{Parser, Subcommand};
 use pelagos::{app, discovery, identity};
@@ -90,12 +95,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(Command::UserAdd { username }) = &args.command {
         if io::stdin().is_terminal() {
-            return Err("supply a password via standard input (not a command-line argument)".into());
+            return Err(
+                "supply a password via standard input (not a command-line argument)".into(),
+            );
         }
         let mut input = String::new();
         io::stdin().take(1025).read_to_string(&mut input)?;
         let password = input.trim_end_matches(['\r', '\n']);
-        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let state_dir = args
+            .state_dir
+            .clone()
+            .unwrap_or_else(identity::default_state_dir);
         let user = pelagos::auth::create_user(&state_dir, username, password)
             .map_err(|e| -> Box<dyn std::error::Error> { e })?;
         println!("created user: {} ({})", user.name, user.id);
@@ -123,6 +133,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     info!(%address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
-    axum::serve(listener, app::router(Arc::new(app::AppState::with_auth_dir(id, state_for_auth)))).await?;
+    axum::serve(
+        listener,
+        app::router(Arc::new(app::AppState::with_auth_dir(id, state_for_auth))),
+    )
+    .await?;
     Ok(())
 }

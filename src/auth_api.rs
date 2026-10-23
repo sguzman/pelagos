@@ -101,11 +101,10 @@ async fn authenticated(
     let dir = state_dir(&state)?;
     let server_id = state.server_id().to_owned();
     let token_clone = token.clone();
-    let outcome = tokio::task::spawn_blocking(move || {
-        auth::identify(&dir, &token_clone, &server_id)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let outcome =
+        tokio::task::spawn_blocking(move || auth::identify(&dir, &token_clone, &server_id))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     match outcome {
         Ok(Some(user)) => Ok((user, token)),
         Ok(None) => Err(StatusCode::UNAUTHORIZED),

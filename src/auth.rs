@@ -7,10 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::SaltString,
-};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -152,7 +149,12 @@ fn digest_token(token: &str) -> [u8; 32] {
     Sha256::digest(token.as_bytes()).into()
 }
 
-pub fn authenticate(state_dir: &Path, name: &str, password: &str, server_id: &str) -> Result<Option<Login>> {
+pub fn authenticate(
+    state_dir: &Path,
+    name: &str,
+    password: &str,
+    server_id: &str,
+) -> Result<Option<Login>> {
     if !valid_username(name) || password.len() > MAX_PASSWORD_BYTES {
         return Ok(None);
     }
@@ -240,11 +242,13 @@ mod tests {
         assert!(!second.policy.is_administrator);
         assert!(create_user(dir.path(), "admin", "another-long-test-passphrase").is_err());
         let db = database(dir.path()).unwrap();
-        let saved: String = db.query_row(
-            "SELECT password_hash FROM pelagos_users WHERE id=?1",
-            params![admin.id],
-            |row| row.get(0),
-        ).unwrap();
+        let saved: String = db
+            .query_row(
+                "SELECT password_hash FROM pelagos_users WHERE id=?1",
+                params![admin.id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert!(saved.starts_with("$argon2id$"));
         assert!(!saved.contains("very-strong-test-passphrase"));
     }
@@ -253,18 +257,35 @@ mod tests {
     fn login_token_revoke_and_restart() {
         let dir = tempfile::tempdir().unwrap();
         create_user(dir.path(), "viewer", "secure-test-passphrase").unwrap();
-        assert!(authenticate(dir.path(), "viewer", "wrong-password", "server").unwrap().is_none());
+        assert!(
+            authenticate(dir.path(), "viewer", "wrong-password", "server")
+                .unwrap()
+                .is_none()
+        );
         let session = authenticate(dir.path(), "Viewer", "secure-test-passphrase", "server")
-            .unwrap().unwrap();
+            .unwrap()
+            .unwrap();
         assert_eq!(session.server_id, "server");
         assert_eq!(session.access_token.len(), 64);
-        assert_eq!(identify(dir.path(), &session.access_token, "server").unwrap().unwrap().name, "viewer");
+        assert_eq!(
+            identify(dir.path(), &session.access_token, "server")
+                .unwrap()
+                .unwrap()
+                .name,
+            "viewer"
+        );
         assert!(identify(dir.path(), "invalid", "server").unwrap().is_none());
         let db = database(dir.path()).unwrap();
-        let raw: Vec<u8> = db.query_row("SELECT digest FROM pelagos_tokens", [], |row| row.get(0)).unwrap();
+        let raw: Vec<u8> = db
+            .query_row("SELECT digest FROM pelagos_tokens", [], |row| row.get(0))
+            .unwrap();
         assert_ne!(raw, session.access_token.as_bytes());
         assert!(revoke(dir.path(), &session.access_token).unwrap());
-        assert!(identify(dir.path(), &session.access_token, "server").unwrap().is_none());
+        assert!(
+            identify(dir.path(), &session.access_token, "server")
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -280,10 +301,20 @@ mod tests {
     fn disabled_users_cannot_login_or_use_tokens() {
         let dir = tempfile::tempdir().unwrap();
         let user = create_user(dir.path(), "viewer", "secure-test-passphrase").unwrap();
-        let session = authenticate(dir.path(), "viewer", "secure-test-passphrase", "server").unwrap().unwrap();
+        let session = authenticate(dir.path(), "viewer", "secure-test-passphrase", "server")
+            .unwrap()
+            .unwrap();
         let db = database(dir.path()).unwrap();
-        db.execute("UPDATE pelagos_users SET disabled=1 WHERE id=?1", params![user.id]).unwrap();
-        assert!(authenticate(dir.path(), "viewer", "secure-test-passphrase", "server").unwrap().is_none());
+        db.execute(
+            "UPDATE pelagos_users SET disabled=1 WHERE id=?1",
+            params![user.id],
+        )
+        .unwrap();
+        assert!(
+            authenticate(dir.path(), "viewer", "secure-test-passphrase", "server")
+                .unwrap()
+                .is_none()
+        );
         assert!(identify(dir.path(), &session.access_token, "server").unwrap().is_none());
     }
 }
