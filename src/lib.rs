@@ -9,5 +9,6 @@ pub mod identity;
 pub mod media;
 pub mod playback;
 pub mod probe;
+pub(crate) mod query_filters;
 pub mod search;
 pub mod streaming;

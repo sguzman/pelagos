@@ -16,7 +16,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::{app::AppState, auth_api, catalog};
+use crate::{
+    app::AppState,
+    auth_api, catalog,
+    query_filters::{filter_types, media_types},
+};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "PascalCase")]
@@ -50,6 +54,11 @@ struct ItemQuery {
     search_term: Option<String>,
     parent_id: Option<String>,
     recursive: Option<bool>,
+    include_item_types: Option<String>,
+    exclude_item_types: Option<String>,
+    media_types: Option<String>,
+    is_movie: Option<bool>,
+    is_series: Option<bool>,
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -223,10 +232,27 @@ async fn query_items(
         }
         None => all.retain(|item| !item.is_folder),
     }
+    if query.is_movie.is_some() || query.is_series.is_some() {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let included = filter_types(query.include_item_types.as_deref())?;
+    let excluded = filter_types(query.exclude_item_types.as_deref())?;
+    let media = media_types(query.media_types.as_deref())?;
     if let Some(search) = query.search_term.filter(|s| !s.is_empty()) {
         let search = search.to_lowercase();
         all.retain(|item| item.name.to_lowercase().contains(&search));
     }
+    all.retain(|item| {
+        included
+            .as_ref()
+            .is_none_or(|types| types.contains(&item.item_type))
+            && excluded
+                .as_ref()
+                .is_none_or(|types| !types.contains(&item.item_type))
+            && media
+                .as_ref()
+                .is_none_or(|types| item.media_type.as_ref().is_some_and(|kind| types.contains(kind)))
+    });
     all.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
     let total_record_count = all.len();
     let start_index = query.start_index.unwrap_or(0);
