@@ -115,6 +115,17 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
     assert_eq!(songs["Items"][0]["ExtraType"], "ThemeSong");
     assert_eq!(songs["Items"][1]["ExtraType"], "ThemeSong");
     assert_eq!(songs["Items"][0]["Type"], "Audio");
+    let descending = json(
+        call(
+            &router,
+            &format!("/Items/{film}/ThemeSongs?sortBy=SortName&sortOrder=Descending"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(descending["Items"][0]["Name"], "theme");
+    assert_eq!(descending["Items"][1]["Name"], "score");
 
     let videos = json(call(&router, &film_video_path, Some(&viewer.access_token)).await).await;
     assert_eq!(videos["TotalRecordCount"], 1);

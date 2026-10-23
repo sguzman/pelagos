@@ -93,7 +93,12 @@ async fn theme_song_video_and_combined_contracts_are_private_and_explicitly_empt
         );
         let sorted = format!("{path}?sortBy=SortName");
         assert_eq!(
-            call(&router, &sorted, Some(&viewer.access_token))
+            json(call(&router, &sorted, Some(&viewer.access_token)).await).await["Items"],
+            serde_json::json!([])
+        );
+        let unsupported = format!("{path}?sortBy=Random");
+        assert_eq!(
+            call(&router, &unsupported, Some(&viewer.access_token))
                 .await
                 .status(),
             StatusCode::NOT_IMPLEMENTED

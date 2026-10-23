@@ -83,8 +83,15 @@ async fn indexed_themes(
     // When Jellyfin finds no local theme, inheritFromParent walks up the
     // hierarchy and changes OwnerId. Refuse until full traversal is modeled.
     if query.inherit_from_parent == Some(true)
-        || query.sort_by.is_some()
-        || query.sort_order.is_some()
+        || query
+            .sort_by
+            .as_deref()
+            .is_some_and(|value| value != "SortName")
+        || query
+            .sort_order
+            .as_deref()
+            .is_some_and(|value| !matches!(value, "Ascending" | "Descending"))
+        || (query.sort_order.is_some() && query.sort_by.is_none())
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
@@ -154,6 +161,10 @@ async fn indexed_themes(
     };
     songs.sort_by(sort);
     videos.sort_by(sort);
+    if query.sort_order.as_deref() == Some("Descending") {
+        songs.reverse();
+        videos.reverse();
+    }
     Ok((
         ThemeMediaResult::new(item_id.clone(), songs),
         ThemeMediaResult::new(item_id, videos),
