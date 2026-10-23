@@ -121,7 +121,12 @@ pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
             let relative = path_text(&file.path)?;
             seen.execute(params![relative])?;
             let bytes = i64::try_from(file.size_bytes)?;
-            put.execute(params![path_text(&root)?, relative, media_kind(file.kind), bytes])?;
+            put.execute(params![
+                path_text(&root)?,
+                relative,
+                media_kind(file.kind),
+                bytes
+            ])?;
         }
     }
     let stale_removed = tx.execute(

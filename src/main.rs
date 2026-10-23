@@ -34,15 +34,11 @@ enum Command {
         /// Directory to inspect recursively. Symlinks are not followed.
         directory: PathBuf,
     },
-    /// Inspect one media file with the installed FFprobe executable.
     /// Synchronize one read-only filesystem scan into Pelagos' private SQLite index.
-    Index {
-        directory: PathBuf,
-    },
+    Index { directory: PathBuf },
     /// List items in an already indexed library.
-    Catalog {
-        directory: PathBuf,
-    },
+    Catalog { directory: PathBuf },
+    /// Inspect one media file with the installed FFprobe executable.
     Probe {
         /// File to examine (never rewritten).
         file: PathBuf,
@@ -73,7 +69,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if let Some(Command::Index { directory }) = &args.command {
-        let state_dir = args.state_dir.clone().unwrap_or_else(identity::default_state_dir);
+        let state_dir = args
+            .state_dir
+            .clone()
+            .unwrap_or_else(identity::default_state_dir);
         let result = pelagos::catalog::index(&state_dir, directory)?;
         println!("{}", serde_json::to_string_pretty(&result)?);
         return Ok(());
