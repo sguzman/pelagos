@@ -425,7 +425,16 @@ async fn stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "video", FileMode::Direct(None)).await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        false,
+        "video",
+        FileMode::Direct(None),
+    )
+    .await
 }
 
 async fn head_stream(
@@ -434,7 +443,16 @@ async fn head_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "video", FileMode::Direct(None)).await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        true,
+        "video",
+        FileMode::Direct(None),
+    )
+    .await
 }
 
 async fn audio_stream(
@@ -443,7 +461,16 @@ async fn audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false, "audio", FileMode::Direct(None)).await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        false,
+        "audio",
+        FileMode::Direct(None),
+    )
+    .await
 }
 
 async fn head_audio_stream(
@@ -452,7 +479,16 @@ async fn head_audio_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true, "audio", FileMode::Direct(None)).await
+    serve_file(
+        state,
+        item_id,
+        headers,
+        query,
+        true,
+        "audio",
+        FileMode::Direct(None),
+    )
+    .await
 }
 
 fn container_name(filename: &str) -> Result<String, StatusCode> {
