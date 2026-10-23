@@ -325,7 +325,7 @@ async fn next_up(
         total_record_count,
         start_index,
     }))
-}}
+}
 
 async fn seasons(
     State(state): State<Arc<AppState>>,
