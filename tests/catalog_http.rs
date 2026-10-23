@@ -6,7 +6,10 @@ use axum::{
     http::{Request, StatusCode},
     response::Response,
 };
-use pelagos::{app::{self, AppState}, auth, catalog};
+use pelagos::{
+    app::{self, AppState},
+    auth, catalog,
+};
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -43,12 +46,14 @@ async fn query_results_are_administrator_only_and_deterministically_paged() {
         .unwrap()
         .unwrap()
         .access_token;
-    let viewer_token = auth::authenticate(&state, "viewer", "viewer-safe-test-passphrase", "server")
-        .unwrap()
-        .unwrap()
-        .access_token;
+    let viewer_token =
+        auth::authenticate(&state, "viewer", "viewer-safe-test-passphrase", "server")
+            .unwrap()
+            .unwrap()
+            .access_token;
     let router = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_string(), state.clone(),
+        "server".to_string(),
+        state.clone(),
     )));
 
     let denied = get(&router, "/Items", None).await;
@@ -62,19 +67,13 @@ async fn query_results_are_administrator_only_and_deterministically_paged() {
     assert_eq!(all["Items"][1]["Name"], "Bravo");
     assert!(all["Items"][0].get("Path").is_none());
 
-    let page = json(
-        get(&router, "/Items?startIndex=1&limit=1", Some(&admin_token)).await,
-    )
-    .await;
+    let page = json(get(&router, "/Items?startIndex=1&limit=1", Some(&admin_token)).await).await;
     assert_eq!(page["TotalRecordCount"], 2);
     assert_eq!(page["StartIndex"], 1);
     assert_eq!(page["Items"].as_array().unwrap().len(), 1);
     assert_eq!(page["Items"][0]["Name"], "Bravo");
 
-    let search = json(
-        get(&router, "/Items?searchTerm=alpha", Some(&admin_token)).await,
-    )
-    .await;
+    let search = json(get(&router, "/Items?searchTerm=alpha", Some(&admin_token)).await).await;
     assert_eq!(search["TotalRecordCount"], 1);
 
     let views = json(get(&router, "/UserViews", Some(&admin_token)).await).await;
