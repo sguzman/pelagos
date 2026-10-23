@@ -35,6 +35,13 @@ async fn json(response: Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap()
 }
 
+async fn view_count(router: &Router, token: &str) -> i64 {
+    json(call(router, "GET", "/UserViews", Some(token), "").await)
+        .await["TotalRecordCount"]
+        .as_i64()
+        .unwrap()
+}
+
 #[tokio::test]
 async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_media() {
     let fixture = tempfile::tempdir().unwrap();
@@ -63,7 +70,11 @@ async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_med
     let remove = "/Library/VirtualFolders?name=Movies";
     for (method, token, status) in [
         ("DELETE", None, StatusCode::UNAUTHORIZED),
-        ("DELETE", Some(viewer.access_token.as_str()), StatusCode::FORBIDDEN),
+        (
+            "DELETE",
+            Some(viewer.access_token.as_str()),
+            StatusCode::FORBIDDEN,
+        ),
     ] {
         assert_eq!(
             call(&router, method, remove, token, "").await.status(),
@@ -95,7 +106,10 @@ async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_med
         StatusCode::NOT_FOUND
     );
     for (path, body) in [
-        ("/Library/VirtualFolders?name=Movies&refreshLibrary=true", ""),
+        (
+            "/Library/VirtualFolders?name=Movies&refreshLibrary=true",
+            "",
+        ),
         (remove, "{}"),
     ] {
         assert_eq!(
@@ -105,8 +119,7 @@ async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_med
             StatusCode::NOT_IMPLEMENTED
         );
     }
-    let before = json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
-    assert_eq!(before["TotalRecordCount"], 1);
+    assert_eq!(view_count(&router, &viewer.access_token).await, 1);
     let response = call(&router, "DELETE", remove, Some(&admin.access_token), "").await;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
     assert!(
@@ -136,8 +149,7 @@ async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_med
         "server".to_owned(),
         state.clone(),
     )));
-    let after = json(call(&restarted, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
-    assert_eq!(after["TotalRecordCount"], 0);
+    assert_eq!(view_count(&restarted, &viewer.access_token).await, 0);
 
     // Re-adding an identical path must never resurrect obsolete read grants.
     let register = format!(
@@ -150,17 +162,9 @@ async fn deleting_registered_virtual_folder_clears_permissions_and_preserves_med
             .status(),
         StatusCode::NO_CONTENT
     );
-    assert_eq!(
-        json(call(&restarted, "GET", "/UserViews", Some(&viewer.access_token), "").await)
-            .await["TotalRecordCount"],
-        0
-    );
+    assert_eq!(view_count(&restarted, &viewer.access_token).await, 0);
     assert!(auth::grant_library(&state, "viewer", &movies).unwrap());
-    assert_eq!(
-        json(call(&restarted, "GET", "/UserViews", Some(&viewer.access_token), "").await)
-            .await["TotalRecordCount"],
-        1
-    );
+    assert_eq!(view_count(&restarted, &viewer.access_token).await, 1);
 }
 
 #[tokio::test]
