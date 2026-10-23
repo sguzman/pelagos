@@ -147,7 +147,11 @@ fn catalog_nodes(
 ) -> Vec<ItemDto> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
-    let indexed_images = files.iter().filter(|f| f.kind == "image").cloned().collect::<Vec<_>>();
+    let indexed_images = files
+        .iter()
+        .filter(|f| f.kind == "image")
+        .cloned()
+        .collect::<Vec<_>>();
     for root in roots {
         let root_id = stable_id(&root, "");
         if seen.insert(root_id) {
@@ -184,8 +188,8 @@ fn catalog_nodes(
                 parent_id = folder_id;
             }
         }
-        let primary = artwork::primary_for_file(&indexed_images, &file)
-            .and_then(artwork::image_tag);
+        let primary =
+            artwork::primary_for_file(&indexed_images, &file).and_then(artwork::image_tag);
         result.push(map_item(file, server_id, parent_id, primary));
     }
     result
@@ -386,7 +390,7 @@ async fn user_views(
             parent_id: None,
             size: None,
             user_data: None,
-        image_tags: None,
+            image_tags: None,
         })
         .collect::<Vec<_>>();
     Ok(Json(QueryResult {

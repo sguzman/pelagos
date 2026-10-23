@@ -1,10 +1,6 @@
 //! Authenticated, read-only primary artwork from already indexed sidecar files.
 //! No external image providers, image resizing, metadata rewrites or source writes.
-use std::{
-    path::Path,
-    sync::Arc,
-    time::UNIX_EPOCH,
-};
+use std::{path::Path, sync::Arc, time::UNIX_EPOCH};
 
 use axum::{
     Router,
@@ -137,19 +133,18 @@ async fn image_response(
         let input = tokio::fs::File::from_std(opened);
         Response::new(Body::from_stream(ReaderStream::new(input.take(size))))
     };
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(mime),
-    );
-    response.headers_mut().insert(
-        CONTENT_LENGTH,
-        HeaderValue::from_str(&size.to_string())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-    );
-    // Keep image validators honest if a user edits the original artwork.
     response
         .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("private, max-age=0"));
+        .insert(CONTENT_TYPE, HeaderValue::from_static(mime));
+    response.headers_mut().insert(
+        CONTENT_LENGTH,
+        HeaderValue::from_str(&size.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    // Keep image validators honest if a user edits the original artwork.
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("private, max-age=0"),
+    );
     Ok(response)
 }
 

@@ -43,27 +43,18 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
 
     auth::create_user(&state, "admin", "artwork-admin-password").unwrap();
     auth::create_user(&state, "viewer", "artwork-viewer-password").unwrap();
-    let administrator = auth::authenticate(
-        &state,
-        "admin",
-        "artwork-admin-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
-    let viewer = auth::authenticate(
-        &state,
-        "viewer",
-        "artwork-viewer-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
+    let administrator = auth::authenticate(&state, "admin", "artwork-admin-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate(&state, "viewer", "artwork-viewer-password", "server")
+        .unwrap()
+        .unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
     )));
-    let admin_items = json(get(&router, "/Items", "GET", Some(&administrator.access_token)).await).await;
+    let admin_items =
+        json(get(&router, "/Items", "GET", Some(&administrator.access_token)).await).await;
     let movie = admin_items["Items"]
         .as_array()
         .unwrap()
@@ -97,13 +88,24 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
     let response = get(&router, &path, "GET", Some(&viewer.access_token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_TYPE], "image/jpeg");
-    assert_eq!(response.headers()[header::CACHE_CONTROL], "private, max-age=0");
-    assert_eq!(to_bytes(response.into_body(), 100).await.unwrap().as_ref(), b"TITLE ART");
+    assert_eq!(
+        response.headers()[header::CACHE_CONTROL],
+        "private, max-age=0"
+    );
+    assert_eq!(
+        to_bytes(response.into_body(), 100).await.unwrap().as_ref(),
+        b"TITLE ART"
+    );
 
     let response = get(&router, &path, "HEAD", Some(&viewer.access_token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_LENGTH], "9");
-    assert!(to_bytes(response.into_body(), 100).await.unwrap().is_empty());
+    assert!(
+        to_bytes(response.into_body(), 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     let response = get(
         &router,
@@ -136,16 +138,14 @@ async fn swapped_primary_poster_symlink_is_rejected() {
     std::fs::write(&outside, b"PRIVATE").unwrap();
     catalog::index(&state, &library).unwrap();
     auth::create_user(&state, "admin", "poster-symlink-password").unwrap();
-    let token = auth::authenticate(
-        &state,
-        "admin",
-        "poster-symlink-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
-    let router = app::router(Arc::new(AppState::with_auth_dir("server".to_owned(), state)));
+    let token = auth::authenticate(&state, "admin", "poster-symlink-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
     let list = json(get(&router, "/Items", "GET", Some(&token)).await).await;
     let id = list["Items"]
         .as_array()
