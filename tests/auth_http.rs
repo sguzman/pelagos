@@ -13,7 +13,13 @@ use pelagos::{
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-async fn send(router: &Router, method: &str, path: &str, body: Body, token: Option<&str>) -> Response {
+async fn send(
+    router: &Router,
+    method: &str,
+    path: &str,
+    body: Body,
+    token: Option<&str>,
+) -> Response {
     let mut request = Request::builder()
         .method(method)
         .uri(path)
@@ -21,7 +27,11 @@ async fn send(router: &Router, method: &str, path: &str, body: Body, token: Opti
     if let Some(value) = token {
         request = request.header("X-Emby-Token", value);
     }
-    router.clone().oneshot(request.body(body).unwrap()).await.unwrap()
+    router
+        .clone()
+        .oneshot(request.body(body).unwrap())
+        .await
+        .unwrap()
 }
 
 async fn json_response(response: Response) -> Value {
@@ -80,7 +90,14 @@ async fn jellyfin_login_me_logout_and_public_directory_are_isolated() {
     assert_eq!(user.status(), StatusCode::OK);
     assert_eq!(json_response(user).await["Name"], "viewer");
 
-    let exit = send(&router, "POST", "/Sessions/Logout", Body::empty(), Some(&token)).await;
+    let exit = send(
+        &router,
+        "POST",
+        "/Sessions/Logout",
+        Body::empty(),
+        Some(&token),
+    )
+    .await;
     assert_eq!(exit.status(), StatusCode::NO_CONTENT);
     let invalid = send(&router, "GET", "/Users/Me", Body::empty(), Some(&token)).await;
     assert_eq!(invalid.status(), StatusCode::UNAUTHORIZED);
