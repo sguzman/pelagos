@@ -2889,6 +2889,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T506",
+              "emoji": "📁",
+              "name": "Administrator creation of one canonical indexed virtual media library",
+              "checks": [
+                {
+                  "title": "Implement administrator-only pinned VirtualFolders POST subset: one existing canonical folder with basename name, default options, private read-only index and explicit refusal of unsupported configuration",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs create_virtual_folder; src/catalog.rs index; pinned Jellyfin v12.3 LibraryStructureController.AddVirtualFolder"
+                },
+                {
+                  "title": "Rust CI validates authorization, canonical/symlink inputs, duplicate names, disabled advanced options, registered root inventory, non-registered isolation, grants and persistence",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40040446626: full Rust tests, Clippy, cargo fmt, pinned contract and evidence-backed roadmap checks passed"
+                },
+                {
+                  "title": "Concurrent registration, multi-path/custom-name/library options, deletion/rename lifecycle and unmodified Jellyfin admin client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

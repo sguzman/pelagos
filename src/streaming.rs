@@ -359,8 +359,9 @@ pub fn router() -> Router<Arc<AppState>> {
         )
 }
 
-/// Pinned Jellyfin download policy is not modeled. Restrict this subset to
-/// administrators and the descriptor-confined original audio/video reader.
+/// Pinned Jellyfin download permission is a limited explicit account grant
+/// (implicit for administrators); item-specific CanDownload is not modeled.
+/// Keep using the descriptor-confined original audio/video reader.
 async fn download_media(
     State(state): State<Arc<AppState>>,
     RoutePath(item_id): RoutePath<String>,
