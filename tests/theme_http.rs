@@ -57,9 +57,7 @@ async fn theme_song_video_and_combined_contracts_are_private_and_explicitly_empt
     let inventory = json(call(&router, "/Items", Some(&admin.access_token)).await).await;
     let all = inventory["Items"].as_array().unwrap();
     let id = |name: &str| {
-        all.iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        all.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
@@ -103,14 +101,14 @@ async fn theme_song_video_and_combined_contracts_are_private_and_explicitly_empt
     }
 
     let combined_route = format!("/Items/{film}/ThemeMedia?inheritFromParent=false");
-    let combined = json(
-        call(&router, &combined_route, Some(&viewer.access_token)).await,
-    )
-    .await;
+    let combined = json(call(&router, &combined_route, Some(&viewer.access_token)).await).await;
     assert_eq!(combined["ThemeSongsResult"]["OwnerId"], film);
     assert_eq!(combined["ThemeSongsResult"]["Items"], serde_json::json!([]));
     assert_eq!(combined["ThemeVideosResult"], combined["ThemeSongsResult"]);
-    assert_eq!(combined["SoundtrackSongsResult"]["Items"], serde_json::json!([]));
+    assert_eq!(
+        combined["SoundtrackSongsResult"]["Items"],
+        serde_json::json!([])
+    );
     assert_eq!(combined["SoundtrackSongsResult"]["TotalRecordCount"], 0);
     assert_eq!(
         combined["SoundtrackSongsResult"]["OwnerId"],
