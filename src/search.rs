@@ -65,14 +65,10 @@ async fn hints(
     if query.search_term.trim().is_empty() || query.search_term.len() > 256 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if query.user_id.as_deref().is_some_and(|id| id != user.id)
-        || query.is_movie.is_some()
-        || query.is_series.is_some()
-        || query.is_news.is_some()
-        || query.is_kids.is_some()
-        || query.is_sports.is_some()
-    {
-        // No cross-user or unsupported movie/series classifier claims.
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.is_news.is_some() || query.is_kids.is_some() || query.is_sports.is_some() {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let included = filter_types(query.include_item_types.as_deref())?;
@@ -101,6 +97,12 @@ async fn hints(
             && media
                 .as_ref()
                 .is_none_or(|types| item.media_type.as_ref().is_some_and(|k| types.contains(k)))
+            && query
+                .is_movie
+                .is_none_or(|selected| (item.item_type == "Movie") == selected)
+            && query
+                .is_series
+                .is_none_or(|selected| (item.item_type == "Series") == selected)
     });
     nodes.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.id.cmp(&b.id)));
     let total_record_count = nodes.len();
