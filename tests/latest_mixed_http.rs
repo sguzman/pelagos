@@ -52,6 +52,7 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
         std::fs::write(root.join(path), content).unwrap();
     }
     std::fs::write(private.join("Hidden (2025)/Hidden (2025).mkv"), b"secret").unwrap();
+    std::fs::write(private.join("Tune.flac"), b"music").unwrap();
     catalog::index(&state, &root).unwrap();
     catalog::index(&state, &private).unwrap();
     let db = rusqlite::Connection::open(state.join("pelagos.sqlite3")).unwrap();
@@ -154,7 +155,6 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
 
     // Album and photo group entities are not implemented; never fake their grouping.
     for unsupported in [
-        "/Items/Latest",
         "/Items/Latest?includeItemTypes=Movie,Audio",
         "/Items/Latest?includeItemTypes=Photo",
         "/Items/Latest?includeItemTypes=Movie,Episode,Photo",
@@ -193,6 +193,16 @@ async fn movies_and_mixed_video_feeds_keep_jellyfin_episode_grouping_and_permiss
     )
     .await;
     assert_eq!(legacy, mixed);
+    let default_group = json(call(&router, "/Items/Latest", Some(&viewer.access_token)).await).await;
+    assert_eq!(default_group, mixed);
+    auth::grant_library(&state, "viewer", &private).unwrap();
+    assert_eq!(
+        call(&router, "/Items/Latest", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    auth::revoke_library(&state, "viewer", &private).unwrap();
     auth::revoke_library(&state, "viewer", &root).unwrap();
     assert!(
         json(call(&router, mixed_route, Some(&viewer.access_token)).await)
