@@ -12,7 +12,10 @@ use axum::{
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{ACCEPT_RANGES, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
+        header::{
+            ACCEPT_RANGES, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE,
+            CONTENT_TYPE, RANGE,
+        },
     },
     response::Response,
     routing::get,
@@ -127,7 +130,10 @@ fn response_headers(response: &mut Response, length: u64, mime: &str) -> Result<
 /// Encode an attachment filename without exposing control bytes to HTTP.
 /// filename* is percent-encoded UTF-8; filename is a safe ASCII fallback.
 fn download_disposition(path: &Path) -> Result<HeaderValue, StatusCode> {
-    let name = path.file_name().and_then(|part| part.to_str()).unwrap_or("media");
+    let name = path
+        .file_name()
+        .and_then(|part| part.to_str())
+        .unwrap_or("media");
     let fallback = name
         .chars()
         .map(|ch| {
@@ -302,8 +308,12 @@ async fn serve_file(
     *response.status_mut() = status;
     response_headers(&mut response, length, media_type(&actual))?;
     if let Some(disposition) = disposition {
-        response.headers_mut().insert(CONTENT_DISPOSITION, disposition);
-        response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+        response
+            .headers_mut()
+            .insert(CONTENT_DISPOSITION, disposition);
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     }
     if let Some(range) = range {
         response.headers_mut().insert(
