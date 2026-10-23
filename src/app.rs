@@ -56,8 +56,7 @@ impl AppState {
     /// Wildcard binds must never leak an unreachable 0.0.0.0/:: URL or
     /// reflect an untrusted client-supplied HTTP Host header.
     pub fn with_listen_addr(mut self, address: SocketAddr) -> Self {
-        self.local_address = (!address.ip().is_unspecified())
-            .then(|| format!("http://{address}"));
+        self.local_address = (!address.ip().is_unspecified()).then(|| format!("http://{address}"));
         self
     }
 
