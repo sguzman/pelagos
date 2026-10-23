@@ -39,7 +39,7 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
     let root = fixture.path().join("library");
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("Café.mkv"), b"VIDEO012345").unwrap();
-    std::fs::write(root.join("Cover.jpg"), b"PHOTO012345").unwrap();
+    std::fs::write(root.join("Landscape.jpg"), b"PHOTO012345").unwrap();
     catalog::index(&state, &root).unwrap();
     auth::create_user(&state, "admin", "download-admin-password").unwrap();
     auth::create_user(&state, "viewer", "download-viewer-password").unwrap();
@@ -69,7 +69,7 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
             .to_owned()
     };
     let video = format!("/Items/{}/Download", id("Café"));
-    let photo = format!("/Items/{}/Download", id("Cover"));
+    let photo = format!("/Items/{}/Download", id("Landscape"));
     assert_eq!(
         request(&router, &video, None, None).await.status(),
         StatusCode::UNAUTHORIZED
