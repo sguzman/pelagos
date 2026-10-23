@@ -13,7 +13,7 @@ use crate::media::{self, MediaKind};
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const DB_NAME: &str = "pelagos.sqlite3";
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Serialize)]
 pub struct IndexedItem {
@@ -106,6 +106,14 @@ fn connect(state_dir: &Path) -> Result<Connection> {
              CREATE INDEX IF NOT EXISTS idx_media_files_first_indexed
                  ON media_files(first_indexed_unix DESC, library_root, relative_path);
              PRAGMA user_version=3;
+             COMMIT;",
+        )?;
+    }
+    if version < 4 {
+        db.execute_batch(
+            "BEGIN IMMEDIATE;
+             ALTER TABLE libraries ADD COLUMN display_name TEXT;
+             PRAGMA user_version=4;
              COMMIT;",
         )?;
     }
@@ -253,12 +261,24 @@ pub fn unregister_by_name(state_dir: &Path, name: &str) -> Result<LibraryRemoval
     )?;
     let tx = db.transaction()?;
     let matching = {
-        let mut stmt = tx.prepare("SELECT root FROM libraries ORDER BY root")?;
+        let mut stmt = tx.prepare("SELECT root, display_name FROM libraries ORDER BY root")?;
         let all = stmt
-            .query_map([], |row| row.get::<_, String>(0))?
+            .query_map([], |row| {
+                let root: String = row.get(0)?;
+                let label: Option<String> = row.get(1)?;
+                Ok((root, label))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         all.into_iter()
-            .filter(|root| Path::new(root).file_name().and_then(|part| part.to_str()) == Some(name))
+            .filter(|(root, label)| {
+                label.as_deref().unwrap_or_else(|| {
+                    Path::new(root)
+                        .file_name()
+                        .and_then(|part| part.to_str())
+                        .unwrap_or("Library")
+                }) == name
+            })
+            .map(|(root, _)| root)
             .collect::<Vec<_>>()
     };
     let root = match matching.as_slice() {
@@ -335,6 +355,87 @@ pub fn latest_file_keys(state_dir: &Path) -> Result<Vec<(String, String)>> {
     )?;
     let rows = query.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryEntry {
+    pub root: String,
+    pub name: String,
+}
+
+/// Durable virtual display names; never change the library root or item IDs.
+pub fn library_entries(state_dir: &Path) -> Result<Vec<LibraryEntry>> {
+    let db = connect(state_dir)?;
+    let mut query = db.prepare("SELECT root, display_name FROM libraries ORDER BY root")?;
+    let rows = query.query_map([], |row| {
+        let root: String = row.get(0)?;
+        let custom: Option<String> = row.get(1)?;
+        let name = custom.unwrap_or_else(|| {
+            Path::new(&root)
+                .file_name()
+                .map(|leaf| leaf.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "Library".to_owned())
+        });
+        Ok(LibraryEntry { root, name })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryRename {
+    Renamed,
+    Missing,
+    Ambiguous,
+    Conflict,
+}
+
+/// Rename virtual-library display metadata, never the media directory itself.
+/// Resolve both names under an immediate transaction to avoid duplicate labels.
+pub fn rename_by_name(
+    state_dir: &Path,
+    current_name: &str,
+    new_name: &str,
+) -> Result<LibraryRename> {
+    let mut db = connect(state_dir)?;
+    let tx = db.transaction()?;
+    let entries = {
+        let mut query = tx.prepare("SELECT root, display_name FROM libraries ORDER BY root")?;
+        query
+            .query_map([], |row| {
+                let root: String = row.get(0)?;
+                let custom: Option<String> = row.get(1)?;
+                let name = custom.unwrap_or_else(|| {
+                    Path::new(&root)
+                        .file_name()
+                        .map(|leaf| leaf.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "Library".to_owned())
+                });
+                Ok(LibraryEntry { root, name })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let found = entries
+        .iter()
+        .filter(|entry| entry.name.eq_ignore_ascii_case(current_name))
+        .collect::<Vec<_>>();
+    let chosen = match found.as_slice() {
+        [] => return Ok(LibraryRename::Missing),
+        [one] => *one,
+        _ => return Ok(LibraryRename::Ambiguous),
+    };
+    if entries
+        .iter()
+        .any(|entry| entry.root != chosen.root && entry.name.eq_ignore_ascii_case(new_name))
+    {
+        return Ok(LibraryRename::Conflict);
+    }
+    tx.execute(
+        "UPDATE libraries SET display_name=?1 WHERE root=?2",
+        params![new_name, chosen.root],
+    )?;
+    tx.commit()?;
+    Ok(LibraryRename::Renamed)
 }
 
 pub fn library_roots(state_dir: &Path) -> Result<Vec<String>> {
