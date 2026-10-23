@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 15%` across 96 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 17%` across 99 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 25%`
+## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 29%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -108,7 +108,7 @@
   - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
   - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
 
-### 👥 P4 — Authentication and user state — `███░░░░░░░ 29%`
+### 👥 P4 — Authentication and user state — `███░░░░░░░ 34%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -138,8 +138,12 @@
   - [x] Persist explicit grants for ordinary users and enforce scoped catalog, media and direct streaming access — src/auth.rs; src/auth_api.rs; src/catalog_api.rs; src/streaming.rs; src/playback.rs — SQLite grant mapping and CLI grant/revoke
   - [x] CI proves cross-library isolation, no file-ID disclosure, dynamic grant/revoke and administrator access — GitHub Actions 39965370233 — format, Clippy, Rust permission and HTTP integration tests passed
   - [ ] Real Jellyfin users and unmodified TV apps validate library permission and parental policy parity
+- ⭐ **T117 — Persistent watched and favorite user-data writes** — `███████░░░ 67%`
+  - [x] Implement per-user played/unplayed and favorite/unfavorite Jellyfin routes with private persistent SQLite state — src/user_data.rs — independent Pelagos database, user-scoped flag updates, play-count and last-played fields
+  - [x] CI verifies individual user isolation, restart persistence, repeat handling, legacy endpoint authorization and revocation — GitHub Actions 39981559797 — formatting, Clippy, SQLite and HTTP tests passed
+  - [ ] Unmodified Jellyfin TV/mobile clients agree on played state, sync updates and watched-count semantics
 
-### 🧭 P5 — General API contracts — `███░░░░░░░ 29%`
+### 🧭 P5 — General API contracts — `███░░░░░░░ 34%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -169,6 +173,10 @@
   - [x] Apply recognized include/exclude item kinds and media types before pagination across Items endpoints — src/query_filters.rs; src/catalog_api.rs; src/search.rs — shared strict type filters and unsupported Movie/Series refusal
   - [x] CI verifies audio/video item filters, pagination, invalid kinds and search-contract consistency — GitHub Actions 39968255232 — formatting, Clippy, filter HTTP tests and source ledger validations passed
   - [ ] Real Jellyfin client pagination, library filtering and full upstream query semantics verified
+- 🪪 **T127 — Authenticated UserData in item DTOs and legacy lookup** — `███████░░░ 67%`
+  - [x] Include per-account UserData in /Items and item detail with paginated SQLite batching and legacy /Users/{userId}/Items/{id} — src/catalog_api.rs; src/user_data.rs — one read connection per paginated response, permission gating and legacy ownership check
+  - [x] CI verifies per-user playback/favorite DTO fields and access isolation — GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed
+  - [ ] Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views
 
 ## 📚 M2 — Full media library and metadata — `█░░░░░░░░░ 10%`
 
@@ -239,11 +247,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 20%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 22%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `████░░░░░░ 37%`
+### ▶️ P9 — Streaming engine — `████░░░░░░ 40%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -281,6 +289,10 @@
   - [x] Add Jellyfin-shaped Audio/{id}/stream GET and HEAD using validated direct-file handler and audio MIME — src/streaming.rs — video/audio shared descriptor-confined stream path and static-play restriction
   - [x] CI tests audio GET, HEAD, byte ranges, MIME, authentication and unsupported transcoding modes — GitHub Actions 39967422588 — full Rust audio/video HTTP tests, formatter, Clippy and ledger validators passed
   - [ ] Unmodified TV and mobile Jellyfin clients direct-play/seek real music and audiobook libraries
+- ⏯️ **T309 — Guarded direct-play resume event persistence** — `███████░░░ 67%`
+  - [x] Accept Jellyfin-shaped /Sessions/Playing start/progress/stop direct-play reports, preserve user-private resume ticks — src/playstate.rs; src/user_data.rs — validated item access and direct-only session event reporting
+  - [x] CI proves position persistence, restart behavior, permission revocation, invalid ticks and rejection of unsupported remux/transcode methods — GitHub Actions 39982784834 — Rust playback report and user data integration tests passed
+  - [ ] Unmodified TV clients demonstrate resume/reconnect, play thresholds, playback event delivery and full sessions/WebSocket behavior
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

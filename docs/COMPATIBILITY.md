@@ -45,3 +45,7 @@ Jellyfin-shaped `/Search/Hints` results now provide read-permission-scoped basic
 ## Shared item/media filters
 
 The initial `/Items` and `/Search/Hints` implementations share a recognized media/item type filter layer ([CI 39968255232](https://github.com/sguzman/pelagos/actions/runs/39968255232)). This is synthetic HTTP evidence only; advanced Jellyfin filters and actual TV browsing remain **Not tested**.
+
+## Personal media state and direct-play resume (synthetic only)
+
+Per-user played/favorite routes, legacy user-item lookup and read-only `UserData` item responses pass Rust/HTTP acceptance fixtures ([CI 39982107696](https://github.com/sguzman/pelagos/actions/runs/39982107696)). Guarded direct-play start/progress/stop routes persist per-account `PositionTicks` and reject unsupported transcoding variants ([CI 39982784834](https://github.com/sguzman/pelagos/actions/runs/39982784834)). These are **not** proof of unmodified TV resume, offline sync, completion thresholds or real playback session behavior. Real-device compatibility remains **Not tested**.

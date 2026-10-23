@@ -638,6 +638,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T117",
+              "emoji": "⭐",
+              "name": "Persistent watched and favorite user-data writes",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement per-user played/unplayed and favorite/unfavorite Jellyfin routes with private persistent SQLite state",
+                  "passed": true,
+                  "evidence": "src/user_data.rs — independent Pelagos database, user-scoped flag updates, play-count and last-played fields"
+                },
+                {
+                  "title": "CI verifies individual user isolation, restart persistence, repeat handling, legacy endpoint authorization and revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39981559797 — formatting, Clippy, SQLite and HTTP tests passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin TV/mobile clients agree on played state, sync updates and watched-count semantics",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -788,6 +810,28 @@
                 },
                 {
                   "title": "Real Jellyfin client pagination, library filtering and full upstream query semantics verified",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T127",
+              "emoji": "🪪",
+              "name": "Authenticated UserData in item DTOs and legacy lookup",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Include per-account UserData in /Items and item detail with paginated SQLite batching and legacy /Users/{userId}/Items/{id}",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; src/user_data.rs — one read connection per paginated response, permission gating and legacy ownership check"
+                },
+                {
+                  "title": "CI verifies per-user playback/favorite DTO fields and access isolation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed"
+                },
+                {
+                  "title": "Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views",
                   "passed": false
                 }
               ]
@@ -1306,6 +1350,28 @@
                 },
                 {
                   "title": "Unmodified TV and mobile Jellyfin clients direct-play/seek real music and audiobook libraries",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T309",
+              "emoji": "⏯️",
+              "name": "Guarded direct-play resume event persistence",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Accept Jellyfin-shaped /Sessions/Playing start/progress/stop direct-play reports, preserve user-private resume ticks",
+                  "passed": true,
+                  "evidence": "src/playstate.rs; src/user_data.rs — validated item access and direct-only session event reporting"
+                },
+                {
+                  "title": "CI proves position persistence, restart behavior, permission revocation, invalid ticks and rejection of unsupported remux/transcode methods",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39982784834 — Rust playback report and user data integration tests passed"
+                },
+                {
+                  "title": "Unmodified TV clients demonstrate resume/reconnect, play thresholds, playback event delivery and full sessions/WebSocket behavior",
                   "passed": false
                 }
               ]
