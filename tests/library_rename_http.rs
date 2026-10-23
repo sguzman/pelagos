@@ -75,9 +75,9 @@ async fn rename_is_administrator_only_and_preserves_ids_grants_and_source_media(
         .await,
     )
     .await;
-    assert_eq!(before[1]["Name"], "Movies");
-    let original_id = before[1]["ItemId"].clone();
-    let physical_path = before[1]["Locations"][0].clone();
+    assert_eq!(before[0]["Name"], "Movies");
+    let original_id = before[0]["ItemId"].clone();
+    let physical_path = before[0]["Locations"][0].clone();
 
     for invalid in [
         "/Library/VirtualFolders/Name?name=Movies&newName=Music",
