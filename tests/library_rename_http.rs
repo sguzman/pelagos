@@ -143,9 +143,9 @@ async fn rename_is_administrator_only_and_preserves_ids_grants_and_source_media(
         .await,
     )
     .await;
-    assert_eq!(after[1]["Name"], "Cinema");
-    assert_eq!(after[1]["ItemId"], original_id);
-    assert_eq!(after[1]["Locations"][0], physical_path);
+    assert_eq!(after[0]["Name"], "Cinema");
+    assert_eq!(after[0]["ItemId"], original_id);
+    assert_eq!(after[0]["Locations"][0], physical_path);
     assert_eq!(catalog::library_roots(&state).unwrap().len(), 2);
     assert_eq!(std::fs::read(movies.join("Film.mkv")).unwrap(), b"film");
 
