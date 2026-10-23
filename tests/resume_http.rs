@@ -61,10 +61,7 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     let all = json(get(&router, "/Items", Some(&admin.access_token)).await).await;
     let items = all["Items"].as_array().unwrap();
     let id = |name: &str| -> String {
-        items
-            .iter()
-            .find(|item| item["Name"] == name)
-            .unwrap()["Id"]
+        items.iter().find(|item| item["Name"] == name).unwrap()["Id"]
             .as_str()
             .unwrap()
             .to_owned()
@@ -75,7 +72,10 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     let picture = id("Picture");
     let secret = id("Secret");
     let uri = "/UserItems/Resume";
-    assert_eq!(get(&router, uri, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        get(&router, uri, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let empty = json(get(&router, uri, Some(&viewer.access_token)).await).await;
     assert_eq!(empty["TotalRecordCount"], 0);
 
@@ -95,12 +95,29 @@ async fn resumes_are_private_persistent_filterable_and_reject_unsupported_option
     assert!(items.iter().any(|item| item["Id"] == alpha));
     assert!(items.iter().any(|item| item["Id"] == beta));
     assert!(items.iter().any(|item| item["Id"] == song));
-    assert!(!items.iter().any(|item| item["Id"] == picture || item["Id"] == secret));
-    assert!(items.iter().all(|item| item["UserData"]["PlaybackPositionTicks"].as_i64().unwrap() > 0));
-    assert!(items.iter().all(|item| item["UserData"]["LastPlayedDate"].is_string()));
+    assert!(
+        !items
+            .iter()
+            .any(|item| item["Id"] == picture || item["Id"] == secret)
+    );
+    assert!(
+        items
+            .iter()
+            .all(|item| item["UserData"]["PlaybackPositionTicks"].as_i64().unwrap() > 0)
+    );
+    assert!(
+        items
+            .iter()
+            .all(|item| item["UserData"]["LastPlayedDate"].is_string())
+    );
 
     let only_audio = json(
-        get(&router, "/UserItems/Resume?mediaTypes=Audio", Some(&viewer.access_token)).await,
+        get(
+            &router,
+            "/UserItems/Resume?mediaTypes=Audio",
+            Some(&viewer.access_token),
+        )
+        .await,
     )
     .await;
     assert_eq!(only_audio["TotalRecordCount"], 1);
