@@ -1,9 +1,6 @@
 //! Pelagos-owned, per-user playback flags. No access to Jellyfin's database.
 //! This is an initial Jellyfin v12.3 user-data subset, not a complete sync engine.
-use std::{
-    path::Path,
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use axum::{
     Json, Router,
