@@ -1,6 +1,6 @@
 //! Pelagos-owned, per-user playback flags. No access to Jellyfin's database.
 //! This is an initial Jellyfin v12.3 user-data subset, not a complete sync engine.
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -219,6 +219,151 @@ async fn read_authorized(
     Ok(Json(result))
 }
 
+/// Supported subset of the pinned Jellyfin UpdateUserItemDataDto contract.
+/// Explicitly reject unsupported non-null fields instead of silently dropping
+/// edits made by existing clients.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct UserDataUpdate {
+    played: Option<bool>,
+    is_favorite: Option<bool>,
+    playback_position_ticks: Option<i64>,
+    play_count: Option<i64>,
+    key: Option<String>,
+    item_id: Option<String>,
+    rating: Option<serde_json::Value>,
+    played_percentage: Option<serde_json::Value>,
+    unplayed_item_count: Option<serde_json::Value>,
+    likes: Option<serde_json::Value>,
+    last_played_date: Option<String>,
+    #[serde(flatten)]
+    additional: BTreeMap<String, serde_json::Value>,
+}
+
+impl UserDataUpdate {
+    fn validate(&self, item_id: &str) -> std::result::Result<(), StatusCode> {
+        if self.rating.is_some()
+            || self.played_percentage.is_some()
+            || self.unplayed_item_count.is_some()
+            || self.likes.is_some()
+            || self.last_played_date.is_some()
+            || self.additional.values().any(|value| !value.is_null())
+        {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        if self.key.as_deref().is_some_and(|key| key != item_id)
+            || self.item_id.as_deref().is_some_and(|id| id != item_id)
+            || self.playback_position_ticks.is_some_and(|ticks| ticks < 0)
+            || self.play_count.is_some_and(|count| count < 0)
+            || self.played == Some(true)
+                && self.playback_position_ticks.is_some_and(|ticks| ticks != 0)
+            || self.played == Some(false)
+                && self.playback_position_ticks.is_some_and(|ticks| ticks != 0)
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if self.played.is_none()
+            && self.is_favorite.is_none()
+            && self.playback_position_ticks.is_none()
+            && self.play_count.is_none()
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        Ok(())
+    }
+}
+
+fn write_update(
+    state_dir: &Path,
+    user_id: &str,
+    item_id: &str,
+    update: UserDataUpdate,
+) -> Result<UserItemData> {
+    let mut db = open_db(state_dir)?;
+    let tx = db.transaction()?;
+    let prior = load(&tx, user_id, item_id)?;
+    let played = update.played.unwrap_or(prior.played);
+    let count = update.play_count.unwrap_or_else(|| {
+        if played && !prior.played {
+            prior.play_count.saturating_add(1)
+        } else {
+            prior.play_count
+        }
+    });
+    let ticks = if update.played.is_some() {
+        0
+    } else {
+        update
+            .playback_position_ticks
+            .unwrap_or(prior.playback_position_ticks)
+    };
+    let favorite = update.is_favorite.unwrap_or(prior.is_favorite);
+    let newly_played = played && !prior.played;
+    tx.execute(
+        "INSERT OR IGNORE INTO item_user_data(user_id,item_id) VALUES(?1,?2)",
+        params![user_id, item_id],
+    )?;
+    tx.execute(
+        "UPDATE item_user_data
+         SET played=?3,play_count=?4,position_ticks=?5,favorite=?6,
+             last_played_utc=CASE WHEN ?7 THEN strftime('%Y-%m-%dT%H:%M:%SZ','now')
+                                  ELSE last_played_utc END
+         WHERE user_id=?1 AND item_id=?2",
+        params![user_id, item_id, played, count, ticks, favorite, newly_played],
+    )?;
+    tx.commit()?;
+    read(state_dir, user_id, item_id)
+}
+
+async fn update_authorized(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    item_id: String,
+    requested_user: Option<String>,
+    update: UserDataUpdate,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if requested_user.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if !catalog_api::accessible_nodes(state.clone(), headers)
+        .await?
+        .iter()
+        .any(|item| item.id == item_id)
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    update.validate(&item_id)?;
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let user_id = user.id;
+    let updated = tokio::task::spawn_blocking(move || {
+        write_update(&dir, &user_id, &item_id, update)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(updated))
+}
+
+async fn update_item(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<UserDataReadQuery>,
+    Json(update): Json<UserDataUpdate>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    update_authorized(state, headers, item_id, query.user_id, update).await
+}
+
+async fn update_item_legacy(
+    State(state): State<Arc<AppState>>,
+    RoutePath((user_id, item_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+    Json(update): Json<UserDataUpdate>,
+) -> std::result::Result<Json<UserItemData>, StatusCode> {
+    update_authorized(state, headers, item_id, Some(user_id), update).await
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct UserDataReadQuery {
@@ -348,10 +493,10 @@ legacy_handler!(unfavorite_legacy, Flag::Favorite(false));
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/UserItems/{item_id}/UserData", get(read_item))
+        .route("/UserItems/{item_id}/UserData", get(read_item).post(update_item))
         .route(
             "/Users/{user_id}/Items/{item_id}/UserData",
-            get(read_item_legacy),
+            get(read_item_legacy).post(update_item_legacy),
         )
         .route("/UserPlayedItems/{item_id}", post(played).delete(unplayed))
         .route(
