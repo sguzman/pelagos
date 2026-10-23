@@ -41,6 +41,7 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
         "Film (2022)/backdrops",
         "Film (2022)/trailers",
         "Second (2023)",
+        "Ambiguous (2020)",
         "Series/Season 01",
         "Series/theme-music",
         "Series/backdrops",
@@ -55,6 +56,9 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
         "Film (2022)/backdrops/loop.mp4",
         "Film (2022)/trailers/feature.mp4",
         "Second (2023)/Second (2023).mkv",
+        "Ambiguous (2020)/Ambiguous (2020).mkv",
+        "Ambiguous (2020)/Extra.mp4",
+        "Ambiguous (2020)/theme.mp3",
         "Series/Season 01/Series - S01E01 - Pilot.mp4",
         "Series/theme-music/series.flac",
         "Series/backdrops/intro.webm",
@@ -97,6 +101,7 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
     let film = id("Film");
     let series = id("Series");
     let second = id("Second");
+    let ambiguous = id("Ambiguous");
     let film_song_path = format!("/Items/{film}/ThemeSongs");
     let film_video_path = format!("/Items/{film}/ThemeVideos");
     assert_eq!(
@@ -201,6 +206,47 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
             0
         );
     }
+    // A directory with multiple videos cannot lend one named theme song to
+    // an arbitrarily selected movie; nor can a library-root theme attach to
+    // an unrelated generic video.
+    let ambiguous_theme = json(
+        call(
+            &router,
+            &format!("/Items/{ambiguous}/ThemeSongs"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(ambiguous_theme["TotalRecordCount"], 0);
+    let videos_at_root = json(
+        call(
+            &router,
+            "/Items?includeItemTypes=Video",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    let loose_id = videos_at_root["Items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["Name"] == "Loose")
+        .unwrap()["Id"]
+        .as_str()
+        .unwrap();
+    let loose_theme = json(
+        call(
+            &router,
+            &format!("/Items/{loose_id}/ThemeSongs"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(loose_theme["TotalRecordCount"], 0);
+
     let same_owner = json(
         call(
             &router,
