@@ -59,7 +59,7 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|item| item["Name"] == "Film")
+        .find(|item| item["Name"] == "Film" && item["Type"] == "Video")
         .unwrap();
     let id = movie["Id"].as_str().unwrap();
     let first_tag = movie["ImageTags"]["Primary"].as_str().unwrap().to_owned();
@@ -81,7 +81,7 @@ async fn poster_is_indexed_read_only_permission_scoped_and_discoverable() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|item| item["Name"] == "Film")
+        .find(|item| item["Name"] == "Film" && item["Type"] == "Video")
         .unwrap();
     assert_eq!(assigned["ImageTags"]["Primary"], first_tag);
 
