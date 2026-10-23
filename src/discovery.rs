@@ -1,6 +1,9 @@
 //! Opt-in local UDP discovery compatible with Jellyfin's v12.3 request and reply.
 //! This does not enable Jellyfin login or TV streaming by itself.
-use std::{io, net::{IpAddr, Ipv4Addr, SocketAddr}};
+use std::{
+    io,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+};
 
 use serde::Serialize;
 use tokio::net::UdpSocket;
@@ -86,7 +89,7 @@ pub async fn bind_default() -> io::Result<UdpSocket> {
 mod tests {
     use super::*;
     use serde_json::Value;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     #[test]
     fn matches_real_discovery_phrase_only() {
@@ -112,7 +115,10 @@ mod tests {
         let address = server.local_addr().unwrap();
         let job = tokio::spawn(serve(server, 8097, "synthetic-id".to_string()));
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-        client.send_to(b"who is JellyfinServer?", address).await.unwrap();
+        client
+            .send_to(b"who is JellyfinServer?", address)
+            .await
+            .unwrap();
         let mut buf = [0u8; 2048];
         let (count, _) = timeout(Duration::from_secs(2), client.recv_from(&mut buf))
             .await

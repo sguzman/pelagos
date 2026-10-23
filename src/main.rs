@@ -79,7 +79,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tracing::error!(%error, "UDP discovery stopped");
             }
         });
-        info!(port = discovery::DISCOVERY_PORT, "opt-in Jellyfin UDP discovery active");
+        info!(
+            port = discovery::DISCOVERY_PORT,
+            "opt-in Jellyfin UDP discovery active"
+        );
     }
     info!(%address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
     axum::serve(listener, app::router(Arc::new(app::AppState::new(id)))).await?;
