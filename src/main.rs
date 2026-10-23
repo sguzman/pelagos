@@ -30,6 +30,14 @@ enum Command {
         /// Directory to inspect recursively. Symlinks are not followed.
         directory: PathBuf,
     },
+    /// Inspect one media file with the installed FFprobe executable.
+    Probe {
+        /// File to examine (never rewritten).
+        file: PathBuf,
+        /// FFprobe binary path; defaults to the ffprobe executable on PATH.
+        #[arg(long, default_value = "ffprobe")]
+        ffprobe: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -44,6 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     if let Some(Command::Scan { directory }) = &args.command {
         let report = pelagos::media::scan(directory)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+    if let Some(Command::Probe { file, ffprobe }) = &args.command {
+        let report = pelagos::probe::probe(file, ffprobe, pelagos::probe::DEFAULT_TIMEOUT).await?;
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
     }

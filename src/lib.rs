@@ -2,3 +2,4 @@
 pub mod app;
 pub mod identity;
 pub mod media;
+pub mod probe;
