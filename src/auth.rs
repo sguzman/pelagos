@@ -312,6 +312,48 @@ pub fn revoke(state_dir: &Path, token: &str) -> Result<bool> {
     )? != 0)
 }
 
+/// Return currently valid session metadata, scoped to the requesting user.
+pub fn list_sessions(
+    state_dir: &Path,
+    requester: &User,
+    server_id: &str,
+    device_id: Option<&str>,
+) -> Result<Vec<SessionInfo>> {
+    let db = database(state_dir)?;
+    let mut statement = db.prepare(
+        "SELECT s.id, u.id, u.username, s.client, s.device_id, s.device_name,
+                s.application_version
+         FROM pelagos_sessions s
+         JOIN pelagos_tokens t ON t.digest=s.digest
+         JOIN pelagos_users u ON u.id=t.user_id
+         WHERE u.disabled=0
+           AND (?1=1 OR u.id=?2)
+           AND (?3 IS NULL OR s.device_id=?3)
+         ORDER BY s.id",
+    )?;
+    let rows = statement.query_map(
+        params![requester.policy.is_administrator, requester.id, device_id],
+        |row| {
+            Ok(SessionInfo {
+                id: row.get(0)?,
+                user_id: row.get(1)?,
+                user_name: row.get(2)?,
+                client: row.get(3)?,
+                device_id: row.get(4)?,
+                device_name: row.get(5)?,
+                application_version: row.get(6)?,
+                server_id: server_id.to_owned(),
+                is_active: true,
+                supports_media_control: false,
+                supports_remote_control: false,
+                playable_media_types: Vec::new(),
+                supported_commands: Vec::new(),
+            })
+        },
+    )?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,6 +453,45 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM pelagos_sessions", [], |r| r.get(0))
             .unwrap();
         assert_eq!(sessions, 0);
+    }
+
+
+    #[test]
+    fn session_listing_is_user_scoped_admin_visible_and_revocation_aware() {
+        let dir = tempfile::tempdir().unwrap();
+        let admin_user = create_user(dir.path(), "admin", "admin-test-passphrase").unwrap();
+        let viewer_user = create_user(dir.path(), "viewer", "viewer-test-passphrase").unwrap();
+        let admin = authenticate(
+            dir.path(),
+            "admin",
+            "admin-test-passphrase",
+            "server",
+        )
+        .unwrap()
+        .unwrap();
+        let viewer = authenticate_with_client(
+            dir.path(),
+            "viewer",
+            "viewer-test-passphrase",
+            "server",
+            ClientMetadata {
+                device_id: Some("tv-1".to_owned()),
+                ..ClientMetadata::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        let mine = list_sessions(dir.path(), &viewer_user, "server", None).unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].user_id, viewer_user.id);
+        assert_eq!(list_sessions(dir.path(), &admin_user, "server", None).unwrap().len(), 2);
+        let filtered = list_sessions(dir.path(), &admin_user, "server", Some("tv-1")).unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, viewer.session_info.id);
+        assert_eq!(list_sessions(dir.path(), &viewer_user, "server", Some("unknown")).unwrap().len(), 0);
+        assert!(revoke(dir.path(), &viewer.access_token).unwrap());
+        assert_eq!(list_sessions(dir.path(), &admin_user, "server", None).unwrap().len(), 1);
+        assert!(revoke(dir.path(), &admin.access_token).unwrap());
     }
 
     #[test]
