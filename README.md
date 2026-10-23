@@ -22,7 +22,7 @@
 
 `██░░░░░░░░ 15%` across 96 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39968255232](https://github.com/sguzman/pelagos/actions/runs/39968255232) — formatting, Clippy, Rust item-filter/search/audio/authorization tests and pinned source-matrix validation.
+**Latest passing CI:** [run 39968688051](https://github.com/sguzman/pelagos/actions/runs/39968688051) — formatting, Clippy, Rust catalog/search/audio/permissions tests and pinned upstream source inventory.
 
 ## 🚀 Current starter
 

@@ -163,7 +163,7 @@
   - [ ] Real Jellyfin clients validate full BaseItemDto, authorization and item query coverage
 - 🔎 **T125 — Authorized initial Jellyfin Search/Hints API** — `███████░░░ 67%`
   - [x] Serve Jellyfin v12.3 SearchHints DTO from indexed file names with filters, pagination and user scoping — src/search.rs; src/catalog_api.rs — shared accessible catalog graph and bounded media-name hints
-  - [x] CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure — GitHub Actions 39967003914 — Rust Search/Hints HTTP integration plus format and Clippy passed
+  - [x] CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure — GitHub Actions 39968688051 — Rust Search/Hints tests for case-insensitive names, include/exclude and media filters, parent root scoping, pagination, permissions, Clippy and format
   - [ ] Unmodified Jellyfin clients exercise full title/artist/genre/people and metadata-aware search
 - 🧰 **T126 — Consistent recognized Items and Search media filters** — `███████░░░ 67%`
   - [x] Apply recognized include/exclude item kinds and media types before pagination across Items endpoints — src/query_filters.rs; src/catalog_api.rs; src/search.rs — shared strict type filters and unsupported Movie/Series refusal

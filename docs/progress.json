@@ -762,7 +762,7 @@
                 {
                   "title": "CI proves case-insensitive search, exclude and type queries, pagination and no cross-library disclosure",
                   "passed": true,
-                  "evidence": "GitHub Actions 39967003914 — Rust Search/Hints HTTP integration plus format and Clippy passed"
+                  "evidence": "GitHub Actions 39968688051 — Rust Search/Hints tests for case-insensitive names, include/exclude and media filters, parent root scoping, pagination, permissions, Clippy and format"
                 },
                 {
                   "title": "Unmodified Jellyfin clients exercise full title/artist/genre/people and metadata-aware search",
