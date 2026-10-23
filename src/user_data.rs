@@ -1,6 +1,6 @@
 //! Pelagos-owned, per-user playback flags. No access to Jellyfin's database.
 //! This is an initial Jellyfin v12.3 user-data subset, not a complete sync engine.
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{collections::{BTreeMap, HashMap}, path::Path, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     routing::{get, post},
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde::{Deserialize, Serialize};
 
 use crate::{app::AppState, auth_api, catalog_api};
@@ -118,14 +118,53 @@ pub fn read(state_dir: &Path, user_id: &str, item_id: &str) -> Result<UserItemDa
     load(&db, user_id, item_id)
 }
 
-/// One private database connection for a paginated Jellyfin library response.
+/// Read personal item states in bounded indexed queries instead of one
+/// query per media item. The result preserves caller order, duplicate IDs and
+/// synthesized default states for items with no saved user data.
 pub fn read_many(
     state_dir: &Path,
     user_id: &str,
     item_ids: &[String],
 ) -> Result<Vec<UserItemData>> {
+    if item_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let db = open_db(state_dir)?;
-    item_ids.iter().map(|id| load(&db, user_id, id)).collect()
+    let mut saved = HashMap::new();
+    // Stay below SQLite's historical 999-bind limit, including user_id.
+    for chunk in item_ids.chunks(400) {
+        let placeholders = vec!["?"; chunk.len()].join(",");
+        let sql = format!(
+            "SELECT item_id,played,play_count,position_ticks,favorite,last_played_utc
+             FROM item_user_data WHERE user_id=? AND item_id IN ({placeholders})"
+        );
+        let mut statement = db.prepare(&sql)?;
+        let arguments = std::iter::once(user_id).chain(chunk.iter().map(String::as_str));
+        let rows = statement.query_map(params_from_iter(arguments), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, bool>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, bool>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })?;
+        for row in rows {
+            let (item_id, played, count, ticks, favorite, last_played) = row?;
+            let mut data = user_item(&item_id);
+            data.played = played;
+            data.play_count = count;
+            data.playback_position_ticks = ticks;
+            data.is_favorite = favorite;
+            data.last_played_date = last_played;
+            saved.insert(item_id, data);
+        }
+    }
+    Ok(item_ids
+        .iter()
+        .map(|id| saved.get(id).cloned().unwrap_or_else(|| user_item(id)))
+        .collect())
 }
 
 fn set_flag(state_dir: &Path, user_id: &str, item_id: &str, flag: Flag) -> Result<UserItemData> {
