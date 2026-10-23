@@ -78,14 +78,38 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
     );
 
     for (uri, expected) in [
-        (format!("/Videos/{id}/stream?static=true&container=mp4"), StatusCode::OK),
-        (format!("/Videos/{id}/stream?static=true&container=mkv"), StatusCode::NOT_IMPLEMENTED),
-        (format!("/Videos/{id}/stream?static=true&startTimeTicks=1"), StatusCode::NOT_IMPLEMENTED),
-        (format!("/Videos/{id}/stream?static=true&startTimeTicks=-1"), StatusCode::BAD_REQUEST),
-        (format!("/Videos/{id}/stream?static=true&audioCodec=aac"), StatusCode::NOT_IMPLEMENTED),
-        (format!("/Videos/{id}/stream?static=true&videoCodec=h264"), StatusCode::NOT_IMPLEMENTED),
-        (format!("/Videos/{id}/stream?static=true&subtitleStreamIndex=2"), StatusCode::NOT_IMPLEMENTED),
-        (format!("/Videos/{id}/stream?static=true&mediaSourceId=wrong"), StatusCode::NOT_IMPLEMENTED),
+        (
+            format!("/Videos/{id}/stream?static=true&container=mp4"),
+            StatusCode::OK,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&container=mkv"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&startTimeTicks=1"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&startTimeTicks=-1"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&audioCodec=aac"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&videoCodec=h264"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&subtitleStreamIndex=2"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&mediaSourceId=wrong"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
     ] {
         let result = call(&app, "GET", &uri, Some(&token), None).await;
         assert_eq!(result.status(), expected, "request: {uri}");

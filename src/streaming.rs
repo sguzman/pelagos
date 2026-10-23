@@ -182,7 +182,10 @@ async fn serve_file(
         || query.audio_codec.is_some()
         || query.video_codec.is_some()
         || query.subtitle_stream_index.is_some()
-        || query.media_source_id.as_deref().is_some_and(|source| source != item_id)
+        || query
+            .media_source_id
+            .as_deref()
+            .is_some_and(|source| source != item_id)
     {
         // Seeking by playback ticks, stream selection and transcoding need a
         // real FFmpeg negotiation pipeline. Only HTTP byte ranges are supported.
