@@ -39,11 +39,7 @@ async fn capped_read<R: tokio::io::AsyncRead + Unpin>(
 /// Probe one explicitly supplied local media file. The executable is invoked directly,
 /// never through a shell; the source is passed as a single argument after -i.
 /// Process lifetime and output size are bounded.
-pub async fn probe(
-    file: &Path,
-    executable: &Path,
-    deadline: Duration,
-) -> io::Result<ProbeReport> {
+pub async fn probe(file: &Path, executable: &Path, deadline: Duration) -> io::Result<ProbeReport> {
     let metadata = tokio::fs::metadata(file).await?;
     if !metadata.is_file() {
         return Err(io::Error::new(
@@ -79,7 +75,10 @@ pub async fn probe(
         Ok(result) => result?,
         Err(_) => {
             child.kill().await?;
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "FFprobe exceeded time limit"));
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "FFprobe exceeded time limit",
+            ));
         }
     };
     let output = output_reader.await.map_err(io::Error::other)??;
@@ -145,9 +144,11 @@ mod tests {
     async fn missing_binary_fails_without_fallback() {
         let (_dir, exe, media) = fake_probe("exit 0");
         let bad_binary = exe.with_extension("missing");
-        assert!(probe(&media, &bad_binary, Duration::from_secs(1))
-            .await
-            .is_err());
+        assert!(
+            probe(&media, &bad_binary, Duration::from_secs(1))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
