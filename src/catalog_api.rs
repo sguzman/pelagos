@@ -101,6 +101,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Items/{item_id}", get(user_item))
         .route("/UserViews", get(user_views))
         .route("/Library/MediaFolders", get(library_media_folders))
+        .route("/Library/PhysicalPaths", get(library_physical_paths))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
 }
 
@@ -712,6 +713,27 @@ async fn user_item(
         return Err(StatusCode::FORBIDDEN);
     }
     item(State(state), RoutePath(item_id), headers).await
+}
+
+/// Pinned Jellyfin v12.3 administrator-only library root paths.
+/// Unlike ordinary user DTOs, this explicitly privileged endpoint returns
+/// configured on-disk source paths only after administrator authentication.
+async fn library_physical_paths(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<String>>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let mut roots = tokio::task::spawn_blocking(move || catalog::library_roots(&dir))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    roots.sort();
+    roots.dedup();
+    Ok(Json(roots))
 }
 
 #[derive(Debug, Default, Deserialize)]
