@@ -1,0 +1,1801 @@
+{
+  "schema": 1,
+  "project": "pelagos",
+  "baseline": {
+    "repository": "jellyfin/jellyfin",
+    "tag": "v12.3",
+    "commit": "06de749d435e2d0be0c5119a41f2300fdd7143e5"
+  },
+  "scope": "Complete Rust replacement for Jellyfin Server v12.3 with unmodified Smart TV Jellyfin client compatibility. All M0-M6 gates constitute MVP.",
+  "method": "Task progress = rounded ratio of accepted checks with evidence. Phases, milestones and overall are simple means of their atomic task progress. Implementation in source counts only for its source check; CI and real device tests are separate checks. Never claim 100% without actual evidence.",
+  "milestones": [
+    {
+      "id": "M0",
+      "emoji": "🧱",
+      "name": "Foundation and project controls",
+      "gate": "Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.",
+      "phases": [
+        {
+          "id": "P0",
+          "emoji": "🧭",
+          "name": "Identity and scope",
+          "tasks": [
+            {
+              "id": "T001",
+              "emoji": "🦀",
+              "name": "Standalone Rust server bootstrap",
+              "checks": [
+                {
+                  "title": "Implement standalone Rust daemon and HTTP routes",
+                  "passed": true,
+                  "evidence": "Cargo.toml; src/main.rs; src/app.rs"
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify standalone Rust daemon and HTTP routes",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates standalone Rust daemon and HTTP routes",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            },
+            {
+              "id": "T002",
+              "emoji": "🪪",
+              "name": "Persistent server identity",
+              "checks": [
+                {
+                  "title": "Implement restart-stable local server ID",
+                  "passed": true,
+                  "evidence": "src/identity.rs"
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify restart-stable local server ID",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates restart-stable local server ID",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            },
+            {
+              "id": "T003",
+              "emoji": "🌗",
+              "name": "Admin web appearance",
+              "checks": [
+                {
+                  "title": "Implement top-right System/Light/Dark selection with System default",
+                  "passed": true,
+                  "evidence": "web/index.html"
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify top-right System/Light/Dark selection with System default",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates top-right System/Light/Dark selection with System default",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            },
+            {
+              "id": "T004",
+              "emoji": "🎨",
+              "name": "Perceptual marine identity",
+              "checks": [
+                {
+                  "title": "Implement OKLCH color specification and readable SVG swatch",
+                  "passed": true,
+                  "evidence": "docs/COLOR.md; assets/pelagos-color.svg"
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify OKLCH color specification and readable SVG swatch",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates OKLCH color specification and readable SVG swatch",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            },
+            {
+              "id": "T005",
+              "emoji": "📌",
+              "name": "Pin Jellyfin reference",
+              "checks": [
+                {
+                  "title": "Implement baseline source/version and compatibility inventory",
+                  "passed": true,
+                  "evidence": "docs/SOURCE_BASELINE.md; docs/PORT_MATRIX.md"
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates baseline source/version and compatibility inventory",
+                  "passed": false
+                }
+              ],
+              "progress": 33
+            }
+          ]
+        },
+        {
+          "id": "P1",
+          "emoji": "🛠️",
+          "name": "Build and storage",
+          "tasks": [
+            {
+              "id": "T006",
+              "emoji": "🏗️",
+              "name": "Build reproducibility",
+              "checks": [
+                {
+                  "title": "Implement locked dependencies and automated stable Rust compilation",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify locked dependencies and automated stable Rust compilation",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates locked dependencies and automated stable Rust compilation",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T007",
+              "emoji": "🗄️",
+              "name": "SQLite store and migrations",
+              "checks": [
+                {
+                  "title": "Implement versioned schema, atomic transactions and recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify versioned schema, atomic transactions and recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates versioned schema, atomic transactions and recovery",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T008",
+              "emoji": "⚙️",
+              "name": "Validated configuration",
+              "checks": [
+                {
+                  "title": "Implement XDG config paths, CLI options, migration and safe defaults",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify XDG config paths, CLI options, migration and safe defaults",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates XDG config paths, CLI options, migration and safe defaults",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T009",
+              "emoji": "🧯",
+              "name": "Health, logs and process lifecycle",
+              "checks": [
+                {
+                  "title": "Implement structured diagnostics, graceful shutdown and signals",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates structured diagnostics, graceful shutdown and signals",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P2",
+          "emoji": "🧪",
+          "name": "Test framework",
+          "tasks": [
+            {
+              "id": "T010",
+              "emoji": "📊",
+              "name": "Ledger generator and CI guard",
+              "checks": [
+                {
+                  "title": "Implement machine ledger, calculated percentages and acceptance evidence",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify machine ledger, calculated percentages and acceptance evidence",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates machine ledger, calculated percentages and acceptance evidence",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T011",
+              "emoji": "🧰",
+              "name": "Protocol fixtures and mock clients",
+              "checks": [
+                {
+                  "title": "Implement contract replay harness without private user data",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates contract replay harness without private user data",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T012",
+              "emoji": "🔒",
+              "name": "Security harness",
+              "checks": [
+                {
+                  "title": "Implement authentication, authorization, path traversal and fuzz regression suite",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify authentication, authorization, path traversal and fuzz regression suite",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates authentication, authorization, path traversal and fuzz regression suite",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T013",
+              "emoji": "🖥️",
+              "name": "Rendered admin GUI acceptance",
+              "checks": [
+                {
+                  "title": "Implement keyboard, responsive, contrast and three-mode browser screenshots",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify keyboard, responsive, contrast and three-mode browser screenshots",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates keyboard, responsive, contrast and three-mode browser screenshots",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M1",
+      "emoji": "🔌",
+      "name": "Jellyfin protocol and API parity",
+      "gate": "Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.",
+      "phases": [
+        {
+          "id": "P3",
+          "emoji": "🌐",
+          "name": "System and transports",
+          "tasks": [
+            {
+              "id": "T100",
+              "emoji": "📡",
+              "name": "Discovery and public server info",
+              "checks": [
+                {
+                  "title": "Implement Jellyfin discovery, public system info and stable version negotiation",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify Jellyfin discovery, public system info and stable version negotiation",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates Jellyfin discovery, public system info and stable version negotiation",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T101",
+              "emoji": "📨",
+              "name": "API transport contracts",
+              "checks": [
+                {
+                  "title": "Implement headers, error models, casing, pagination and compatibility responses",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify headers, error models, casing, pagination and compatibility responses",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates headers, error models, casing, pagination and compatibility responses",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T102",
+              "emoji": "🔁",
+              "name": "WebSocket sessions",
+              "checks": [
+                {
+                  "title": "Implement Jellyfin WebSocket events, heartbeats and reconnects",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify Jellyfin WebSocket events, heartbeats and reconnects",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates Jellyfin WebSocket events, heartbeats and reconnects",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T103",
+              "emoji": "🛰️",
+              "name": "Device pairing and Quick Connect",
+              "checks": [
+                {
+                  "title": "Implement TV-friendly Quick Connect and device approval",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify TV-friendly Quick Connect and device approval",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates TV-friendly Quick Connect and device approval",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P4",
+          "emoji": "👥",
+          "name": "Authentication and user state",
+          "tasks": [
+            {
+              "id": "T110",
+              "emoji": "🔑",
+              "name": "Users and token issuance",
+              "checks": [
+                {
+                  "title": "Implement password hashing, access tokens, logout and expiry",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify password hashing, access tokens, logout and expiry",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates password hashing, access tokens, logout and expiry",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T111",
+              "emoji": "🛡️",
+              "name": "Authorization and parental policy",
+              "checks": [
+                {
+                  "title": "Implement per-library permissions, parental ratings and account restrictions",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify per-library permissions, parental ratings and account restrictions",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates per-library permissions, parental ratings and account restrictions",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T112",
+              "emoji": "📱",
+              "name": "Device authorization",
+              "checks": [
+                {
+                  "title": "Implement sessions, remote control and device inventory",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify sessions, remote control and device inventory",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates sessions, remote control and device inventory",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T113",
+              "emoji": "🕰️",
+              "name": "Playback state",
+              "checks": [
+                {
+                  "title": "Implement watch states, resume positions, history and user configuration",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify watch states, resume positions, history and user configuration",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates watch states, resume positions, history and user configuration",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P5",
+          "emoji": "🧭",
+          "name": "General API contracts",
+          "tasks": [
+            {
+              "id": "T120",
+              "emoji": "🔎",
+              "name": "Search and query APIs",
+              "checks": [
+                {
+                  "title": "Implement search, suggestions, sorting, filters and item pagination",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify search, suggestions, sorting, filters and item pagination",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates search, suggestions, sorting, filters and item pagination",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T121",
+              "emoji": "🖼️",
+              "name": "Artwork endpoints",
+              "checks": [
+                {
+                  "title": "Implement images, sizing, remote art and caches",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify images, sizing, remote art and caches",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates images, sizing, remote art and caches",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T122",
+              "emoji": "⚡",
+              "name": "Activity and tasks APIs",
+              "checks": [
+                {
+                  "title": "Implement scheduled job state, activity log and configuration endpoints",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify scheduled job state, activity log and configuration endpoints",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates scheduled job state, activity log and configuration endpoints",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T123",
+              "emoji": "🧪",
+              "name": "Actual TV login smoke suite",
+              "checks": [
+                {
+                  "title": "Implement unmodified Android TV, webOS/Tizen and Roku client login fixtures",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify unmodified Android TV, webOS/Tizen and Roku client login fixtures",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates unmodified Android TV, webOS/Tizen and Roku client login fixtures",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "emoji": "📚",
+      "name": "Full media library and metadata",
+      "gate": "Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.",
+      "phases": [
+        {
+          "id": "P6",
+          "emoji": "📂",
+          "name": "Filesystem and items",
+          "tasks": [
+            {
+              "id": "T200",
+              "emoji": "🗂️",
+              "name": "Library roots and filesystem watching",
+              "checks": [
+                {
+                  "title": "Implement multi-root libraries, watcher updates and rescan correctness",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify multi-root libraries, watcher updates and rescan correctness",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates multi-root libraries, watcher updates and rescan correctness",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T201",
+              "emoji": "📀",
+              "name": "Media naming and structure",
+              "checks": [
+                {
+                  "title": "Implement series, movies, editions, seasons, episodes and extras naming parity",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify series, movies, editions, seasons, episodes and extras naming parity",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates series, movies, editions, seasons, episodes and extras naming parity",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T202",
+              "emoji": "🧬",
+              "name": "Item graph and persistence",
+              "checks": [
+                {
+                  "title": "Implement item hierarchy, people, genres, studios and provider identities",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify item hierarchy, people, genres, studios and provider identities",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates item hierarchy, people, genres, studios and provider identities",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T203",
+              "emoji": "🪄",
+              "name": "Library jobs and cleanup",
+              "checks": [
+                {
+                  "title": "Implement refreshes, scheduled tasks, deletion safety and retention",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify refreshes, scheduled tasks, deletion safety and retention",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates refreshes, scheduled tasks, deletion safety and retention",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P7",
+          "emoji": "🧩",
+          "name": "Metadata systems",
+          "tasks": [
+            {
+              "id": "T210",
+              "emoji": "📝",
+              "name": "Metadata readers",
+              "checks": [
+                {
+                  "title": "Implement NFO, tags, EXIF, chapters and sidecar parsing",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify NFO, tags, EXIF, chapters and sidecar parsing",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates NFO, tags, EXIF, chapters and sidecar parsing",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T211",
+              "emoji": "🛜",
+              "name": "Metadata providers",
+              "checks": [
+                {
+                  "title": "Implement provider fetching, merging, rate limits and fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify provider fetching, merging, rate limits and fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates provider fetching, merging, rate limits and fallback",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T212",
+              "emoji": "🖌️",
+              "name": "Images and thumbnails",
+              "checks": [
+                {
+                  "title": "Implement posters, backdrops, chapter thumbnails and caching",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify posters, backdrops, chapter thumbnails and caching",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates posters, backdrops, chapter thumbnails and caching",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T213",
+              "emoji": "🌎",
+              "name": "Locale, subtitles and titles",
+              "checks": [
+                {
+                  "title": "Implement language, localization, provider IDs and sort-title rules",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify language, localization, provider IDs and sort-title rules",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates language, localization, provider IDs and sort-title rules",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P8",
+          "emoji": "🎼",
+          "name": "Library feature APIs",
+          "tasks": [
+            {
+              "id": "T220",
+              "emoji": "🎬",
+              "name": "Movie and TV collections",
+              "checks": [
+                {
+                  "title": "Implement movies, series, playlists, collections and multiple versions",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify movies, series, playlists, collections and multiple versions",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates movies, series, playlists, collections and multiple versions",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T221",
+              "emoji": "🎵",
+              "name": "Music catalog",
+              "checks": [
+                {
+                  "title": "Implement artists, albums, tracks, genres, lyrics and artist artwork",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify artists, albums, tracks, genres, lyrics and artist artwork",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates artists, albums, tracks, genres, lyrics and artist artwork",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T222",
+              "emoji": "📖",
+              "name": "Books and photo libraries",
+              "checks": [
+                {
+                  "title": "Implement books, images, home videos and mixed content",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify books, images, home videos and mixed content",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates books, images, home videos and mixed content",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T223",
+              "emoji": "🔗",
+              "name": "User media edits",
+              "checks": [
+                {
+                  "title": "Implement favorite, rating, playlist editing and metadata override round trips",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify favorite, rating, playlist editing and metadata override round trips",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates favorite, rating, playlist editing and metadata override round trips",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "emoji": "🎞️",
+      "name": "Playback, FFmpeg and hardware acceleration",
+      "gate": "Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.",
+      "phases": [
+        {
+          "id": "P9",
+          "emoji": "▶️",
+          "name": "Streaming engine",
+          "tasks": [
+            {
+              "id": "T300",
+              "emoji": "📄",
+              "name": "Media probing",
+              "checks": [
+                {
+                  "title": "Implement ffprobe output mapping and device profiles",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify ffprobe output mapping and device profiles",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates ffprobe output mapping and device profiles",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T301",
+              "emoji": "🎯",
+              "name": "Playback negotiation",
+              "checks": [
+                {
+                  "title": "Implement client profiles, direct play, direct stream and transcoding decisions",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify client profiles, direct play, direct stream and transcoding decisions",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates client profiles, direct play, direct stream and transcoding decisions",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T302",
+              "emoji": "🚰",
+              "name": "Direct streaming",
+              "checks": [
+                {
+                  "title": "Implement range requests, MIME behavior, seeking and large-file streaming",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify range requests, MIME behavior, seeking and large-file streaming",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates range requests, MIME behavior, seeking and large-file streaming",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T303",
+              "emoji": "🔁",
+              "name": "Remux and media sources",
+              "checks": [
+                {
+                  "title": "Implement container remux, alternate versions, segment boundaries and timestamps",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify container remux, alternate versions, segment boundaries and timestamps",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates container remux, alternate versions, segment boundaries and timestamps",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P10",
+          "emoji": "⚙️",
+          "name": "Transcoding and GPU",
+          "tasks": [
+            {
+              "id": "T310",
+              "emoji": "🧱",
+              "name": "FFmpeg job controller",
+              "checks": [
+                {
+                  "title": "Implement process supervision, concurrency, cancellation and cleanup",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify process supervision, concurrency, cancellation and cleanup",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates process supervision, concurrency, cancellation and cleanup",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T311",
+              "emoji": "📺",
+              "name": "HLS, DASH and transport",
+              "checks": [
+                {
+                  "title": "Implement segment manifests, adaptive profiles and timebase correctness",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify segment manifests, adaptive profiles and timebase correctness",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates segment manifests, adaptive profiles and timebase correctness",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T312",
+              "emoji": "🖥️",
+              "name": "Linux GPU acceleration",
+              "checks": [
+                {
+                  "title": "Implement FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T313",
+              "emoji": "📈",
+              "name": "Playback telemetry",
+              "checks": [
+                {
+                  "title": "Implement active transcoding state, progress, bandwidth and resume reporting",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify active transcoding state, progress, bandwidth and resume reporting",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates active transcoding state, progress, bandwidth and resume reporting",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P11",
+          "emoji": "💬",
+          "name": "Subtitles and ancillary streams",
+          "tasks": [
+            {
+              "id": "T320",
+              "emoji": "📝",
+              "name": "Subtitle delivery",
+              "checks": [
+                {
+                  "title": "Implement external/embedded tracks, fonts, formats and selection",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify external/embedded tracks, fonts, formats and selection",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates external/embedded tracks, fonts, formats and selection",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T321",
+              "emoji": "🔥",
+              "name": "Subtitle burn-in",
+              "checks": [
+                {
+                  "title": "Implement FFmpeg subtitle overlay and TV-compatible fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify FFmpeg subtitle overlay and TV-compatible fallback",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates FFmpeg subtitle overlay and TV-compatible fallback",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T322",
+              "emoji": "🔊",
+              "name": "Audio pipelines",
+              "checks": [
+                {
+                  "title": "Implement codec fallback, remuxing, channel mapping and normalization",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify codec fallback, remuxing, channel mapping and normalization",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates codec fallback, remuxing, channel mapping and normalization",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T323",
+              "emoji": "🖼️",
+              "name": "Trickplay and chapters",
+              "checks": [
+                {
+                  "title": "Implement preview sprites, chapter thumbnails, seeking and client metadata",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify preview sprites, chapter thumbnails, seeking and client metadata",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates preview sprites, chapter thumbnails, seeking and client metadata",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "emoji": "📺",
+      "name": "Advanced server features",
+      "gate": "Music, live TV and collaboration features reach the same useful contract depth as Jellyfin.",
+      "phases": [
+        {
+          "id": "P12",
+          "emoji": "📡",
+          "name": "Live TV and recording",
+          "tasks": [
+            {
+              "id": "T400",
+              "emoji": "📻",
+              "name": "Tuners and IPTV",
+              "checks": [
+                {
+                  "title": "Implement M3U, network tuners and live channel catalogs",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify M3U, network tuners and live channel catalogs",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates M3U, network tuners and live channel catalogs",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T401",
+              "emoji": "🗓️",
+              "name": "Program guide",
+              "checks": [
+                {
+                  "title": "Implement EPG parsing, refresh, mapping and program search",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify EPG parsing, refresh, mapping and program search",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates EPG parsing, refresh, mapping and program search",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T402",
+              "emoji": "⏺️",
+              "name": "DVR scheduler",
+              "checks": [
+                {
+                  "title": "Implement recordings, timers, conflicts, storage and cancellation",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify recordings, timers, conflicts, storage and cancellation",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates recordings, timers, conflicts, storage and cancellation",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P13",
+          "emoji": "🎧",
+          "name": "Rich media services",
+          "tasks": [
+            {
+              "id": "T410",
+              "emoji": "🎶",
+              "name": "Music streaming",
+              "checks": [
+                {
+                  "title": "Implement audio endpoints, transcoding, instant mix and playlists",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify audio endpoints, transcoding, instant mix and playlists",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates audio endpoints, transcoding, instant mix and playlists",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T411",
+              "emoji": "✍️",
+              "name": "Lyrics and collections",
+              "checks": [
+                {
+                  "title": "Implement synchronized lyrics, people/artists endpoints and smart queries",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify synchronized lyrics, people/artists endpoints and smart queries",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates synchronized lyrics, people/artists endpoints and smart queries",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T412",
+              "emoji": "📚",
+              "name": "Books, photos and special items",
+              "checks": [
+                {
+                  "title": "Implement book/photo handling, thumbnails and browse behavior",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify book/photo handling, thumbnails and browse behavior",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates book/photo handling, thumbnails and browse behavior",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P14",
+          "emoji": "🤝",
+          "name": "Devices and synchronization",
+          "tasks": [
+            {
+              "id": "T420",
+              "emoji": "👥",
+              "name": "SyncPlay",
+              "checks": [
+                {
+                  "title": "Implement group sessions, leader time and drift recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify group sessions, leader time and drift recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates group sessions, leader time and drift recovery",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T421",
+              "emoji": "📲",
+              "name": "Chromecast and remote controls",
+              "checks": [
+                {
+                  "title": "Implement remote session commands and supporting device protocols",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify remote session commands and supporting device protocols",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates remote session commands and supporting device protocols",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T422",
+              "emoji": "📺",
+              "name": "DLNA capability",
+              "checks": [
+                {
+                  "title": "Implement UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "emoji": "🛡️",
+      "name": "Administration, extensibility and migration",
+      "gate": "An operator can manage the entire server, retain their data and install equivalent supported extensions.",
+      "phases": [
+        {
+          "id": "P15",
+          "emoji": "🛠️",
+          "name": "Admin and accounts",
+          "tasks": [
+            {
+              "id": "T500",
+              "emoji": "🧭",
+              "name": "Complete Rust-driven admin frontend",
+              "checks": [
+                {
+                  "title": "Implement admin features with responsive desktop/mobile navigation",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify admin features with responsive desktop/mobile navigation",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates admin features with responsive desktop/mobile navigation",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T501",
+              "emoji": "👤",
+              "name": "User and permissions console",
+              "checks": [
+                {
+                  "title": "Implement users, access restrictions, password resets and sessions",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify users, access restrictions, password resets and sessions",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates users, access restrictions, password resets and sessions",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T502",
+              "emoji": "🗃️",
+              "name": "Library and task console",
+              "checks": [
+                {
+                  "title": "Implement libraries, scanner, metadata jobs and system logs",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify libraries, scanner, metadata jobs and system logs",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates libraries, scanner, metadata jobs and system logs",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P16",
+          "emoji": "🔌",
+          "name": "Plugins and integrations",
+          "tasks": [
+            {
+              "id": "T510",
+              "emoji": "🧩",
+              "name": "Rust-native extension host",
+              "checks": [
+                {
+                  "title": "Implement stable plugin ABI/API policy and lifecycle",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify stable plugin ABI/API policy and lifecycle",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates stable plugin ABI/API policy and lifecycle",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T511",
+              "emoji": "🔁",
+              "name": "Built-in and first-party feature replacements",
+              "checks": [
+                {
+                  "title": "Implement required Jellyfin built-in or common plugin features without .NET",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify required Jellyfin built-in or common plugin features without .NET",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates required Jellyfin built-in or common plugin features without .NET",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T512",
+              "emoji": "🌐",
+              "name": "Network and reverse proxy",
+              "checks": [
+                {
+                  "title": "Implement HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P17",
+          "emoji": "💾",
+          "name": "Safety and migration",
+          "tasks": [
+            {
+              "id": "T520",
+              "emoji": "📦",
+              "name": "Jellyfin data import",
+              "checks": [
+                {
+                  "title": "Implement users, watched state, metadata, playlists and configuration migration",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify users, watched state, metadata, playlists and configuration migration",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates users, watched state, metadata, playlists and configuration migration",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T521",
+              "emoji": "🛟",
+              "name": "Backup/restore",
+              "checks": [
+                {
+                  "title": "Implement transactional backup, restore tests and reversible migration",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify transactional backup, restore tests and reversible migration",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates transactional backup, restore tests and reversible migration",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T522",
+              "emoji": "🔐",
+              "name": "Security and operations",
+              "checks": [
+                {
+                  "title": "Implement secrets, audit trails, log redaction and startup-safe auth",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify secrets, audit trails, log redaction and startup-safe auth",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates secrets, audit trails, log redaction and startup-safe auth",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M6",
+      "emoji": "🏁",
+      "name": "Complete upstream server parity and MVP release",
+      "gate": "All targeted Jellyfin v12.3 built-in C# server behavior is ported or explicitly resolved, and real clients pass a published matrix.",
+      "phases": [
+        {
+          "id": "P18",
+          "emoji": "🗺️",
+          "name": "Exhaustive upstream coverage",
+          "tasks": [
+            {
+              "id": "T600",
+              "emoji": "🧾",
+              "name": "Map all upstream server modules",
+              "checks": [
+                {
+                  "title": "Implement version-pinned C# module and API inventory with owner/replacement mapping",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify version-pinned C# module and API inventory with owner/replacement mapping",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates version-pinned C# module and API inventory with owner/replacement mapping",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T601",
+              "emoji": "🧮",
+              "name": "Full feature differential suite",
+              "checks": [
+                {
+                  "title": "Implement golden requests and responses, playback, metadata and settings parity",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify golden requests and responses, playback, metadata and settings parity",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates golden requests and responses, playback, metadata and settings parity",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T602",
+              "emoji": "📖",
+              "name": "Document deliberate differences",
+              "checks": [
+                {
+                  "title": "Implement no undocumented or unverified omissions in port matrix",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify no undocumented or unverified omissions in port matrix",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates no undocumented or unverified omissions in port matrix",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T603",
+              "emoji": "📐",
+              "name": "Performance and reliability parity",
+              "checks": [
+                {
+                  "title": "Implement stream throughput, memory/CPU, restarts and crash recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify stream throughput, memory/CPU, restarts and crash recovery",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates stream throughput, memory/CPU, restarts and crash recovery",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P19",
+          "emoji": "📺",
+          "name": "Unmodified client acceptance",
+          "tasks": [
+            {
+              "id": "T610",
+              "emoji": "📱",
+              "name": "Android TV / Fire TV",
+              "checks": [
+                {
+                  "title": "Implement unmodified native Jellyfin app pairing, browse, seek and playback",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify unmodified native Jellyfin app pairing, browse, seek and playback",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates unmodified native Jellyfin app pairing, browse, seek and playback",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T611",
+              "emoji": "📡",
+              "name": "Roku, Samsung and LG",
+              "checks": [
+                {
+                  "title": "Implement unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T612",
+              "emoji": "🌍",
+              "name": "Web and mobile clients",
+              "checks": [
+                {
+                  "title": "Implement supported web, Android and iOS client behavioral fixtures",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify supported web, Android and iOS client behavioral fixtures",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates supported web, Android and iOS client behavioral fixtures",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T613",
+              "emoji": "🎬",
+              "name": "Codec/subtitle matrix",
+              "checks": [
+                {
+                  "title": "Implement direct play, remux, transcode, subtitle and hardware playback scenarios",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify direct play, remux, transcode, subtitle and hardware playback scenarios",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates direct play, remux, transcode, subtitle and hardware playback scenarios",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        },
+        {
+          "id": "P20",
+          "emoji": "🚀",
+          "name": "Release gates",
+          "tasks": [
+            {
+              "id": "T620",
+              "emoji": "📦",
+              "name": "Linux distribution",
+              "checks": [
+                {
+                  "title": "Implement native release binaries, package recipes, systemd and install/uninstall",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify native release binaries, package recipes, systemd and install/uninstall",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates native release binaries, package recipes, systemd and install/uninstall",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T621",
+              "emoji": "⚖️",
+              "name": "Licensing and provenance audit",
+              "checks": [
+                {
+                  "title": "Implement file-by-file license/provenance and dependencies review",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify file-by-file license/provenance and dependencies review",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates file-by-file license/provenance and dependencies review",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T622",
+              "emoji": "🔁",
+              "name": "Upgrade and rollback",
+              "checks": [
+                {
+                  "title": "Implement versioned upgrade, media-safety and rollback reproducibility",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify versioned upgrade, media-safety and rollback reproducibility",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates versioned upgrade, media-safety and rollback reproducibility",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            },
+            {
+              "id": "T623",
+              "emoji": "🏆",
+              "name": "Complete MVP signoff",
+              "checks": [
+                {
+                  "title": "Implement full-port acceptance checklist without unaccepted compatibility gaps",
+                  "passed": false
+                },
+                {
+                  "title": "Automated tests and Jellyfin baseline fixture verify full-port acceptance checklist without unaccepted compatibility gaps",
+                  "passed": false
+                },
+                {
+                  "title": "Production or real-client acceptance validates full-port acceptance checklist without unaccepted compatibility gaps",
+                  "passed": false
+                }
+              ],
+              "progress": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

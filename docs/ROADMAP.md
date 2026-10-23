@@ -1,0 +1,413 @@
+# 🗺️ Pelagos full-port roadmap
+
+**MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
+
+**Overall acceptance progress:** `░░░░░░░░░░ 2%` across 79 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+
+## 🧱 M0 — Foundation and project controls — `█░░░░░░░░░ 13%`
+
+**Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
+
+### 🧭 P0 — Identity and scope — `███░░░░░░░ 33%`
+
+- 🦀 **T001 — Standalone Rust server bootstrap** — `███░░░░░░░ 33%`
+  - [x] Implement standalone Rust daemon and HTTP routes — Cargo.toml; src/main.rs; src/app.rs
+  - [ ] Automated tests and Jellyfin baseline fixture verify standalone Rust daemon and HTTP routes
+  - [ ] Production or real-client acceptance validates standalone Rust daemon and HTTP routes
+- 🪪 **T002 — Persistent server identity** — `███░░░░░░░ 33%`
+  - [x] Implement restart-stable local server ID — src/identity.rs
+  - [ ] Automated tests and Jellyfin baseline fixture verify restart-stable local server ID
+  - [ ] Production or real-client acceptance validates restart-stable local server ID
+- 🌗 **T003 — Admin web appearance** — `███░░░░░░░ 33%`
+  - [x] Implement top-right System/Light/Dark selection with System default — web/index.html
+  - [ ] Automated tests and Jellyfin baseline fixture verify top-right System/Light/Dark selection with System default
+  - [ ] Production or real-client acceptance validates top-right System/Light/Dark selection with System default
+- 🎨 **T004 — Perceptual marine identity** — `███░░░░░░░ 33%`
+  - [x] Implement OKLCH color specification and readable SVG swatch — docs/COLOR.md; assets/pelagos-color.svg
+  - [ ] Automated tests and Jellyfin baseline fixture verify OKLCH color specification and readable SVG swatch
+  - [ ] Production or real-client acceptance validates OKLCH color specification and readable SVG swatch
+- 📌 **T005 — Pin Jellyfin reference** — `███░░░░░░░ 33%`
+  - [x] Implement baseline source/version and compatibility inventory — docs/SOURCE_BASELINE.md; docs/PORT_MATRIX.md
+  - [ ] Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory
+  - [ ] Production or real-client acceptance validates baseline source/version and compatibility inventory
+
+### 🛠️ P1 — Build and storage — `░░░░░░░░░░ 0%`
+
+- 🏗️ **T006 — Build reproducibility** — `░░░░░░░░░░ 0%`
+  - [ ] Implement locked dependencies and automated stable Rust compilation
+  - [ ] Automated tests and Jellyfin baseline fixture verify locked dependencies and automated stable Rust compilation
+  - [ ] Production or real-client acceptance validates locked dependencies and automated stable Rust compilation
+- 🗄️ **T007 — SQLite store and migrations** — `░░░░░░░░░░ 0%`
+  - [ ] Implement versioned schema, atomic transactions and recovery
+  - [ ] Automated tests and Jellyfin baseline fixture verify versioned schema, atomic transactions and recovery
+  - [ ] Production or real-client acceptance validates versioned schema, atomic transactions and recovery
+- ⚙️ **T008 — Validated configuration** — `░░░░░░░░░░ 0%`
+  - [ ] Implement XDG config paths, CLI options, migration and safe defaults
+  - [ ] Automated tests and Jellyfin baseline fixture verify XDG config paths, CLI options, migration and safe defaults
+  - [ ] Production or real-client acceptance validates XDG config paths, CLI options, migration and safe defaults
+- 🧯 **T009 — Health, logs and process lifecycle** — `░░░░░░░░░░ 0%`
+  - [ ] Implement structured diagnostics, graceful shutdown and signals
+  - [ ] Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals
+  - [ ] Production or real-client acceptance validates structured diagnostics, graceful shutdown and signals
+
+### 🧪 P2 — Test framework — `░░░░░░░░░░ 0%`
+
+- 📊 **T010 — Ledger generator and CI guard** — `░░░░░░░░░░ 0%`
+  - [ ] Implement machine ledger, calculated percentages and acceptance evidence
+  - [ ] Automated tests and Jellyfin baseline fixture verify machine ledger, calculated percentages and acceptance evidence
+  - [ ] Production or real-client acceptance validates machine ledger, calculated percentages and acceptance evidence
+- 🧰 **T011 — Protocol fixtures and mock clients** — `░░░░░░░░░░ 0%`
+  - [ ] Implement contract replay harness without private user data
+  - [ ] Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data
+  - [ ] Production or real-client acceptance validates contract replay harness without private user data
+- 🔒 **T012 — Security harness** — `░░░░░░░░░░ 0%`
+  - [ ] Implement authentication, authorization, path traversal and fuzz regression suite
+  - [ ] Automated tests and Jellyfin baseline fixture verify authentication, authorization, path traversal and fuzz regression suite
+  - [ ] Production or real-client acceptance validates authentication, authorization, path traversal and fuzz regression suite
+- 🖥️ **T013 — Rendered admin GUI acceptance** — `░░░░░░░░░░ 0%`
+  - [ ] Implement keyboard, responsive, contrast and three-mode browser screenshots
+  - [ ] Automated tests and Jellyfin baseline fixture verify keyboard, responsive, contrast and three-mode browser screenshots
+  - [ ] Production or real-client acceptance validates keyboard, responsive, contrast and three-mode browser screenshots
+
+## 🔌 M1 — Jellyfin protocol and API parity — `░░░░░░░░░░ 0%`
+
+**Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
+
+### 🌐 P3 — System and transports — `░░░░░░░░░░ 0%`
+
+- 📡 **T100 — Discovery and public server info** — `░░░░░░░░░░ 0%`
+  - [ ] Implement Jellyfin discovery, public system info and stable version negotiation
+  - [ ] Automated tests and Jellyfin baseline fixture verify Jellyfin discovery, public system info and stable version negotiation
+  - [ ] Production or real-client acceptance validates Jellyfin discovery, public system info and stable version negotiation
+- 📨 **T101 — API transport contracts** — `░░░░░░░░░░ 0%`
+  - [ ] Implement headers, error models, casing, pagination and compatibility responses
+  - [ ] Automated tests and Jellyfin baseline fixture verify headers, error models, casing, pagination and compatibility responses
+  - [ ] Production or real-client acceptance validates headers, error models, casing, pagination and compatibility responses
+- 🔁 **T102 — WebSocket sessions** — `░░░░░░░░░░ 0%`
+  - [ ] Implement Jellyfin WebSocket events, heartbeats and reconnects
+  - [ ] Automated tests and Jellyfin baseline fixture verify Jellyfin WebSocket events, heartbeats and reconnects
+  - [ ] Production or real-client acceptance validates Jellyfin WebSocket events, heartbeats and reconnects
+- 🛰️ **T103 — Device pairing and Quick Connect** — `░░░░░░░░░░ 0%`
+  - [ ] Implement TV-friendly Quick Connect and device approval
+  - [ ] Automated tests and Jellyfin baseline fixture verify TV-friendly Quick Connect and device approval
+  - [ ] Production or real-client acceptance validates TV-friendly Quick Connect and device approval
+
+### 👥 P4 — Authentication and user state — `░░░░░░░░░░ 0%`
+
+- 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
+  - [ ] Implement password hashing, access tokens, logout and expiry
+  - [ ] Automated tests and Jellyfin baseline fixture verify password hashing, access tokens, logout and expiry
+  - [ ] Production or real-client acceptance validates password hashing, access tokens, logout and expiry
+- 🛡️ **T111 — Authorization and parental policy** — `░░░░░░░░░░ 0%`
+  - [ ] Implement per-library permissions, parental ratings and account restrictions
+  - [ ] Automated tests and Jellyfin baseline fixture verify per-library permissions, parental ratings and account restrictions
+  - [ ] Production or real-client acceptance validates per-library permissions, parental ratings and account restrictions
+- 📱 **T112 — Device authorization** — `░░░░░░░░░░ 0%`
+  - [ ] Implement sessions, remote control and device inventory
+  - [ ] Automated tests and Jellyfin baseline fixture verify sessions, remote control and device inventory
+  - [ ] Production or real-client acceptance validates sessions, remote control and device inventory
+- 🕰️ **T113 — Playback state** — `░░░░░░░░░░ 0%`
+  - [ ] Implement watch states, resume positions, history and user configuration
+  - [ ] Automated tests and Jellyfin baseline fixture verify watch states, resume positions, history and user configuration
+  - [ ] Production or real-client acceptance validates watch states, resume positions, history and user configuration
+
+### 🧭 P5 — General API contracts — `░░░░░░░░░░ 0%`
+
+- 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
+  - [ ] Implement search, suggestions, sorting, filters and item pagination
+  - [ ] Automated tests and Jellyfin baseline fixture verify search, suggestions, sorting, filters and item pagination
+  - [ ] Production or real-client acceptance validates search, suggestions, sorting, filters and item pagination
+- 🖼️ **T121 — Artwork endpoints** — `░░░░░░░░░░ 0%`
+  - [ ] Implement images, sizing, remote art and caches
+  - [ ] Automated tests and Jellyfin baseline fixture verify images, sizing, remote art and caches
+  - [ ] Production or real-client acceptance validates images, sizing, remote art and caches
+- ⚡ **T122 — Activity and tasks APIs** — `░░░░░░░░░░ 0%`
+  - [ ] Implement scheduled job state, activity log and configuration endpoints
+  - [ ] Automated tests and Jellyfin baseline fixture verify scheduled job state, activity log and configuration endpoints
+  - [ ] Production or real-client acceptance validates scheduled job state, activity log and configuration endpoints
+- 🧪 **T123 — Actual TV login smoke suite** — `░░░░░░░░░░ 0%`
+  - [ ] Implement unmodified Android TV, webOS/Tizen and Roku client login fixtures
+  - [ ] Automated tests and Jellyfin baseline fixture verify unmodified Android TV, webOS/Tizen and Roku client login fixtures
+  - [ ] Production or real-client acceptance validates unmodified Android TV, webOS/Tizen and Roku client login fixtures
+
+## 📚 M2 — Full media library and metadata — `░░░░░░░░░░ 0%`
+
+**Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
+
+### 📂 P6 — Filesystem and items — `░░░░░░░░░░ 0%`
+
+- 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
+  - [ ] Implement multi-root libraries, watcher updates and rescan correctness
+  - [ ] Automated tests and Jellyfin baseline fixture verify multi-root libraries, watcher updates and rescan correctness
+  - [ ] Production or real-client acceptance validates multi-root libraries, watcher updates and rescan correctness
+- 📀 **T201 — Media naming and structure** — `░░░░░░░░░░ 0%`
+  - [ ] Implement series, movies, editions, seasons, episodes and extras naming parity
+  - [ ] Automated tests and Jellyfin baseline fixture verify series, movies, editions, seasons, episodes and extras naming parity
+  - [ ] Production or real-client acceptance validates series, movies, editions, seasons, episodes and extras naming parity
+- 🧬 **T202 — Item graph and persistence** — `░░░░░░░░░░ 0%`
+  - [ ] Implement item hierarchy, people, genres, studios and provider identities
+  - [ ] Automated tests and Jellyfin baseline fixture verify item hierarchy, people, genres, studios and provider identities
+  - [ ] Production or real-client acceptance validates item hierarchy, people, genres, studios and provider identities
+- 🪄 **T203 — Library jobs and cleanup** — `░░░░░░░░░░ 0%`
+  - [ ] Implement refreshes, scheduled tasks, deletion safety and retention
+  - [ ] Automated tests and Jellyfin baseline fixture verify refreshes, scheduled tasks, deletion safety and retention
+  - [ ] Production or real-client acceptance validates refreshes, scheduled tasks, deletion safety and retention
+
+### 🧩 P7 — Metadata systems — `░░░░░░░░░░ 0%`
+
+- 📝 **T210 — Metadata readers** — `░░░░░░░░░░ 0%`
+  - [ ] Implement NFO, tags, EXIF, chapters and sidecar parsing
+  - [ ] Automated tests and Jellyfin baseline fixture verify NFO, tags, EXIF, chapters and sidecar parsing
+  - [ ] Production or real-client acceptance validates NFO, tags, EXIF, chapters and sidecar parsing
+- 🛜 **T211 — Metadata providers** — `░░░░░░░░░░ 0%`
+  - [ ] Implement provider fetching, merging, rate limits and fallback
+  - [ ] Automated tests and Jellyfin baseline fixture verify provider fetching, merging, rate limits and fallback
+  - [ ] Production or real-client acceptance validates provider fetching, merging, rate limits and fallback
+- 🖌️ **T212 — Images and thumbnails** — `░░░░░░░░░░ 0%`
+  - [ ] Implement posters, backdrops, chapter thumbnails and caching
+  - [ ] Automated tests and Jellyfin baseline fixture verify posters, backdrops, chapter thumbnails and caching
+  - [ ] Production or real-client acceptance validates posters, backdrops, chapter thumbnails and caching
+- 🌎 **T213 — Locale, subtitles and titles** — `░░░░░░░░░░ 0%`
+  - [ ] Implement language, localization, provider IDs and sort-title rules
+  - [ ] Automated tests and Jellyfin baseline fixture verify language, localization, provider IDs and sort-title rules
+  - [ ] Production or real-client acceptance validates language, localization, provider IDs and sort-title rules
+
+### 🎼 P8 — Library feature APIs — `░░░░░░░░░░ 0%`
+
+- 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
+  - [ ] Implement movies, series, playlists, collections and multiple versions
+  - [ ] Automated tests and Jellyfin baseline fixture verify movies, series, playlists, collections and multiple versions
+  - [ ] Production or real-client acceptance validates movies, series, playlists, collections and multiple versions
+- 🎵 **T221 — Music catalog** — `░░░░░░░░░░ 0%`
+  - [ ] Implement artists, albums, tracks, genres, lyrics and artist artwork
+  - [ ] Automated tests and Jellyfin baseline fixture verify artists, albums, tracks, genres, lyrics and artist artwork
+  - [ ] Production or real-client acceptance validates artists, albums, tracks, genres, lyrics and artist artwork
+- 📖 **T222 — Books and photo libraries** — `░░░░░░░░░░ 0%`
+  - [ ] Implement books, images, home videos and mixed content
+  - [ ] Automated tests and Jellyfin baseline fixture verify books, images, home videos and mixed content
+  - [ ] Production or real-client acceptance validates books, images, home videos and mixed content
+- 🔗 **T223 — User media edits** — `░░░░░░░░░░ 0%`
+  - [ ] Implement favorite, rating, playlist editing and metadata override round trips
+  - [ ] Automated tests and Jellyfin baseline fixture verify favorite, rating, playlist editing and metadata override round trips
+  - [ ] Production or real-client acceptance validates favorite, rating, playlist editing and metadata override round trips
+
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `░░░░░░░░░░ 0%`
+
+**Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
+
+### ▶️ P9 — Streaming engine — `░░░░░░░░░░ 0%`
+
+- 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
+  - [ ] Implement ffprobe output mapping and device profiles
+  - [ ] Automated tests and Jellyfin baseline fixture verify ffprobe output mapping and device profiles
+  - [ ] Production or real-client acceptance validates ffprobe output mapping and device profiles
+- 🎯 **T301 — Playback negotiation** — `░░░░░░░░░░ 0%`
+  - [ ] Implement client profiles, direct play, direct stream and transcoding decisions
+  - [ ] Automated tests and Jellyfin baseline fixture verify client profiles, direct play, direct stream and transcoding decisions
+  - [ ] Production or real-client acceptance validates client profiles, direct play, direct stream and transcoding decisions
+- 🚰 **T302 — Direct streaming** — `░░░░░░░░░░ 0%`
+  - [ ] Implement range requests, MIME behavior, seeking and large-file streaming
+  - [ ] Automated tests and Jellyfin baseline fixture verify range requests, MIME behavior, seeking and large-file streaming
+  - [ ] Production or real-client acceptance validates range requests, MIME behavior, seeking and large-file streaming
+- 🔁 **T303 — Remux and media sources** — `░░░░░░░░░░ 0%`
+  - [ ] Implement container remux, alternate versions, segment boundaries and timestamps
+  - [ ] Automated tests and Jellyfin baseline fixture verify container remux, alternate versions, segment boundaries and timestamps
+  - [ ] Production or real-client acceptance validates container remux, alternate versions, segment boundaries and timestamps
+
+### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
+
+- 🧱 **T310 — FFmpeg job controller** — `░░░░░░░░░░ 0%`
+  - [ ] Implement process supervision, concurrency, cancellation and cleanup
+  - [ ] Automated tests and Jellyfin baseline fixture verify process supervision, concurrency, cancellation and cleanup
+  - [ ] Production or real-client acceptance validates process supervision, concurrency, cancellation and cleanup
+- 📺 **T311 — HLS, DASH and transport** — `░░░░░░░░░░ 0%`
+  - [ ] Implement segment manifests, adaptive profiles and timebase correctness
+  - [ ] Automated tests and Jellyfin baseline fixture verify segment manifests, adaptive profiles and timebase correctness
+  - [ ] Production or real-client acceptance validates segment manifests, adaptive profiles and timebase correctness
+- 🖥️ **T312 — Linux GPU acceleration** — `░░░░░░░░░░ 0%`
+  - [ ] Implement FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback
+  - [ ] Automated tests and Jellyfin baseline fixture verify FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback
+  - [ ] Production or real-client acceptance validates FFmpeg NVENC/NVDEC, VA-API and QSV capabilities with fallback
+- 📈 **T313 — Playback telemetry** — `░░░░░░░░░░ 0%`
+  - [ ] Implement active transcoding state, progress, bandwidth and resume reporting
+  - [ ] Automated tests and Jellyfin baseline fixture verify active transcoding state, progress, bandwidth and resume reporting
+  - [ ] Production or real-client acceptance validates active transcoding state, progress, bandwidth and resume reporting
+
+### 💬 P11 — Subtitles and ancillary streams — `░░░░░░░░░░ 0%`
+
+- 📝 **T320 — Subtitle delivery** — `░░░░░░░░░░ 0%`
+  - [ ] Implement external/embedded tracks, fonts, formats and selection
+  - [ ] Automated tests and Jellyfin baseline fixture verify external/embedded tracks, fonts, formats and selection
+  - [ ] Production or real-client acceptance validates external/embedded tracks, fonts, formats and selection
+- 🔥 **T321 — Subtitle burn-in** — `░░░░░░░░░░ 0%`
+  - [ ] Implement FFmpeg subtitle overlay and TV-compatible fallback
+  - [ ] Automated tests and Jellyfin baseline fixture verify FFmpeg subtitle overlay and TV-compatible fallback
+  - [ ] Production or real-client acceptance validates FFmpeg subtitle overlay and TV-compatible fallback
+- 🔊 **T322 — Audio pipelines** — `░░░░░░░░░░ 0%`
+  - [ ] Implement codec fallback, remuxing, channel mapping and normalization
+  - [ ] Automated tests and Jellyfin baseline fixture verify codec fallback, remuxing, channel mapping and normalization
+  - [ ] Production or real-client acceptance validates codec fallback, remuxing, channel mapping and normalization
+- 🖼️ **T323 — Trickplay and chapters** — `░░░░░░░░░░ 0%`
+  - [ ] Implement preview sprites, chapter thumbnails, seeking and client metadata
+  - [ ] Automated tests and Jellyfin baseline fixture verify preview sprites, chapter thumbnails, seeking and client metadata
+  - [ ] Production or real-client acceptance validates preview sprites, chapter thumbnails, seeking and client metadata
+
+## 📺 M4 — Advanced server features — `░░░░░░░░░░ 0%`
+
+**Gate:** Music, live TV and collaboration features reach the same useful contract depth as Jellyfin.
+
+### 📡 P12 — Live TV and recording — `░░░░░░░░░░ 0%`
+
+- 📻 **T400 — Tuners and IPTV** — `░░░░░░░░░░ 0%`
+  - [ ] Implement M3U, network tuners and live channel catalogs
+  - [ ] Automated tests and Jellyfin baseline fixture verify M3U, network tuners and live channel catalogs
+  - [ ] Production or real-client acceptance validates M3U, network tuners and live channel catalogs
+- 🗓️ **T401 — Program guide** — `░░░░░░░░░░ 0%`
+  - [ ] Implement EPG parsing, refresh, mapping and program search
+  - [ ] Automated tests and Jellyfin baseline fixture verify EPG parsing, refresh, mapping and program search
+  - [ ] Production or real-client acceptance validates EPG parsing, refresh, mapping and program search
+- ⏺️ **T402 — DVR scheduler** — `░░░░░░░░░░ 0%`
+  - [ ] Implement recordings, timers, conflicts, storage and cancellation
+  - [ ] Automated tests and Jellyfin baseline fixture verify recordings, timers, conflicts, storage and cancellation
+  - [ ] Production or real-client acceptance validates recordings, timers, conflicts, storage and cancellation
+
+### 🎧 P13 — Rich media services — `░░░░░░░░░░ 0%`
+
+- 🎶 **T410 — Music streaming** — `░░░░░░░░░░ 0%`
+  - [ ] Implement audio endpoints, transcoding, instant mix and playlists
+  - [ ] Automated tests and Jellyfin baseline fixture verify audio endpoints, transcoding, instant mix and playlists
+  - [ ] Production or real-client acceptance validates audio endpoints, transcoding, instant mix and playlists
+- ✍️ **T411 — Lyrics and collections** — `░░░░░░░░░░ 0%`
+  - [ ] Implement synchronized lyrics, people/artists endpoints and smart queries
+  - [ ] Automated tests and Jellyfin baseline fixture verify synchronized lyrics, people/artists endpoints and smart queries
+  - [ ] Production or real-client acceptance validates synchronized lyrics, people/artists endpoints and smart queries
+- 📚 **T412 — Books, photos and special items** — `░░░░░░░░░░ 0%`
+  - [ ] Implement book/photo handling, thumbnails and browse behavior
+  - [ ] Automated tests and Jellyfin baseline fixture verify book/photo handling, thumbnails and browse behavior
+  - [ ] Production or real-client acceptance validates book/photo handling, thumbnails and browse behavior
+
+### 🤝 P14 — Devices and synchronization — `░░░░░░░░░░ 0%`
+
+- 👥 **T420 — SyncPlay** — `░░░░░░░░░░ 0%`
+  - [ ] Implement group sessions, leader time and drift recovery
+  - [ ] Automated tests and Jellyfin baseline fixture verify group sessions, leader time and drift recovery
+  - [ ] Production or real-client acceptance validates group sessions, leader time and drift recovery
+- 📲 **T421 — Chromecast and remote controls** — `░░░░░░░░░░ 0%`
+  - [ ] Implement remote session commands and supporting device protocols
+  - [ ] Automated tests and Jellyfin baseline fixture verify remote session commands and supporting device protocols
+  - [ ] Production or real-client acceptance validates remote session commands and supporting device protocols
+- 📺 **T422 — DLNA capability** — `░░░░░░░░░░ 0%`
+  - [ ] Implement UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
+  - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
+  - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
+
+## 🛡️ M5 — Administration, extensibility and migration — `░░░░░░░░░░ 0%`
+
+**Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
+
+### 🛠️ P15 — Admin and accounts — `░░░░░░░░░░ 0%`
+
+- 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
+  - [ ] Implement admin features with responsive desktop/mobile navigation
+  - [ ] Automated tests and Jellyfin baseline fixture verify admin features with responsive desktop/mobile navigation
+  - [ ] Production or real-client acceptance validates admin features with responsive desktop/mobile navigation
+- 👤 **T501 — User and permissions console** — `░░░░░░░░░░ 0%`
+  - [ ] Implement users, access restrictions, password resets and sessions
+  - [ ] Automated tests and Jellyfin baseline fixture verify users, access restrictions, password resets and sessions
+  - [ ] Production or real-client acceptance validates users, access restrictions, password resets and sessions
+- 🗃️ **T502 — Library and task console** — `░░░░░░░░░░ 0%`
+  - [ ] Implement libraries, scanner, metadata jobs and system logs
+  - [ ] Automated tests and Jellyfin baseline fixture verify libraries, scanner, metadata jobs and system logs
+  - [ ] Production or real-client acceptance validates libraries, scanner, metadata jobs and system logs
+
+### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
+
+- 🧩 **T510 — Rust-native extension host** — `░░░░░░░░░░ 0%`
+  - [ ] Implement stable plugin ABI/API policy and lifecycle
+  - [ ] Automated tests and Jellyfin baseline fixture verify stable plugin ABI/API policy and lifecycle
+  - [ ] Production or real-client acceptance validates stable plugin ABI/API policy and lifecycle
+- 🔁 **T511 — Built-in and first-party feature replacements** — `░░░░░░░░░░ 0%`
+  - [ ] Implement required Jellyfin built-in or common plugin features without .NET
+  - [ ] Automated tests and Jellyfin baseline fixture verify required Jellyfin built-in or common plugin features without .NET
+  - [ ] Production or real-client acceptance validates required Jellyfin built-in or common plugin features without .NET
+- 🌐 **T512 — Network and reverse proxy** — `░░░░░░░░░░ 0%`
+  - [ ] Implement HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration
+  - [ ] Automated tests and Jellyfin baseline fixture verify HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration
+  - [ ] Production or real-client acceptance validates HTTPS, forwarded headers, CORS/CSRF rules and LAN discovery configuration
+
+### 💾 P17 — Safety and migration — `░░░░░░░░░░ 0%`
+
+- 📦 **T520 — Jellyfin data import** — `░░░░░░░░░░ 0%`
+  - [ ] Implement users, watched state, metadata, playlists and configuration migration
+  - [ ] Automated tests and Jellyfin baseline fixture verify users, watched state, metadata, playlists and configuration migration
+  - [ ] Production or real-client acceptance validates users, watched state, metadata, playlists and configuration migration
+- 🛟 **T521 — Backup/restore** — `░░░░░░░░░░ 0%`
+  - [ ] Implement transactional backup, restore tests and reversible migration
+  - [ ] Automated tests and Jellyfin baseline fixture verify transactional backup, restore tests and reversible migration
+  - [ ] Production or real-client acceptance validates transactional backup, restore tests and reversible migration
+- 🔐 **T522 — Security and operations** — `░░░░░░░░░░ 0%`
+  - [ ] Implement secrets, audit trails, log redaction and startup-safe auth
+  - [ ] Automated tests and Jellyfin baseline fixture verify secrets, audit trails, log redaction and startup-safe auth
+  - [ ] Production or real-client acceptance validates secrets, audit trails, log redaction and startup-safe auth
+
+## 🏁 M6 — Complete upstream server parity and MVP release — `░░░░░░░░░░ 0%`
+
+**Gate:** All targeted Jellyfin v12.3 built-in C# server behavior is ported or explicitly resolved, and real clients pass a published matrix.
+
+### 🗺️ P18 — Exhaustive upstream coverage — `░░░░░░░░░░ 0%`
+
+- 🧾 **T600 — Map all upstream server modules** — `░░░░░░░░░░ 0%`
+  - [ ] Implement version-pinned C# module and API inventory with owner/replacement mapping
+  - [ ] Automated tests and Jellyfin baseline fixture verify version-pinned C# module and API inventory with owner/replacement mapping
+  - [ ] Production or real-client acceptance validates version-pinned C# module and API inventory with owner/replacement mapping
+- 🧮 **T601 — Full feature differential suite** — `░░░░░░░░░░ 0%`
+  - [ ] Implement golden requests and responses, playback, metadata and settings parity
+  - [ ] Automated tests and Jellyfin baseline fixture verify golden requests and responses, playback, metadata and settings parity
+  - [ ] Production or real-client acceptance validates golden requests and responses, playback, metadata and settings parity
+- 📖 **T602 — Document deliberate differences** — `░░░░░░░░░░ 0%`
+  - [ ] Implement no undocumented or unverified omissions in port matrix
+  - [ ] Automated tests and Jellyfin baseline fixture verify no undocumented or unverified omissions in port matrix
+  - [ ] Production or real-client acceptance validates no undocumented or unverified omissions in port matrix
+- 📐 **T603 — Performance and reliability parity** — `░░░░░░░░░░ 0%`
+  - [ ] Implement stream throughput, memory/CPU, restarts and crash recovery
+  - [ ] Automated tests and Jellyfin baseline fixture verify stream throughput, memory/CPU, restarts and crash recovery
+  - [ ] Production or real-client acceptance validates stream throughput, memory/CPU, restarts and crash recovery
+
+### 📺 P19 — Unmodified client acceptance — `░░░░░░░░░░ 0%`
+
+- 📱 **T610 — Android TV / Fire TV** — `░░░░░░░░░░ 0%`
+  - [ ] Implement unmodified native Jellyfin app pairing, browse, seek and playback
+  - [ ] Automated tests and Jellyfin baseline fixture verify unmodified native Jellyfin app pairing, browse, seek and playback
+  - [ ] Production or real-client acceptance validates unmodified native Jellyfin app pairing, browse, seek and playback
+- 📡 **T611 — Roku, Samsung and LG** — `░░░░░░░░░░ 0%`
+  - [ ] Implement unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance
+  - [ ] Automated tests and Jellyfin baseline fixture verify unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance
+  - [ ] Production or real-client acceptance validates unmodified Roku, Tizen and webOS Jellyfin clients pass acceptance
+- 🌍 **T612 — Web and mobile clients** — `░░░░░░░░░░ 0%`
+  - [ ] Implement supported web, Android and iOS client behavioral fixtures
+  - [ ] Automated tests and Jellyfin baseline fixture verify supported web, Android and iOS client behavioral fixtures
+  - [ ] Production or real-client acceptance validates supported web, Android and iOS client behavioral fixtures
+- 🎬 **T613 — Codec/subtitle matrix** — `░░░░░░░░░░ 0%`
+  - [ ] Implement direct play, remux, transcode, subtitle and hardware playback scenarios
+  - [ ] Automated tests and Jellyfin baseline fixture verify direct play, remux, transcode, subtitle and hardware playback scenarios
+  - [ ] Production or real-client acceptance validates direct play, remux, transcode, subtitle and hardware playback scenarios
+
+### 🚀 P20 — Release gates — `░░░░░░░░░░ 0%`
+
+- 📦 **T620 — Linux distribution** — `░░░░░░░░░░ 0%`
+  - [ ] Implement native release binaries, package recipes, systemd and install/uninstall
+  - [ ] Automated tests and Jellyfin baseline fixture verify native release binaries, package recipes, systemd and install/uninstall
+  - [ ] Production or real-client acceptance validates native release binaries, package recipes, systemd and install/uninstall
+- ⚖️ **T621 — Licensing and provenance audit** — `░░░░░░░░░░ 0%`
+  - [ ] Implement file-by-file license/provenance and dependencies review
+  - [ ] Automated tests and Jellyfin baseline fixture verify file-by-file license/provenance and dependencies review
+  - [ ] Production or real-client acceptance validates file-by-file license/provenance and dependencies review
+- 🔁 **T622 — Upgrade and rollback** — `░░░░░░░░░░ 0%`
+  - [ ] Implement versioned upgrade, media-safety and rollback reproducibility
+  - [ ] Automated tests and Jellyfin baseline fixture verify versioned upgrade, media-safety and rollback reproducibility
+  - [ ] Production or real-client acceptance validates versioned upgrade, media-safety and rollback reproducibility
+- 🏆 **T623 — Complete MVP signoff** — `░░░░░░░░░░ 0%`
+  - [ ] Implement full-port acceptance checklist without unaccepted compatibility gaps
+  - [ ] Automated tests and Jellyfin baseline fixture verify full-port acceptance checklist without unaccepted compatibility gaps
+  - [ ] Production or real-client acceptance validates full-port acceptance checklist without unaccepted compatibility gaps
+
