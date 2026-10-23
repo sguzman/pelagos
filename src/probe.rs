@@ -25,7 +25,7 @@ pub struct ProbeReport {
 }
 
 async fn capped_read<R: tokio::io::AsyncRead + Unpin>(
-    mut input: R,
+    input: R,
     max_size: usize,
 ) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
