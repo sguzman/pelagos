@@ -46,22 +46,12 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     catalog::index(&state, &private).unwrap();
     auth::create_user(&state, "admin", "admin-hints-test-password").unwrap();
     auth::create_user(&state, "viewer", "viewer-hints-test-password").unwrap();
-    let admin = auth::authenticate(
-        &state,
-        "admin",
-        "admin-hints-test-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
-    let viewer = auth::authenticate(
-        &state,
-        "viewer",
-        "viewer-hints-test-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap();
+    let admin = auth::authenticate(&state, "admin", "admin-hints-test-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate(&state, "viewer", "viewer-hints-test-password", "server")
+        .unwrap()
+        .unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
@@ -96,7 +86,10 @@ async fn jellyfin_hints_obey_library_grants_filters_and_pagination() {
     assert_eq!(filtered["TotalRecordCount"], 2);
     assert_eq!(filtered["SearchHints"][0]["Name"], "Film A");
     assert_eq!(filtered["SearchHints"][0]["Type"], "Video");
-    assert_eq!(filtered["SearchHints"][0]["ItemId"], filtered["SearchHints"][0]["Id"]);
+    assert_eq!(
+        filtered["SearchHints"][0]["ItemId"],
+        filtered["SearchHints"][0]["Id"]
+    );
     assert!(filtered["SearchHints"][0].get("Path").is_none());
 
     let page = body_json(

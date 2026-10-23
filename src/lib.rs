@@ -9,5 +9,5 @@ pub mod identity;
 pub mod media;
 pub mod playback;
 pub mod probe;
-pub mod streaming;
 pub mod search;
+pub mod streaming;
