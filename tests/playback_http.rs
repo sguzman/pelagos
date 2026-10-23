@@ -141,6 +141,10 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     assert_eq!(info["MediaSources"][0]["SupportsTranscoding"], false);
     assert_eq!(info["MediaSources"][0]["SupportsDirectPlay"], true);
     assert!(info["MediaSources"][0].get("Path").is_none());
+    assert_eq!(
+        info["MediaSources"][0]["DirectStreamUrl"],
+        format!("/Videos/{id}/stream?static=true")
+    );
 
     let post = request(
         &router,
@@ -151,6 +155,19 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     )
     .await;
     assert_eq!(post.status(), StatusCode::OK);
+    let defaults = request(
+        &router,
+        "POST",
+        &route,
+        Some(&token),
+        r#"{"EnableDirectPlay":true,"EnableDirectStream":true,"EnableTranscoding":true}"#,
+    )
+    .await;
+    assert_eq!(defaults.status(), StatusCode::OK);
+    let body = to_bytes(defaults.into_body(), 65536).await.unwrap();
+    let response: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(response["MediaSources"][0]["SupportsDirectStream"], false);
+    assert_eq!(response["MediaSources"][0]["SupportsTranscoding"], false);
     let rejected = request(
         &router,
         "POST",
@@ -160,4 +177,86 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     )
     .await;
     assert_eq!(rejected.status(), StatusCode::NOT_IMPLEMENTED);
+}
+
+
+#[cfg(unix)]
+#[tokio::test]
+async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+
+    use axum::body::to_bytes;
+    use pelagos::catalog;
+    use serde_json::Value;
+
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("Music");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("Track.flac"), b"synthetic audio").unwrap();
+    catalog::index(&state_dir, &root).unwrap();
+
+    let executable = temp.path().join("fake-ffprobe");
+    fs::write(
+        &executable,
+        "#!/bin/sh\nprintf '%s' '{\"format\":{\"duration\":\"125.5\"},\"streams\":[{\"index\":0,\"codec_type\":\"audio\",\"codec_name\":\"flac\",\"sample_rate\":\"44100\",\"channels\":2}]}'\n",
+    )
+    .unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+
+    auth::create_user(&state_dir, "admin", "long-audio-admin-password").unwrap();
+    auth::create_user(&state_dir, "listener", "long-audio-user-password").unwrap();
+    let admin = auth::authenticate(&state_dir, "admin", "long-audio-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let viewer = auth::authenticate(&state_dir, "listener", "long-audio-user-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let router = app::router(Arc::new(
+        AppState::with_auth_dir("server".to_owned(), state_dir.clone())
+            .with_probe_executable(executable),
+    ));
+    let items = request(&router, "GET", "/Items", Some(&admin), "").await;
+    let body = to_bytes(items.into_body(), 65536).await.unwrap();
+    let response: Value = serde_json::from_slice(&body).unwrap();
+    let id = response["Items"][0]["Id"].as_str().unwrap();
+    let route = format!("/Items/{id}/PlaybackInfo");
+
+    assert_eq!(
+        request(&router, "GET", &route, Some(&viewer), "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+
+    auth::grant_library(&state_dir, "listener", &root).unwrap();
+    let info = request(
+        &router,
+        "POST",
+        &route,
+        Some(&viewer),
+        r#"{"EnableDirectPlay":true,"EnableDirectStream":true,"EnableTranscoding":true}"#,
+    )
+    .await;
+    assert_eq!(info.status(), StatusCode::OK);
+    let bytes = to_bytes(info.into_body(), 65536).await.unwrap();
+    let payload: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        payload["MediaSources"][0]["DirectStreamUrl"],
+        format!("/Audio/{id}/stream?static=true")
+    );
+    assert_eq!(payload["MediaSources"][0]["RunTimeTicks"], 1_255_000_000);
+    assert_eq!(payload["MediaSources"][0]["MediaStreams"][0]["Codec"], "flac");
+    assert_eq!(payload["MediaSources"][0]["SupportsDirectPlay"], true);
+    assert_eq!(payload["MediaSources"][0]["SupportsTranscoding"], false);
+
+    auth::revoke_library(&state_dir, "listener", &root).unwrap();
+    assert_eq!(
+        request(&router, "GET", &route, Some(&viewer), "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
 }
