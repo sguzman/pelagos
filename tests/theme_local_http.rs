@@ -201,16 +201,57 @@ async fn local_theme_rules_are_scoped_to_a_single_recognized_owner() {
             0
         );
     }
-    assert_eq!(
+    let same_owner = json(
         call(
             &router,
             &format!("/Items/{film}/ThemeSongs?inheritFromParent=true"),
             Some(&viewer.access_token),
         )
-        .await
-        .status(),
-        StatusCode::NOT_IMPLEMENTED
-    );
+        .await,
+    )
+    .await;
+    assert_eq!(same_owner, songs);
+    let episodes = json(
+        call(
+            &router,
+            "/Items?includeItemTypes=Episode",
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    let episode = episodes["Items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["Name"] == "Pilot")
+        .unwrap()["Id"]
+        .as_str()
+        .unwrap();
+    let direct = json(
+        call(
+            &router,
+            &format!("/Items/{episode}/ThemeSongs"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(direct["Items"], serde_json::json!([]));
+    assert_eq!(direct["OwnerId"], episode);
+    let inherited = json(
+        call(
+            &router,
+            &format!("/Items/{episode}/ThemeMedia?inheritFromParent=true"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(inherited["ThemeSongsResult"]["OwnerId"], series);
+    assert_eq!(inherited["ThemeVideosResult"]["OwnerId"], series);
+    assert_eq!(inherited["ThemeSongsResult"]["Items"][0]["Name"], "series");
+    assert_eq!(inherited["ThemeVideosResult"]["Items"][0]["Name"], "intro");
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),

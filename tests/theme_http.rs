@@ -85,12 +85,10 @@ async fn theme_song_video_and_combined_contracts_are_private_and_explicitly_empt
         assert_eq!(result["StartIndex"], 0);
         assert_eq!(result["OwnerId"], film);
         let inherited = format!("{path}?inheritFromParent=true");
-        assert_eq!(
-            call(&router, &inherited, Some(&viewer.access_token))
-                .await
-                .status(),
-            StatusCode::NOT_IMPLEMENTED
-        );
+        let inherited_result =
+            json(call(&router, &inherited, Some(&viewer.access_token)).await).await;
+        assert_eq!(inherited_result["Items"], serde_json::json!([]));
+        assert_ne!(inherited_result["OwnerId"], film);
         let sorted = format!("{path}?sortBy=SortName");
         assert_eq!(
             json(call(&router, &sorted, Some(&viewer.access_token)).await).await["Items"],
