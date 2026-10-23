@@ -69,16 +69,24 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        get(&router, "/Library/PhysicalPaths", Some(&viewer.access_token))
-            .await
-            .status(),
+        get(
+            &router,
+            "/Library/PhysicalPaths",
+            Some(&viewer.access_token)
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     auth::grant_library(&state, "viewer", &movies).unwrap();
     assert_eq!(
-        get(&router, "/Library/PhysicalPaths", Some(&viewer.access_token))
-            .await
-            .status(),
+        get(
+            &router,
+            "/Library/PhysicalPaths",
+            Some(&viewer.access_token)
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -107,13 +115,16 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
         assert!(item.get("Path").is_none());
         assert!(item.get("UserData").is_none());
     }
-    let paths = json(
-        get(&router, "/Library/PhysicalPaths", Some(&admin.access_token)).await,
-    )
-    .await;
+    let paths = json(get(&router, "/Library/PhysicalPaths", Some(&admin.access_token)).await).await;
     let mut expected_paths = vec![
-        std::fs::canonicalize(&empty).unwrap().to_string_lossy().into_owned(),
-        std::fs::canonicalize(&movies).unwrap().to_string_lossy().into_owned(),
+        std::fs::canonicalize(&empty)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+        std::fs::canonicalize(&movies)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
     ];
     expected_paths.sort();
     assert_eq!(paths, serde_json::json!(expected_paths));
@@ -124,7 +135,12 @@ async fn library_media_folders_requires_admin_and_exposes_only_indexed_visible_r
     )));
     assert_eq!(
         json(
-            get(&restarted, "/Library/PhysicalPaths", Some(&admin.access_token)).await,
+            get(
+                &restarted,
+                "/Library/PhysicalPaths",
+                Some(&admin.access_token)
+            )
+            .await,
         )
         .await,
         paths
