@@ -38,6 +38,13 @@ fn media_type(path: &Path) -> &'static str {
         .as_str()
     {
         "mp4" | "m4v" => "video/mp4",
+        "mp3" => "audio/mpeg",
+        "flac" => "audio/flac",
+        "m4a" | "alac" => "audio/mp4",
+        "wav" => "audio/wav",
+        "ogg" | "oga" | "opus" => "audio/ogg",
+        "aac" => "audio/aac",
+        "wma" => "audio/x-ms-wma",
         "mkv" => "video/x-matroska",
         "webm" => "video/webm",
         "ts" | "m2ts" => "video/mp2t",
@@ -155,6 +162,7 @@ async fn serve_file(
     headers: HeaderMap,
     query: StreamQuery,
     head_only: bool,
+    kind: &'static str,
 ) -> Result<Response, StatusCode> {
     if query.static_play != Some(true) {
         return Err(StatusCode::NOT_IMPLEMENTED);
@@ -170,7 +178,7 @@ async fn serve_file(
                 .as_ref()
                 .is_none_or(|roots| roots.contains(&row.root));
             can_read
-                && row.kind == "video"
+                && row.kind == kind
                 && catalog_api::stable_id(&row.root, &row.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -219,7 +227,12 @@ async fn serve_file(
 }
 
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route("/Videos/{item_id}/stream", get(stream).head(head_stream))
+    Router::new()
+        .route("/Videos/{item_id}/stream", get(stream).head(head_stream))
+        .route(
+            "/Audio/{item_id}/stream",
+            get(audio_stream).head(head_audio_stream),
+        )
 }
 
 async fn stream(
@@ -228,7 +241,7 @@ async fn stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, false).await
+    serve_file(state, item_id, headers, query, false, "video").await
 }
 
 async fn head_stream(
@@ -237,7 +250,25 @@ async fn head_stream(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Result<Response, StatusCode> {
-    serve_file(state, item_id, headers, query, true).await
+    serve_file(state, item_id, headers, query, true, "video").await
+}
+
+async fn audio_stream(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, false, "audio").await
+}
+
+async fn head_audio_stream(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<StreamQuery>,
+) -> Result<Response, StatusCode> {
+    serve_file(state, item_id, headers, query, true, "audio").await
 }
 
 #[cfg(test)]
