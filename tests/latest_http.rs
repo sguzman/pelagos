@@ -103,10 +103,15 @@ async fn latest_ungrouped_media_is_stable_permission_scoped_and_uses_played_filt
     let no_grant = json(call(&router, "GET", route, Some(&viewer.access_token)).await).await;
     assert!(no_grant.as_array().unwrap().is_empty());
     auth::grant_library(&state, "viewer", &allowed).unwrap();
-    let grouped =
-        json(call(&router, "GET", "/Items/Latest", Some(&viewer.access_token)).await).await;
-    let ungrouped = json(call(&router, "GET", route, Some(&viewer.access_token)).await).await;
-    assert_eq!(grouped, ungrouped);
+    // This granted root contains real Audio and Photo items. The default
+    // grouped response must refuse unsupported album grouping, while the
+    // explicitly ungrouped route remains available.
+    assert_eq!(
+        call(&router, "GET", "/Items/Latest", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
     let latest = json(call(&router, "GET", route, Some(&viewer.access_token)).await).await;
     let names = latest
         .as_array()
