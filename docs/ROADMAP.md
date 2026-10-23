@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 12%` across 91 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 13%` across 93 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 17%`
+## 🔌 M1 — Jellyfin protocol and API parity — `██░░░░░░░░ 20%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -108,7 +108,7 @@
   - [x] Automated loopback UDP, message filtering, JSON property and address tests pass — GitHub Actions 39954060555 — formatting, Clippy, UDP tests and other checks pass
   - [ ] Unmodified Smart TV Jellyfin app actually discovers Pelagos and verifies address
 
-### 👥 P4 — Authentication and user state — `██░░░░░░░░ 22%`
+### 👥 P4 — Authentication and user state — `███░░░░░░░ 29%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -134,6 +134,10 @@
   - [x] Issue persistent session IDs and per-client device metadata tied to hashed tokens; expose authenticated GET /Sessions with owner/admin filtering — src/auth.rs; src/auth_api.rs — quotes-aware Jellyfin header metadata, FK-backed session rows, revocation and device scoping
   - [x] CI proves device-aware login response, session authorization, unsupported-filter rejection and cascading logout — GitHub Actions 39962550684 — full formatting, Clippy, Rust unit/HTTP tests and pinned matrix checks passed
   - [ ] Unmodified TV clients register devices, maintain WebSocket sessions and resume real playback across reconnects
+- 🔒 **T116 — Default-deny per-library permission enforcement** — `███████░░░ 67%`
+  - [x] Persist explicit grants for ordinary users and enforce scoped catalog, media and direct streaming access — src/auth.rs; src/auth_api.rs; src/catalog_api.rs; src/streaming.rs; src/playback.rs — SQLite grant mapping and CLI grant/revoke
+  - [x] CI proves cross-library isolation, no file-ID disclosure, dynamic grant/revoke and administrator access — GitHub Actions 39965370233 — format, Clippy, Rust permission and HTTP integration tests passed
+  - [ ] Real Jellyfin users and unmodified TV apps validate library permission and parental policy parity
 
 ### 🧭 P5 — General API contracts — `█░░░░░░░░░ 13%`
 
@@ -227,11 +231,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 13%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `██░░░░░░░░ 17%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `███░░░░░░░ 29%`
+### ▶️ P9 — Streaming engine — `███░░░░░░░ 34%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -261,6 +265,10 @@
   - [x] Rust GET/POST playback information maps FFprobe streams and duration, gates auth and refuses unsupported transcoding requests — src/playback.rs; src/app.rs — bounded probe, direct-source DTO with no absolute host paths
   - [x] CI validates authenticated synthetic GET/POST playback responses and media stream mapping using a fake FFprobe binary — GitHub Actions 39960435059 — full integration suite, format, Clippy and contracts passed
   - [ ] Unmodified Jellyfin clients accept media-source negotiation, codec selection and actual playback sessions
+- 🛡️ **T307 — Opened-file descriptor validation for direct streaming** — `███████░░░ 67%`
+  - [x] Validate Linux opened descriptor target inside canonical indexed root before streaming bytes — src/streaming.rs — file-handle confinement, Linux fd canonicalization and explicit non-Linux refusal
+  - [x] CI proves symlink swapping, replaced library root and retained descriptor content invariants — GitHub Actions 39965980868 — format, Clippy, Rust streaming security regressions and contract checks passed
+  - [ ] Linux production stress and adversarial multi-user filesystem security audit
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

@@ -33,3 +33,7 @@ An administrator can request synthetic-verified `GET/POST /Items/{id}/PlaybackIn
 ## Device-aware sessions (synthetic evidence only)
 
 Token issuance creates a real persistent session record and login returns `SessionInfo` with client/device fields. Authenticated `GET /Sessions` can filter by device and is scoped to the owner or administrator; remote-control and activity filters remain unsupported. Synthetic REST and persistence tests passed [CI 39962550684](https://github.com/sguzman/pelagos/actions/runs/39962550684). Actual unmodified TV login and WebSocket/reconnect behavior is **Not tested**.
+
+## Root permission scope and descriptor confinement
+
+Pelagos supports explicit root-level media read grants for ordinary accounts, while administrators see all indexed libraries. Routes for library views, item discovery, PlaybackInfo and direct-file streaming enforce the same deny-by-default permission set, with synthetic authorization coverage ([CI 39965370233](https://github.com/sguzman/pelagos/actions/runs/39965370233)). The Linux stream handler verifies the opened file descriptor to avoid symlink-swap redirection ([CI 39965980868](https://github.com/sguzman/pelagos/actions/runs/39965980868)). Real Jellyfin TV-client access-control and codec acceptance tests remain **Not tested**.

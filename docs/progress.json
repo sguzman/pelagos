@@ -616,6 +616,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T116",
+              "emoji": "🔒",
+              "name": "Default-deny per-library permission enforcement",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Persist explicit grants for ordinary users and enforce scoped catalog, media and direct streaming access",
+                  "passed": true,
+                  "evidence": "src/auth.rs; src/auth_api.rs; src/catalog_api.rs; src/streaming.rs; src/playback.rs — SQLite grant mapping and CLI grant/revoke"
+                },
+                {
+                  "title": "CI proves cross-library isolation, no file-ID disclosure, dynamic grant/revoke and administrator access",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39965370233 — format, Clippy, Rust permission and HTTP integration tests passed"
+                },
+                {
+                  "title": "Real Jellyfin users and unmodified TV apps validate library permission and parental policy parity",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -1196,6 +1218,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin clients accept media-source negotiation, codec selection and actual playback sessions",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T307",
+              "emoji": "🛡️",
+              "name": "Opened-file descriptor validation for direct streaming",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Validate Linux opened descriptor target inside canonical indexed root before streaming bytes",
+                  "passed": true,
+                  "evidence": "src/streaming.rs — file-handle confinement, Linux fd canonicalization and explicit non-Linux refusal"
+                },
+                {
+                  "title": "CI proves symlink swapping, replaced library root and retained descriptor content invariants",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39965980868 — format, Clippy, Rust streaming security regressions and contract checks passed"
+                },
+                {
+                  "title": "Linux production stress and adversarial multi-user filesystem security audit",
                   "passed": false
                 }
               ]
