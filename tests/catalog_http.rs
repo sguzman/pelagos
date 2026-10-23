@@ -31,7 +31,7 @@ async fn json(response: Response) -> Value {
 }
 
 #[tokio::test]
-async fn query_results_are_administrator_only_and_deterministically_paged() {
+async fn query_results_deny_ungranted_users_and_page_deterministically() {
     let fixture = tempfile::tempdir().unwrap();
     let root = fixture.path().join("Movies");
     let state = fixture.path().join("state");
@@ -59,7 +59,8 @@ async fn query_results_are_administrator_only_and_deterministically_paged() {
     let denied = get(&router, "/Items", None).await;
     assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
     let viewer = get(&router, "/Items", Some(&viewer_token)).await;
-    assert_eq!(viewer.status(), StatusCode::FORBIDDEN);
+    assert_eq!(viewer.status(), StatusCode::OK);
+    assert_eq!(json(viewer).await["TotalRecordCount"], 0);
 
     let all = json(get(&router, "/Items", Some(&admin_token)).await).await;
     assert_eq!(all["TotalRecordCount"], 2);

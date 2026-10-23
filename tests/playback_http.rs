@@ -59,7 +59,7 @@ async fn playback_requires_auth_and_rejects_unsupported_modes() {
         request(&router, "GET", path, Some(&viewer), "")
             .await
             .status(),
-        StatusCode::FORBIDDEN
+        StatusCode::NOT_FOUND
     );
     assert_eq!(
         request(
