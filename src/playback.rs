@@ -50,6 +50,7 @@ pub struct MediaSource {
     supports_transcoding: bool,
     media_streams: Vec<MediaStream>,
     required_http_headers: std::collections::BTreeMap<String, String>,
+    direct_stream_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,7 +99,12 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
     })
 }
 
-fn source_from_probe(item_id: &str, file: &Path, result: &probe::ProbeReport) -> MediaSource {
+fn source_from_probe(
+    item_id: &str,
+    kind: &str,
+    file: &Path,
+    result: &probe::ProbeReport,
+) -> MediaSource {
     let container = file
         .extension()
         .and_then(|ext| ext.to_str())
@@ -131,15 +137,19 @@ fn source_from_probe(item_id: &str, file: &Path, result: &probe::ProbeReport) ->
         supports_transcoding: false,
         media_streams: result.streams.iter().filter_map(mapped_stream).collect(),
         required_http_headers: Default::default(),
+        direct_stream_url: format!(
+            "/{}/{item_id}/stream?static=true",
+            if kind == "audio" { "Audio" } else { "Videos" }
+        ),
     }
 }
 
-/// Lookup only catalog-indexed video files and resolve them under the configured root.
+/// Lookup only authorized, indexed audio/video and resolve them within the root.
 async fn media_file(
     state: &AppState,
     item_id: String,
     allowed: Option<HashSet<String>>,
-) -> Result<PathBuf, StatusCode> {
+) -> Result<(PathBuf, &'static str), StatusCode> {
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
     let found = tokio::task::spawn_blocking(move || catalog::all_files(&dir))
         .await
@@ -151,7 +161,7 @@ async fn media_file(
                 .as_ref()
                 .is_none_or(|roots| roots.contains(&file.root));
             can_read
-                && file.kind == "video"
+                && matches!(file.kind.as_str(), "audio" | "video")
                 && catalog_api::stable_id(&file.root, &file.relative_path) == item_id
         })
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -164,7 +174,8 @@ async fn media_file(
     if !path.starts_with(&root) {
         return Err(StatusCode::FORBIDDEN);
     }
-    Ok(path)
+    let kind = if found.kind == "audio" { "audio" } else { "video" };
+    Ok((path, kind))
 }
 
 async fn playback_info(
@@ -175,18 +186,18 @@ async fn playback_info(
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
     let (_, allowed) = auth_api::library_scope(state.clone(), headers).await?;
     // Unknown negotiation criteria cannot be promised as implemented.
-    if req.enable_direct_play == Some(false)
-        || req.enable_direct_stream == Some(true)
-        || req.enable_transcoding == Some(true)
-    {
+    // Jellyfin's EnableDirectStream and EnableTranscoding indicate what a
+    // client permits, not a requirement to provide those modes. A client that
+    // allows direct play can still receive a direct-only source.
+    if req.enable_direct_play == Some(false) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let file = media_file(&state, item_id.clone(), allowed).await?;
+    let (file, kind) = media_file(&state, item_id.clone(), allowed).await?;
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok(Json(PlaybackInfo {
-        media_sources: vec![source_from_probe(&item_id, &file, &probed)],
+        media_sources: vec![source_from_probe(&item_id, kind, &file, &probed)],
         play_session_id: None,
         error_code: None,
     }))
@@ -233,7 +244,7 @@ mod tests {
             ],
             chapters: vec![],
         };
-        let media = source_from_probe("abc", Path::new("synthetic.mp4"), &source);
+        let media = source_from_probe("abc", "video", Path::new("synthetic.mp4"), &source);
         assert_eq!(media.run_time_ticks, Some(601_230_000));
         assert_eq!(media.media_streams.len(), 2);
         assert_eq!(media.media_streams[0].stream_type, "Video");
@@ -241,6 +252,25 @@ mod tests {
         assert!(!media.supports_transcoding);
         assert!(!media.supports_direct_stream);
         assert!(media.supports_direct_play);
+        assert_eq!(media.direct_stream_url, "/Videos/abc/stream?static=true");
+    }
+
+
+    #[test]
+    fn audio_sources_use_the_audio_stream_route() {
+        let source = probe::ProbeReport {
+            path: PathBuf::from("sound.flac"),
+            size_bytes: 10,
+            format: Some(json!({"duration":"12.5"})),
+            streams: vec![json!({"index":0,"codec_type":"audio","codec_name":"flac","sample_rate":"96000","channels":2})],
+            chapters: vec![],
+        };
+        let media = source_from_probe("track-id", "audio", Path::new("sound.flac"), &source);
+        assert_eq!(media.direct_stream_url, "/Audio/track-id/stream?static=true");
+        assert_eq!(media.run_time_ticks, Some(125_000_000));
+        assert!(media.supports_direct_play);
+        assert!(!media.supports_transcoding);
+        assert_eq!(media.media_streams[0].codec.as_deref(), Some("flac"));
     }
 
     #[test]
@@ -252,7 +282,7 @@ mod tests {
             streams: vec![json!({"codec_type":"data","index":3})],
             chapters: vec![],
         };
-        let result = source_from_probe("abc", Path::new("x.mkv"), &source);
+        let result = source_from_probe("abc", "video", Path::new("x.mkv"), &source);
         assert_eq!(result.run_time_ticks, None);
         assert!(result.media_streams.is_empty());
     }
