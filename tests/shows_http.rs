@@ -147,6 +147,19 @@ async fn shows_queries_keep_series_boundaries_season_order_and_private_accounts(
     assert_eq!(list[3]["Name"], "Return");
     assert!(list.iter().all(|item| item["SeriesId"] == signal));
     assert!(list.iter().all(|item| item["MediaType"] == "Video"));
+    let arrival_id = list[2]["Id"].as_str().unwrap();
+    let continuation = json(
+        get(
+            &router,
+            &format!("{episodes_url}?startItemId={arrival_id}"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(continuation["TotalRecordCount"], 2);
+    assert_eq!(continuation["Items"][0]["Name"], "Arrival");
+    assert_eq!(continuation["Items"][1]["Name"], "Return");
 
     let filtered = json(
         get(
@@ -199,10 +212,20 @@ async fn shows_queries_keep_series_boundaries_season_order_and_private_accounts(
             StatusCode::NOT_FOUND
         );
     }
+    let unknown_anchor = json(
+        get(
+            &router,
+            &format!("{episodes_url}?startItemId={other}"),
+            Some(&viewer.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(unknown_anchor["TotalRecordCount"], 0);
     for route in [
         format!("{episodes_url}?isMissing=true"),
         format!("{episodes_url}?fields=MediaStreams"),
-        format!("{episodes_url}?startItemId={other}"),
+        format!("{seasons_url}?startItemId={other}"),
         format!("{seasons_url}?adjacentTo={other}"),
     ] {
         assert_eq!(
