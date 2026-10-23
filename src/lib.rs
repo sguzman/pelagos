@@ -8,4 +8,5 @@ pub mod discovery;
 pub mod identity;
 pub mod media;
 pub mod probe;
+pub mod playback;
 pub mod streaming;
