@@ -1,6 +1,6 @@
 # 📡 Jellyfin v12.3 controller attribute inventory
 
-**Partial inventory:** 20/60 upstream controllers, 185 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
+**Partial inventory:** 30/60 upstream controllers, 236 HTTP method attributes. Extracted from version-pinned C# controller files. See [machine matrix](api-contracts.json).
 
 This is **not** a complete API inventory and **not** accepted parity. Method attribute lines alone do not establish route registration, authentication, parameter binding, response schemas, event streams or actual TV client behavior. Fields with `path: null` require manual route-attribute resolution.
 
@@ -14,7 +14,17 @@ This is **not** a complete API inventory and **not** accepted parity. Method att
 - **ClientLogController** — `ClientLog` — 1 method attributes
 - **CollectionController** — `Collections` — 3 method attributes
 - **ConfigurationController** — `System` — 6 method attributes
+- **DashboardController** — `/` — 2 method attributes
+- **DevicesController** — `Devices` — 5 method attributes
+- **DisplayPreferencesController** — `DisplayPreferences` — 2 method attributes
+- **DynamicHlsController** — `/` — 9 method attributes
+- **EnvironmentController** — `Environment` — 5 method attributes
+- **FilterController** — `/` — 2 method attributes
+- **GenresController** — `Genres` — 2 method attributes
+- **HlsSegmentController** — `/` — 5 method attributes
 - **ImageController** — `/` — 45 method attributes
+- **InstantMixController** — `/` — 8 method attributes
+- **ItemLookupController** — `/` — 11 method attributes
 - **ItemsController** — `/` — 8 method attributes
 - **LibraryController** — `/` — 25 method attributes
 - **MediaInfoController** — `/` — 5 method attributes

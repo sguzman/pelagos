@@ -254,6 +254,230 @@
       ]
     },
     {
+      "controller": "DashboardController",
+      "source_path": "Jellyfin.Api/Controllers/DashboardController.cs",
+      "upstream_blob_sha": "b9958867e7931e9fd72e78c23aa66d3b916700f7",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/web/ConfigurationPages",
+          "source_line": 49
+        },
+        {
+          "method": "GET",
+          "path": "/web/ConfigurationPage",
+          "source_line": 73
+        }
+      ]
+    },
+    {
+      "controller": "DevicesController",
+      "source_path": "Jellyfin.Api/Controllers/DevicesController.cs",
+      "upstream_blob_sha": "2bbfeb40b84a67e8b7ac9f2485858e9b7892a355",
+      "route_prefix": "Devices",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Devices",
+          "source_line": 51
+        },
+        {
+          "method": "GET",
+          "path": "/Devices/Info",
+          "source_line": 66
+        },
+        {
+          "method": "GET",
+          "path": "/Devices/Options",
+          "source_line": 87
+        },
+        {
+          "method": "POST",
+          "path": "/Devices/Options",
+          "source_line": 108
+        },
+        {
+          "method": "DELETE",
+          "path": "/Devices",
+          "source_line": 125
+        }
+      ]
+    },
+    {
+      "controller": "DisplayPreferencesController",
+      "source_path": "Jellyfin.Api/Controllers/DisplayPreferencesController.cs",
+      "upstream_blob_sha": "c1287fe3f4a2a924ffa7a14aa33359a0a2e445bf",
+      "route_prefix": "DisplayPreferences",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/DisplayPreferences/{displayPreferencesId}",
+          "source_line": 48
+        },
+        {
+          "method": "POST",
+          "path": "/DisplayPreferences/{displayPreferencesId}",
+          "source_line": 112
+        }
+      ]
+    },
+    {
+      "controller": "DynamicHlsController",
+      "source_path": "Jellyfin.Api/Controllers/DynamicHlsController.cs",
+      "upstream_blob_sha": "6df76de0b44ce321be11a9b6128c53ced1bcd069",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/live.m3u8",
+          "source_line": 164
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/master.m3u8",
+          "source_line": 404
+        },
+        {
+          "method": "HEAD",
+          "path": "/Videos/{itemId}/master.m3u8",
+          "source_line": 405
+        },
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/master.m3u8",
+          "source_line": 577
+        },
+        {
+          "method": "HEAD",
+          "path": "/Audio/{itemId}/master.m3u8",
+          "source_line": 578
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/main.m3u8",
+          "source_line": 745
+        },
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/main.m3u8",
+          "source_line": 914
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/hls1/{playlistId}/{segmentId}.{container}",
+          "source_line": 1086
+        },
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/hls1/{playlistId}/{segmentId}.{container}",
+          "source_line": 1268
+        }
+      ]
+    },
+    {
+      "controller": "EnvironmentController",
+      "source_path": "Jellyfin.Api/Controllers/EnvironmentController.cs",
+      "upstream_blob_sha": "794ca969329f351cf96aa9c4bc99b5e9170b1982",
+      "route_prefix": "Environment",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Environment/DirectoryContents",
+          "source_line": 48
+        },
+        {
+          "method": "POST",
+          "path": "/Environment/ValidatePath",
+          "source_line": 76
+        },
+        {
+          "method": "GET",
+          "path": "/Environment/Drives",
+          "source_line": 135
+        },
+        {
+          "method": "GET",
+          "path": "/Environment/ParentPath",
+          "source_line": 147
+        },
+        {
+          "method": "GET",
+          "path": "/Environment/DefaultDirectoryBrowser",
+          "source_line": 176
+        }
+      ]
+    },
+    {
+      "controller": "FilterController",
+      "source_path": "Jellyfin.Api/Controllers/FilterController.cs",
+      "upstream_blob_sha": "b9ca45cc1c59753f65ffa6db7491b9c6c54cfcd9",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/Filters",
+          "source_line": 53
+        },
+        {
+          "method": "GET",
+          "path": "/Items/Filters2",
+          "source_line": 112
+        }
+      ]
+    },
+    {
+      "controller": "GenresController",
+      "source_path": "Jellyfin.Api/Controllers/GenresController.cs",
+      "upstream_blob_sha": "18a8b67be2dfee5abfd0cd7008af64265dd6704e",
+      "route_prefix": "Genres",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Genres",
+          "source_line": 74
+        },
+        {
+          "method": "GET",
+          "path": "/Genres/{genreName}",
+          "source_line": 162
+        }
+      ]
+    },
+    {
+      "controller": "HlsSegmentController",
+      "source_path": "Jellyfin.Api/Controllers/HlsSegmentController.cs",
+      "upstream_blob_sha": "c61ee45830d1a06b8a93827181be2c047e4c96cc",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/hls/{segmentId}/stream.mp3",
+          "source_line": 55
+        },
+        {
+          "method": "GET",
+          "path": "/Audio/{itemId}/hls/{segmentId}/stream.aac",
+          "source_line": 56
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/hls/{playlistId}/stream.m3u8",
+          "source_line": 79
+        },
+        {
+          "method": "DELETE",
+          "path": "/Videos/ActiveEncodings",
+          "source_line": 103
+        },
+        {
+          "method": "GET",
+          "path": "/Videos/{itemId}/hls/{playlistId}/{segmentId}.{segmentContainer}",
+          "source_line": 126
+        }
+      ]
+    },
+    {
       "controller": "ImageController",
       "source_path": "Jellyfin.Api/Controllers/ImageController.cs",
       "upstream_blob_sha": "d492a2f5bab5b23ecd06e57f9d222b90ca0afa45",
@@ -483,6 +707,117 @@
           "method": "DELETE",
           "path": "/Branding/Splashscreen",
           "source_line": 1758
+        }
+      ]
+    },
+    {
+      "controller": "InstantMixController",
+      "source_path": "Jellyfin.Api/Controllers/InstantMixController.cs",
+      "upstream_blob_sha": "8cd79645a88187c953f42c8cc6042715e9318b94",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Songs/{itemId}/InstantMix",
+          "source_line": 69
+        },
+        {
+          "method": "GET",
+          "path": "/Albums/{itemId}/InstantMix",
+          "source_line": 112
+        },
+        {
+          "method": "GET",
+          "path": "/Playlists/{itemId}/InstantMix",
+          "source_line": 155
+        },
+        {
+          "method": "GET",
+          "path": "/MusicGenres/{name}/InstantMix",
+          "source_line": 197
+        },
+        {
+          "method": "GET",
+          "path": "/Artists/{itemId}/InstantMix",
+          "source_line": 234
+        },
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/InstantMix",
+          "source_line": 277
+        },
+        {
+          "method": "GET",
+          "path": "/Artists/InstantMix",
+          "source_line": 320
+        },
+        {
+          "method": "GET",
+          "path": "/MusicGenres/InstantMix",
+          "source_line": 360
+        }
+      ]
+    },
+    {
+      "controller": "ItemLookupController",
+      "source_path": "Jellyfin.Api/Controllers/ItemLookupController.cs",
+      "upstream_blob_sha": "39ba5ab186eea39007c02c2e0660777f8012340c",
+      "route_prefix": "",
+      "actions": [
+        {
+          "method": "GET",
+          "path": "/Items/{itemId}/ExternalIdInfos",
+          "source_line": 64
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Movie",
+          "source_line": 88
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Trailer",
+          "source_line": 105
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/MusicVideo",
+          "source_line": 122
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Series",
+          "source_line": 139
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/BoxSet",
+          "source_line": 156
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/MusicArtist",
+          "source_line": 173
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/MusicAlbum",
+          "source_line": 190
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Person",
+          "source_line": 207
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Book",
+          "source_line": 225
+        },
+        {
+          "method": "POST",
+          "path": "/Items/RemoteSearch/Apply/{itemId}",
+          "source_line": 245
         }
       ]
     },
