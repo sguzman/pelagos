@@ -24,3 +24,5 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Tests
         run: cargo test --all-targets
+      - name: Evidence-backed roadmap
+        run: cargo run --quiet --bin pelagos-roadmap -- --check
