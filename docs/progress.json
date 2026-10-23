@@ -213,6 +213,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T014",
+              "emoji": "📂",
+              "name": "Read-only local media scan diagnostic",
+              "checks": [
+                {
+                  "title": "Implement native Rust file-type inventory without following symlinks or modifying media",
+                  "passed": true,
+                  "evidence": "src/media.rs; src/main.rs; Cargo.toml"
+                },
+                {
+                  "title": "CI validates synthetic media detection, symlink avoidance and unchanged file contents",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39950651357: format, clippy, tests and roadmap verification passed"
+                },
+                {
+                  "title": "Live Linux scan verifies a real user-authorized library safely",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

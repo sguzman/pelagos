@@ -6,7 +6,7 @@
 
 **Identity:** `#1DB2C0` · `oklch(70% 0.115 205)` ([color decision](docs/COLOR.md)). **Administration appearance:** ◐ System (default) / ☀ Light / ☾ Dark, with the selector at the top right.
 
-> **Pre-alpha scaffolding, not yet Jellyfin compatible.** The server boots a provisional API, health endpoint and admin UI. There is no media library, authentication, transcoding, user account migration or Smart TV playback yet. Full compatibility is an acceptance goal, not a current claim.
+> **Pre-alpha scaffolding, not yet Jellyfin compatible.** The server boots a provisional API, health endpoint and admin UI. A read-only filename-based scanner is available via CLI, but there is no server-side media library, authentication, transcoding, user account migration or Smart TV playback yet. Full compatibility is an acceptance goal, not a current claim.
 
 ## 🎯 MVP means the COMPLETE Jellyfin Server port
 
@@ -20,14 +20,16 @@
 
 ## 📊 Development status
 
-`░░░░░░░░░░ 4%` across 79 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`█░░░░░░░░░ 5%` across 80 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 39950134726](https://github.com/sguzman/pelagos/actions/runs/39950134726) — formatting, clippy, Rust tests and automatic roadmap validation.
+**Latest passing CI:** [run 39950651357](https://github.com/sguzman/pelagos/actions/runs/39950651357) — formatting, clippy, Rust tests and automatic roadmap validation.
 
 ## 🚀 Current starter
 
 ```sh
 cargo run -- --bind 127.0.0.1 --port 8097
+# Read-only offline inventory; no server started, no writes to media:
+cargo run -- scan /path/to/authorized/media
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets

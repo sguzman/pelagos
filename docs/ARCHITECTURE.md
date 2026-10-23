@@ -30,3 +30,7 @@ The default listener is loopback-only on port 8097, deliberately avoiding collis
 ## Constraints
 
 Prefer a single Rust package with clearly separated modules until concrete scaling needs justify multiple crates. Keep media roots configurable, never mutate original media without explicit operation and tested backup behavior. Build an isolated Pelagos database; any Jellyfin data import is read-only against source data and previewed first. Retain FFmpeg/FFprobe and hardware acceleration without codec reinvention. GUI appearance: upper-right System (default), Light, Dark, persisted locally, with live OS theme following when System is selected.
+
+## Read-only diagnostics
+
+The Rust-only `pelagos scan <directory>` subcommand enumerates recognized file extensions, sizes and relative paths, sorted deterministically. It never writes source media, never follows file or directory symlinks inside the library root, does not run Jellyfin, and does not start HTTP. This is a testable inventory diagnostic only: no persistent indexing, metadata inference, user library, remote client delivery or FFprobe analysis is claimed yet. Synthetic fixtures and a symlink boundary test run in GitHub CI.

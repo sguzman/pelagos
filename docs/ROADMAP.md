@@ -2,9 +2,9 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `░░░░░░░░░░ 4%` across 79 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 5%` across 80 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `██░░░░░░░░ 23%`
+## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 26%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -31,7 +31,7 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory
   - [ ] Production or real-client acceptance validates baseline source/version and compatibility inventory
 
-### 🛠️ P1 — Build and storage — `░░░░░░░░░░ 0%`
+### 🛠️ P1 — Build and storage — `█░░░░░░░░░ 13%`
 
 - 🏗️ **T006 — Build reproducibility** — `░░░░░░░░░░ 0%`
   - [ ] Implement locked dependencies and automated stable Rust compilation
@@ -49,6 +49,10 @@
   - [ ] Implement structured diagnostics, graceful shutdown and signals
   - [ ] Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals
   - [ ] Production or real-client acceptance validates structured diagnostics, graceful shutdown and signals
+- 📂 **T014 — Read-only local media scan diagnostic** — `███████░░░ 67%`
+  - [x] Implement native Rust file-type inventory without following symlinks or modifying media — src/media.rs; src/main.rs; Cargo.toml
+  - [x] CI validates synthetic media detection, symlink avoidance and unchanged file contents — GitHub Actions 39950651357: format, clippy, tests and roadmap verification passed
+  - [ ] Live Linux scan verifies a real user-authorized library safely
 
 ### 🧪 P2 — Test framework — `██░░░░░░░░ 17%`
 
