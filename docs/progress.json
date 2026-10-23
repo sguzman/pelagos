@@ -1632,6 +1632,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T230",
+              "emoji": "📁",
+              "name": "Confined original-media Jellyfin item file retrieval",
+              "checks": [
+                {
+                  "title": "Implement pinned GET/HEAD /Items/{itemId}/File using indexed, authorization-scoped opened descriptors, original bytes and MIME types with HTTP byte ranges",
+                  "passed": true,
+                  "evidence": "src/streaming.rs; tests/original_file_http.rs — shared Linux-confined direct-file reader for audio, video and standalone photos"
+                },
+                {
+                  "title": "CI verifies unauthenticated 401, ungranted 404, cross-library protection, restart persistence, grant revocation, HEAD, partial/invalid ranges and swapped outside symlinks",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40013990594 — full formatting, Clippy, Rust integration/unit tests and repository contract guards passed"
+                },
+                {
+                  "title": "Unmodified Jellyfin web/TV clients verify original-file handling, permissions and full upstream retrieval/download-policy differences",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }

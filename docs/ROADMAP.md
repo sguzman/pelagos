@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 28%` across 129 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 29%` across 130 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -226,7 +226,7 @@
   - [x] CI verifies mixed filter exclusion, explicit Series discovery, scoped Search/Hints, cross-user 403, unsupported flags and grant revocation — GitHub Actions 40011417762 — complete Rust tests, formatting, Clippy and contract/roadmap guards passed
   - [ ] Upstream boolean-filter combinations and actual unmodified Jellyfin TV clients validate full search/browse parity
 
-## 📚 M2 — Full media library and metadata — `███░░░░░░░ 34%`
+## 📚 M2 — Full media library and metadata — `████░░░░░░ 35%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -296,7 +296,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `████░░░░░░ 37%`
+### 🎼 P8 — Library feature APIs — `████░░░░░░ 40%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -334,6 +334,10 @@
   - [x] Implement pinned GET Shows/{seriesId}/Seasons and /Episodes with season filters, specials, index ordering, paging, StartItemId and optional UserData/images — src/shows.rs; tests/shows_http.rs — scoped catalog graph with explicit refusal of unsupported query options
   - [x] Full CI verifies unavailable/foreign series, cross-user identity, typed seasons/episodes, stable season links, continuation and permission revocation — GitHub Actions 40007768099 — formatting, Clippy, all Rust HTTP tests and upstream/roadmap checks passed
   - [ ] Unmodified Jellyfin Smart TV/web clients validate complete Shows routes, missing episodes, NextUp, metadata and alternate media behaviors
+- 📁 **T230 — Confined original-media Jellyfin item file retrieval** — `███████░░░ 67%`
+  - [x] Implement pinned GET/HEAD /Items/{itemId}/File using indexed, authorization-scoped opened descriptors, original bytes and MIME types with HTTP byte ranges — src/streaming.rs; tests/original_file_http.rs — shared Linux-confined direct-file reader for audio, video and standalone photos
+  - [x] CI verifies unauthenticated 401, ungranted 404, cross-library protection, restart persistence, grant revocation, HEAD, partial/invalid ranges and swapped outside symlinks — GitHub Actions 40013990594 — full formatting, Clippy, Rust integration/unit tests and repository contract guards passed
+  - [ ] Unmodified Jellyfin web/TV clients verify original-file handling, permissions and full upstream retrieval/download-policy differences
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 

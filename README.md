@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 28%` across 129 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 29%` across 130 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40012627288](https://github.com/sguzman/pelagos/actions/runs/40012627288) — administrator-only physical paths, batched SQLite personal metadata, formatting, Clippy, complete Rust tests and source/roadmap guards.
+**Latest passing CI:** [run 40013990594](https://github.com/sguzman/pelagos/actions/runs/40013990594) — permission-scoped original-item file access, GET/HEAD, ranges, symlink containment, Rust format, Clippy and complete test/contract checks.
 
 ## 🚀 Current starter
 
@@ -73,6 +73,8 @@ Conservative local Movie recognition now requires the video filename and contain
 `GET /Items/Counts` now reports visible indexed media totals and recognized Movie/Series/Episode counts, honoring the authenticated user's own `isFavorite` state. Other categories remain zero until actual matching classification exists; those zeros are **not** evidence of full Jellyfin counts parity. Explicit `isSeries`/`isMovie` filters now work across `/Items` and `/Search/Hints`, including typed Series discovery, without changing default file-only browsing or library access controls.
 
 Personal watched/favorite/resume metadata now loads via bounded SQLite batches rather than a separate query for every media item; regression coverage includes 900+ IDs and enforces isolation and input-order preservation. The pinned `GET /Library/PhysicalPaths` provides administrators only with configured indexed filesystem roots, while ordinary media DTOs remain pathless. Neither change establishes full upstream migration or real client parity.
+
+Pelagos now serves pinned `GET /Items/{itemId}/File` and HEAD using its indexed, authorized, Linux descriptor-confined original-media reader. Byte ranges, video/audio/photo MIME types, and library revocation are synthetic-tested. This **does not** enable the separate `/Items/{itemId}/Download` policy, transcoding, or actual Jellyfin client acceptance.
 
 ## 🦀 Architecture and independence
 
