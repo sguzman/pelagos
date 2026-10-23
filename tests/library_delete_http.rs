@@ -36,8 +36,7 @@ async fn json(response: Response) -> Value {
 }
 
 async fn view_count(router: &Router, token: &str) -> i64 {
-    json(call(router, "GET", "/UserViews", Some(token), "").await)
-        .await["TotalRecordCount"]
+    json(call(router, "GET", "/UserViews", Some(token), "").await).await["TotalRecordCount"]
         .as_i64()
         .unwrap()
 }
