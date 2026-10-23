@@ -81,6 +81,39 @@ pub fn episode_hint(relative_path: &Path) -> Option<EpisodeHint> {
     })
 }
 
+/// Only infer a movie from a matching Title (YYYY) directory and file stem.
+/// This rejects movie-looking files dropped into an arbitrary mixed library
+/// and makes no genre, edition or provider metadata claims.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MovieHint {
+    pub title: String,
+    pub production_year: u16,
+}
+
+pub fn movie_hint(relative_path: &Path) -> Option<MovieHint> {
+    let stem = relative_path.file_stem()?.to_str()?.trim();
+    let folder = relative_path.parent()?.file_name()?.to_str()?.trim();
+    if !stem.eq_ignore_ascii_case(folder) {
+        return None;
+    }
+    let without_paren = stem.strip_suffix(')')?;
+    let (title, year_text) = without_paren.rsplit_once(" (")?;
+    if title.trim().is_empty()
+        || year_text.len() != 4
+        || !year_text.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let production_year: u16 = year_text.parse().ok()?;
+    if !(1888..=2100).contains(&production_year) {
+        return None;
+    }
+    Some(MovieHint {
+        title: title.trim().to_owned(),
+        production_year,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +154,35 @@ mod tests {
             "Show/Season 01/Show - S01E01.mp4/other.mkv",
         ] {
             assert!(episode_hint(Path::new(path)).is_none(), "{path}");
+        }
+    }
+
+    #[test]
+    fn recognizes_only_matching_movie_folder_and_file_pairs() {
+        assert_eq!(
+            movie_hint(Path::new("Films/Café de México (2024)/Café de México (2024).mkv")),
+            Some(MovieHint {
+                title: "Café de México".to_owned(),
+                production_year: 2024,
+            })
+        );
+        assert_eq!(
+            movie_hint(Path::new("Arrival (2016)/arrival (2016).mp4"))
+                .unwrap()
+                .title,
+            "arrival"
+        );
+        for path in [
+            "Feature (2021).mkv",
+            "Shows/Season 01/Film (2021).mkv",
+            "Different (2021)/Film (2021).mkv",
+            "Film (abcd)/Film (abcd).mp4",
+            "Film (1776)/Film (1776).mp4",
+            "Film (2101)/Film (2101).mp4",
+            "Film (2021)/Film (2021) - Extended.mp4",
+            "Film (2021)/Film (2021).English.srt",
+        ] {
+            assert!(movie_hint(Path::new(path)).is_none(), "{path}");
         }
     }
 
