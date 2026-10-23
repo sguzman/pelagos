@@ -55,7 +55,13 @@ async fn authenticated_system_info_matches_public_identity_and_truthful_capabili
     let info = get(&router, "/System/Info", Some(&token)).await;
     assert_eq!(info.status(), StatusCode::OK);
     let content = json(info).await;
-    for key in ["Id", "ServerName", "ProductName", "Version", "OperatingSystem"] {
+    for key in [
+        "Id",
+        "ServerName",
+        "ProductName",
+        "Version",
+        "OperatingSystem",
+    ] {
         assert_eq!(content[key], public[key], "{key}");
     }
     assert_eq!(content["SupportsLibraryMonitor"], false);
@@ -63,7 +69,12 @@ async fn authenticated_system_info_matches_public_identity_and_truthful_capabili
     assert_eq!(content["CanSelfRestart"], false);
     assert_eq!(content["HasPendingRestart"], false);
     assert_eq!(content["IsShuttingDown"], false);
-    assert!(content["CompletedInstallations"].as_array().unwrap().is_empty());
+    assert!(
+        content["CompletedInstallations"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     for disallowed in [
         "ProgramDataPath",
         "CachePath",
