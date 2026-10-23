@@ -90,7 +90,8 @@ async fn hints(
     }
     let term = query.search_term.trim().to_lowercase();
     nodes.retain(|item| {
-        item.name.to_lowercase().contains(&term)
+        item.parent_id.is_some()
+            && item.name.to_lowercase().contains(&term)
             && included
                 .as_ref()
                 .is_none_or(|kinds| kinds.contains(&item.item_type))
