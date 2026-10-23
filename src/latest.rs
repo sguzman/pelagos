@@ -118,7 +118,11 @@ async fn latest_for_user(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let limit = query.limit.unwrap_or(20).min(200);
     let mut result = Vec::new();
+    if limit == 0 {
+        return Ok(Json(result));
+    }
     for (mut item, data) in ordered.drain(..).zip(saved) {
         if query.is_played.is_some_and(|played| data.played != played) {
             continue;
@@ -130,7 +134,7 @@ async fn latest_for_user(
             item.user_data = Some(data);
         }
         result.push(item);
-        if result.len() >= query.limit.unwrap_or(20).min(200) {
+        if result.len() >= limit {
             break;
         }
     }
