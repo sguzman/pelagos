@@ -141,7 +141,11 @@ async fn list_resume(
         b.user_data
             .as_ref()
             .and_then(|data| data.last_played_date.as_ref())
-            .cmp(&a.user_data.as_ref().and_then(|data| data.last_played_date.as_ref()))
+            .cmp(
+                &a.user_data
+                    .as_ref()
+                    .and_then(|data| data.last_played_date.as_ref()),
+            )
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.id.cmp(&b.id))
     });
