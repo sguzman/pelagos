@@ -241,7 +241,7 @@ fn catalog_nodes(
                         server_id: server_id.to_owned(),
                         parent_id: Some(parent_id.clone()),
                         size: None,
-        container: None,
+                        container: None,
                         user_data: None,
                         image_tags: artwork::primary_for_folder(&indexed_images, &root, &folder)
                             .and_then(artwork::image_tag)
