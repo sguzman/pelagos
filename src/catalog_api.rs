@@ -116,9 +116,19 @@ fn root_item(root: &str, server_id: &str) -> ItemDto {
 
 /// Build a virtual directory hierarchy from indexed filenames. No filesystem writes,
 /// metadata guesses, or symlink traversal occur here.
-fn catalog_nodes(files: Vec<catalog::CatalogFile>, server_id: &str) -> Vec<ItemDto> {
+fn catalog_nodes(
+    files: Vec<catalog::CatalogFile>,
+    roots: Vec<String>,
+    server_id: &str,
+) -> Vec<ItemDto> {
     let mut result = Vec::new();
     let mut seen = HashSet::new();
+    for root in roots {
+        let root_id = stable_id(&root, "");
+        if seen.insert(root_id) {
+            result.push(root_item(&root, server_id));
+        }
+    }
     for file in files {
         let root = file.root.clone();
         let root_id = stable_id(&root, "");
@@ -184,11 +194,15 @@ async fn query_items(
 ) -> Result<Json<QueryResult>, StatusCode> {
     let state_dir = admin_state(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let files = tokio::task::spawn_blocking(move || catalog::all_files(&state_dir))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut all = catalog_nodes(files, &server_id);
+    let (files, roots) = tokio::task::spawn_blocking(move || {
+        let files = catalog::all_files(&state_dir)?;
+        let roots = catalog::library_roots(&state_dir)?;
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut all = catalog_nodes(files, roots, &server_id);
     match query.parent_id.as_deref() {
         Some(parent) => {
             let parents: HashMap<String, Option<String>> = all
@@ -253,11 +267,15 @@ async fn item(
 ) -> Result<Json<ItemDto>, StatusCode> {
     let dir = admin_state(state.clone(), headers).await?;
     let server_id = state.server_id().to_owned();
-    let candidates = tokio::task::spawn_blocking(move || catalog::all_files(&dir))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    catalog_nodes(candidates, &server_id)
+    let (candidates, roots) = tokio::task::spawn_blocking(move || {
+        let files = catalog::all_files(&dir)?;
+        let roots = catalog::library_roots(&dir)?;
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>((files, roots))
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    catalog_nodes(candidates, roots, &server_id)
         .into_iter()
         .find(|item| item.id == item_id)
         .map(Json)
@@ -328,7 +346,7 @@ mod tests {
                 size_bytes: 5,
             },
         ];
-        let tree = catalog_nodes(files, "server");
+        let tree = catalog_nodes(files, vec!["/media/movies".to_owned()], "server");
         assert_eq!(tree.len(), 5);
         let root = tree
             .iter()
