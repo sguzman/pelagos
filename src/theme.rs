@@ -95,7 +95,9 @@ async fn indexed_themes(
         Some(owner.id.as_str())
     } else if owner.item_type == "Movie" {
         owner.parent_id.as_deref().filter(|parent| {
-            nodes.iter().any(|item| item.id == *parent && item.item_type == "Folder")
+            nodes
+                .iter()
+                .any(|item| item.id == *parent && item.item_type == "Folder")
                 && nodes
                     .iter()
                     .filter(|item| {
