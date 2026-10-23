@@ -1260,6 +1260,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T207",
+              "emoji": "🕒",
+              "name": "Durable first-indexed chronology and catalog schema v3 migration",
+              "checks": [
+                {
+                  "title": "Store immutable first-index timestamps on newly cataloged files, migrate v1/v2 histories conservatively and keep timestamps fixed during rescans",
+                  "passed": true,
+                  "evidence": "src/catalog.rs — schema v3 with last-seen backfill, dedicated latest index and timestamp-preserving conflict updates"
+                },
+                {
+                  "title": "Full CI verifies initial ordering, deterministic ties, rescans, removal/readdition, backwards migration and forward-version safety",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40015196184 — Rust formatting, Clippy, unit/integration suite and repository guards passed"
+                },
+                {
+                  "title": "Large-library migration benchmarking, known external creation-time reconciliation and Jellyfin upstream DateCreated compatibility are verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
@@ -1650,6 +1672,28 @@
                 },
                 {
                   "title": "Unmodified Jellyfin web/TV clients verify original-file handling, permissions and full upstream retrieval/download-policy differences",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T231",
+              "emoji": "🆕",
+              "name": "Authorized ungrouped latest media shelf and legacy user route",
+              "checks": [
+                {
+                  "title": "Implement pinned GET /Items/Latest and legacy route with explicit groupItems=false, saved chronological order, recognized item filtering, per-user watched state and paging",
+                  "passed": true,
+                  "evidence": "src/latest.rs; tests/latest_http.rs — directory-scoped newest-first media, personal state, optional DTO flags and strict 501 on unsupported grouping"
+                },
+                {
+                  "title": "CI verifies authorization, cross-user denial, revoked grants, stable rescan/restart ordering, movie/episode/photo media, played filters, limit=0 and legacy response",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40015196184 — full Rust tests, formatting, Clippy, source/roadmap checks passed"
+                },
+                {
+                  "title": "Default grouped latest shelves, alternate Jellyfin library types, upstream DateCreated behavior and unmodified client acceptance verified",
                   "passed": false
                 }
               ],

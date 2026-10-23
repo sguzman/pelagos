@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 29%` across 130 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 29%` across 132 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -226,11 +226,11 @@
   - [x] CI verifies mixed filter exclusion, explicit Series discovery, scoped Search/Hints, cross-user 403, unsupported flags and grant revocation — GitHub Actions 40011417762 — complete Rust tests, formatting, Clippy and contract/roadmap guards passed
   - [ ] Upstream boolean-filter combinations and actual unmodified Jellyfin TV clients validate full search/browse parity
 
-## 📚 M2 — Full media library and metadata — `████░░░░░░ 35%`
+## 📚 M2 — Full media library and metadata — `████░░░░░░ 37%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
-### 📂 P6 — Filesystem and items — `███░░░░░░░ 29%`
+### 📂 P6 — Filesystem and items — `███░░░░░░░ 34%`
 
 - 🗂️ **T200 — Library roots and filesystem watching** — `░░░░░░░░░░ 0%`
   - [ ] Implement multi-root libraries, watcher updates and rescan correctness
@@ -260,6 +260,10 @@
   - [x] Recognize a conservative Title (YYYY) movie only when video filename and containing directory agree; otherwise retain generic Video without fabricated production metadata — src/naming.rs; src/catalog_api.rs — local movie hints, Movie DTO and optional ProductionYear
   - [x] CI verifies Movie type/isMovie filters, Search/Hints, resume persistence, stable IDs, Unicode titles and grant/revoke isolation — GitHub Actions 40008846700 — full formatting, Clippy, Rust HTTP/unit and source/roadmap checks passed
   - [ ] Unmodified Jellyfin clients verify full movie naming, NFO/remote metadata, editions, provider IDs, collections and media-source parity
+- 🕒 **T207 — Durable first-indexed chronology and catalog schema v3 migration** — `███████░░░ 67%`
+  - [x] Store immutable first-index timestamps on newly cataloged files, migrate v1/v2 histories conservatively and keep timestamps fixed during rescans — src/catalog.rs — schema v3 with last-seen backfill, dedicated latest index and timestamp-preserving conflict updates
+  - [x] Full CI verifies initial ordering, deterministic ties, rescans, removal/readdition, backwards migration and forward-version safety — GitHub Actions 40015196184 — Rust formatting, Clippy, unit/integration suite and repository guards passed
+  - [ ] Large-library migration benchmarking, known external creation-time reconciliation and Jellyfin upstream DateCreated compatibility are verified
 
 ### 🧩 P7 — Metadata systems — `███░░░░░░░ 34%`
 
@@ -296,7 +300,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `████░░░░░░ 40%`
+### 🎼 P8 — Library feature APIs — `████░░░░░░ 43%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -338,6 +342,10 @@
   - [x] Implement pinned GET/HEAD /Items/{itemId}/File using indexed, authorization-scoped opened descriptors, original bytes and MIME types with HTTP byte ranges — src/streaming.rs; tests/original_file_http.rs — shared Linux-confined direct-file reader for audio, video and standalone photos
   - [x] CI verifies unauthenticated 401, ungranted 404, cross-library protection, restart persistence, grant revocation, HEAD, partial/invalid ranges and swapped outside symlinks — GitHub Actions 40013990594 — full formatting, Clippy, Rust integration/unit tests and repository contract guards passed
   - [ ] Unmodified Jellyfin web/TV clients verify original-file handling, permissions and full upstream retrieval/download-policy differences
+- 🆕 **T231 — Authorized ungrouped latest media shelf and legacy user route** — `███████░░░ 67%`
+  - [x] Implement pinned GET /Items/Latest and legacy route with explicit groupItems=false, saved chronological order, recognized item filtering, per-user watched state and paging — src/latest.rs; tests/latest_http.rs — directory-scoped newest-first media, personal state, optional DTO flags and strict 501 on unsupported grouping
+  - [x] CI verifies authorization, cross-user denial, revoked grants, stable rescan/restart ordering, movie/episode/photo media, played filters, limit=0 and legacy response — GitHub Actions 40015196184 — full Rust tests, formatting, Clippy, source/roadmap checks passed
+  - [ ] Default grouped latest shelves, alternate Jellyfin library types, upstream DateCreated behavior and unmodified client acceptance verified
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 
