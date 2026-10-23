@@ -189,8 +189,8 @@ async fn shows_queries_keep_series_boundaries_season_order_and_private_accounts(
     }
     for route in [
         format!("{episodes_url}?seasonId={other}"),
-        format!("/Shows/00000000000000000000000000000000/Episodes"),
-        format!("/Shows/00000000000000000000000000000000/Seasons"),
+        "/Shows/00000000000000000000000000000000/Episodes".to_string(),
+        "/Shows/00000000000000000000000000000000/Seasons".to_string(),
     ] {
         assert_eq!(
             get(&router, &route, Some(&viewer.access_token))
