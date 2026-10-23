@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 22%` across 111 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 23%` across 113 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 30%`
+## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 34%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -147,7 +147,7 @@
   - [x] CI verifies individual user isolation, restart persistence, repeat handling, legacy endpoint authorization and revocation — GitHub Actions 39981559797 — formatting, Clippy, SQLite and HTTP tests passed
   - [ ] Unmodified Jellyfin TV/mobile clients agree on played state, sync updates and watched-count semantics
 
-### 🧭 P5 — General API contracts — `███░░░░░░░ 34%`
+### 🧭 P5 — General API contracts — `████░░░░░░ 40%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -181,6 +181,14 @@
   - [x] Include per-account UserData in /Items and item detail with paginated SQLite batching and legacy /Users/{userId}/Items/{id} — src/catalog_api.rs; src/user_data.rs — one read connection per paginated response, permission gating and legacy ownership check
   - [x] CI verifies per-user playback/favorite DTO fields and access isolation — GitHub Actions 39982107696 — Rust item/legacy user data integration tests and source checks passed
   - [ ] Real Jellyfin clients validate complete BaseItemDto UserData schema and updates across browsing views
+- 🧬 **T128 — Permission-scoped Jellyfin item ancestor navigation** — `███████░░░ 67%`
+  - [x] Implement pinned Items/{itemId}/Ancestors order with user ownership, accessible folder chain and UserData — src/catalog_api.rs; tests/ancestors_http.rs — direct-parent-first chain from the authorized item graph
+  - [x] CI verifies ancestor ordering, root behavior, 401/403/404 responses, grants and immediate revocation — GitHub Actions 39997380191 — fmt, Clippy, Rust HTTP/unit tests, compatibility inventory and roadmap guard all passed
+  - [ ] Unmodified Jellyfin TV/web clients validate ancestor navigation and full BaseItemDto behavior
+- ⭐ **T129 — Authenticated Jellyfin UserData item reads and legacy route** — `███████░░░ 67%`
+  - [x] Expose pinned UserItems/{itemId}/UserData GET and Users/{userId}/Items/{itemId}/UserData GET from private per-user SQLite state — src/user_data.rs; tests/user_data_http.rs — authorized current-user reads, independent from Jellyfin state
+  - [x] CI verifies uninitialized state, watched/favorite persistence, cross-account denial and grant revocation — GitHub Actions 39997380191 — complete Rust CI passed with GET regressions
+  - [ ] Unmodified Jellyfin clients verify read/write UserData DTO parity and synchronization semantics
 
 ## 📚 M2 — Full media library and metadata — `███░░░░░░░ 25%`
 
