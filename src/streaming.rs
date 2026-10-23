@@ -24,9 +24,16 @@ use tokio_util::io::ReaderStream;
 use crate::{app::AppState, auth_api, catalog, catalog_api};
 
 #[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct StreamQuery {
     #[serde(rename = "static")]
     static_play: Option<bool>,
+    container: Option<String>,
+    start_time_ticks: Option<i64>,
+    media_source_id: Option<String>,
+    audio_codec: Option<String>,
+    video_codec: Option<String>,
+    subtitle_stream_index: Option<i64>,
 }
 
 fn media_type(path: &Path) -> &'static str {
@@ -168,6 +175,19 @@ async fn serve_file(
     if query.static_play != Some(true) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
+    if query.start_time_ticks.is_some_and(|value| value < 0) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if query.start_time_ticks.is_some_and(|value| value > 0)
+        || query.audio_codec.is_some()
+        || query.video_codec.is_some()
+        || query.subtitle_stream_index.is_some()
+        || query.media_source_id.as_deref().is_some_and(|source| source != item_id)
+    {
+        // Seeking by playback ticks, stream selection and transcoding need a
+        // real FFmpeg negotiation pipeline. Only HTTP byte ranges are supported.
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let (directory, allowed) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     let matched = tokio::task::spawn_blocking(move || catalog::all_files(&directory))
         .await
@@ -186,7 +206,7 @@ async fn serve_file(
 
     // A Jellyfin stream.<container> URL must not silently remux. Only return
     // the already indexed source when its original extension matches.
-    if let Some(requested) = requested_container {
+    for requested in requested_container.into_iter().chain(query.container) {
         let valid = requested.len() <= 16
             && !requested.is_empty()
             && requested.bytes().all(|byte| byte.is_ascii_alphanumeric());
