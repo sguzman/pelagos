@@ -9,6 +9,7 @@ pub mod catalog_api;
 pub mod discovery;
 pub mod identity;
 pub mod media;
+pub mod naming;
 pub mod playback;
 pub mod playstate;
 pub mod probe;
