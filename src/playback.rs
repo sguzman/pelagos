@@ -66,6 +66,23 @@ pub struct MediaStream {
     bit_rate: Option<i64>,
     channels: Option<i64>,
     sample_rate: Option<i64>,
+    profile: Option<String>,
+    title: Option<String>,
+    aspect_ratio: Option<String>,
+    pixel_format: Option<String>,
+    channel_layout: Option<String>,
+    time_base: Option<String>,
+    codec_time_base: Option<String>,
+    color_range: Option<String>,
+    color_space: Option<String>,
+    color_transfer: Option<String>,
+    color_primaries: Option<String>,
+    bit_depth: Option<i64>,
+    average_frame_rate: Option<f64>,
+    real_frame_rate: Option<f64>,
+    is_interlaced: bool,
+    is_hearing_impaired: bool,
+    is_original: bool,
     is_default: bool,
     is_forced: bool,
 }
@@ -74,6 +91,25 @@ fn number(value: &Value) -> Option<i64> {
     value
         .as_i64()
         .or_else(|| value.as_str()?.parse::<i64>().ok())
+}
+
+fn text_field(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .filter(|text| text.len() <= 256 && !text.chars().any(char::is_control))
+        .map(str::to_owned)
+}
+
+fn frame_rate(value: &Value) -> Option<f64> {
+    let raw = value.as_str()?;
+    let (numerator, denominator) = raw.split_once('/')?;
+    let numerator = numerator.parse::<f64>().ok()?;
+    let denominator = denominator.parse::<f64>().ok()?;
+    if !numerator.is_finite() || !denominator.is_finite() || denominator <= 0.0 {
+        return None;
+    }
+    let fps = numerator / denominator;
+    (fps.is_finite() && fps > 0.0 && fps <= 1_000.0).then_some(fps)
 }
 
 fn mapped_stream(value: &Value) -> Option<MediaStream> {
@@ -94,8 +130,29 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         bit_rate: number(&value["bit_rate"]),
         channels: number(&value["channels"]),
         sample_rate: number(&value["sample_rate"]),
-        is_default: value["disposition"]["default"] == 1,
-        is_forced: value["disposition"]["forced"] == 1,
+        profile: text_field(&value["profile"]),
+        title: text_field(&value["tags"]["title"]),
+        aspect_ratio: text_field(&value["display_aspect_ratio"]),
+        pixel_format: text_field(&value["pix_fmt"]),
+        channel_layout: text_field(&value["channel_layout"]),
+        time_base: text_field(&value["time_base"]),
+        codec_time_base: text_field(&value["codec_time_base"]),
+        color_range: text_field(&value["color_range"]),
+        color_space: text_field(&value["color_space"]),
+        color_transfer: text_field(&value["color_transfer"]),
+        color_primaries: text_field(&value["color_primaries"]),
+        bit_depth: number(&value["bits_per_raw_sample"])
+            .or_else(|| number(&value["bits_per_sample"])),
+        average_frame_rate: frame_rate(&value["avg_frame_rate"]),
+        real_frame_rate: frame_rate(&value["r_frame_rate"]),
+        is_interlaced: matches!(
+            value["field_order"].as_str(),
+            Some("tt" | "bb" | "tb" | "bt")
+        ),
+        is_hearing_impaired: number(&value["disposition"]["hearing_impaired"]) == Some(1),
+        is_original: number(&value["disposition"]["original"]) == Some(1),
+        is_default: number(&value["disposition"]["default"]) == Some(1),
+        is_forced: number(&value["disposition"]["forced"]) == Some(1),
     })
 }
 
@@ -284,6 +341,75 @@ mod tests {
         assert!(media.supports_direct_play);
         assert!(!media.supports_transcoding);
         assert_eq!(media.media_streams[0].codec.as_deref(), Some("flac"));
+    }
+
+
+    #[test]
+    fn media_stream_profiles_and_fps_only_report_probed_values() {
+        let stream = json!({
+            "index": 0,
+            "codec_type": "video",
+            "codec_name": "hevc",
+            "profile": "Main 10",
+            "width": 3840,
+            "height": 2160,
+            "pix_fmt": "yuv420p10le",
+            "display_aspect_ratio": "16:9",
+            "avg_frame_rate": "24000/1001",
+            "r_frame_rate": "24/1",
+            "color_primaries": "bt2020",
+            "color_transfer": "smpte2084",
+            "color_space": "bt2020nc",
+            "color_range": "tv",
+            "bits_per_raw_sample": "10",
+            "time_base": "1/24000",
+            "field_order": "progressive",
+            "tags": {"title": "Main video"},
+            "disposition": {"default": 1, "forced": 0, "original": 1}
+        });
+        let mapped = mapped_stream(&stream).unwrap();
+        assert_eq!(mapped.profile.as_deref(), Some("Main 10"));
+        assert_eq!(mapped.pixel_format.as_deref(), Some("yuv420p10le"));
+        assert_eq!(mapped.bit_depth, Some(10));
+        assert_eq!(mapped.aspect_ratio.as_deref(), Some("16:9"));
+        assert_eq!(mapped.color_transfer.as_deref(), Some("smpte2084"));
+        assert_eq!(mapped.title.as_deref(), Some("Main video"));
+        assert_eq!(mapped.real_frame_rate, Some(24.0));
+        assert!((mapped.average_frame_rate.unwrap() - 23.976_023_976).abs() < 1e-7);
+        assert!(!mapped.is_interlaced);
+        assert!(mapped.is_default);
+        assert!(mapped.is_original);
+        assert_eq!(frame_rate(&json!("0/0")), None);
+        assert_eq!(frame_rate(&json!("30/0")), None);
+        assert_eq!(frame_rate(&json!("NaN/1")), None);
+        assert_eq!(frame_rate(&json!("30000/1")), None);
+    }
+
+    #[test]
+    fn subtitle_dispositions_and_audio_layout_are_not_inferred() {
+        let subtitle = mapped_stream(&json!({
+            "index": 2,
+            "codec_type": "subtitle",
+            "codec_name": "subrip",
+            "tags": {"language": "eng", "title": "SDH"},
+            "disposition": {"hearing_impaired": 1, "forced": 1}
+        }))
+        .unwrap();
+        assert!(subtitle.is_hearing_impaired);
+        assert!(subtitle.is_forced);
+        assert_eq!(subtitle.average_frame_rate, None);
+        let audio = mapped_stream(&json!({
+            "index": 1,
+            "codec_type": "audio",
+            "codec_name": "flac",
+            "channel_layout": "5.1(side)",
+            "sample_rate": "48000",
+            "bits_per_sample": 24
+        }))
+        .unwrap();
+        assert_eq!(audio.channel_layout.as_deref(), Some("5.1(side)"));
+        assert_eq!(audio.bit_depth, Some(24));
+        assert!(!audio.is_original);
     }
 
     #[test]
