@@ -1786,6 +1786,50 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T235",
+              "emoji": "🗂️",
+              "name": "Library-root-scoped NextUp discovery with authorization checks",
+              "checks": [
+                {
+                  "title": "Resolve NextUp parentId solely to an authorized CollectionFolder and restrict candidate episodes through the local indexed parent graph; reject unsupported combined series filters and nested scopes",
+                  "passed": true,
+                  "evidence": "src/shows.rs — permission-scoped graph traversal and precise 404/501 failure boundaries"
+                },
+                {
+                  "title": "CI verifies per-library NextUp results, cross-library isolation, inaccessible/unknown parents, nested unsupported scopes and post-revocation 404",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40023231676 — formatting, Clippy, new tests/next_up_many_http.rs coverage and complete Rust/contract suites passed"
+                },
+                {
+                  "title": "Jellyfin nested parent views, grouped user views, channels and unmodified TV clients accept complete upstream parentId semantics",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T236",
+              "emoji": "📆",
+              "name": "Validated UTC last-watch cutoff for general NextUp recommendations",
+              "checks": [
+                {
+                  "title": "Support nextUpDateCutoff for general watched-series discovery with strict UTC parsing, real calendar validation and inclusive nanosecond-precision comparison",
+                  "passed": true,
+                  "evidence": "src/shows.rs — safe UTC key parser, explicit bad-date response, series-cutoff filtering before paging"
+                },
+                {
+                  "title": "CI verifies exact cutoff, fraction boundary, invalid calendar days, leap dates, Unicode input safety, sorting and supported option combinations",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40023231676 — dedicated parser tests and multi-series HTTP regressions alongside full Rust validation"
+                },
+                {
+                  "title": "Jellyfin offset-aware DateTime variations, alternate historical episode versions and unmodified web/Smart TV cutoff behavior verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
