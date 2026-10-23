@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 31%` across 140 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 32%` across 141 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -304,7 +304,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `█████░░░░░ 51%`
+### 🎼 P8 — Library feature APIs — `█████░░░░░ 52%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -374,6 +374,10 @@
   - [x] Implement parent-container parity for video-only latest item types and permission-scoped default grouping without inventing audio/photo albums — src/latest.rs; pinned Jellyfin v12.3 BaseItem.LatestItemsIndexContainer, TV/Episode.cs and UserViewManager.cs
   - [x] Rust CI verifies grouped Movie/Episode/Video feeds, default video-only results, mixed-media refusal, ordering, count, legacy route and library permissions — GitHub Actions 40031375693: formatting, Clippy, complete Rust tests, roadmap and pinned contract checks passed
   - [ ] Unmodified Jellyfin Smart TV apps and production deployments accept latest Movie/Episode and default video-only shelves
+- 🗃️ **T238 — Permission-scoped empty Jellyfin item BoxSet membership subset** — `███████░░░ 67%`
+  - [x] Return pinned Jellyfin collection QueryResult for authorized indexed items, with truthful empty membership and fail-closed unsupported fields — src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController.GetItemCollections; BoxSet indexing not yet implemented
+  - [x] CI verifies admin and user authorization, missing/private IDs, paging, account isolation, restart and grant revocation — GitHub Actions 40031984883: full Rust test suite, formatting, Clippy, roadmap and pinned source/API contracts passed
+  - [ ] Indexed real BoxSet memberships and unmodified Jellyfin TV client acceptance of item collections
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 

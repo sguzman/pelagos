@@ -1852,6 +1852,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T238",
+              "emoji": "🗃️",
+              "name": "Permission-scoped empty Jellyfin item BoxSet membership subset",
+              "checks": [
+                {
+                  "title": "Return pinned Jellyfin collection QueryResult for authorized indexed items, with truthful empty membership and fail-closed unsupported fields",
+                  "passed": true,
+                  "evidence": "src/catalog_api.rs; pinned Jellyfin v12.3 LibraryController.GetItemCollections; BoxSet indexing not yet implemented"
+                },
+                {
+                  "title": "CI verifies admin and user authorization, missing/private IDs, paging, account isolation, restart and grant revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40031984883: full Rust test suite, formatting, Clippy, roadmap and pinned source/API contracts passed"
+                },
+                {
+                  "title": "Indexed real BoxSet memberships and unmodified Jellyfin TV client acceptance of item collections",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }

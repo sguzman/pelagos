@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 31%` across 140 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 32%` across 141 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40031375693](https://github.com/sguzman/pelagos/actions/runs/40031375693) — typed Movie/Episode/Video and permission-scoped default latest grouping, privacy/refusal cases, complete Rust tests, formatting, Clippy, evidence-ledger and pinned contract checks.
+**Latest passing CI:** [run 40031984883](https://github.com/sguzman/pelagos/actions/runs/40031984883) — scoped empty item collection membership, authorization/paging/revocation regressions, full Rust tests, formatting, Clippy and pinned contract checks.
 
 ## 🚀 Current starter
 
@@ -97,3 +97,5 @@ Rust owns HTTP, protocols, indexing, metadata, state, playback negotiations, and
 [Architecture](docs/ARCHITECTURE.md) · [Pinned API attributes](docs/API_CONTRACTS.md) · [Compatibility](docs/COMPATIBILITY.md) · [Provenance and licensing](docs/PROVENANCE.md) · [Tracking](docs/ISSUES.md).
 
 Pelagos is independent of and not endorsed by Jellyfin. This repository retains its original MIT license for independently authored implementation; Jellyfin's GPL-2.0 source must not be copied/translated without meeting derivative-work licensing obligations.
+
+Pelagos implements a deliberately narrow authenticated `GET /Items/{itemId}/Collections` subset for visible, indexed items. It returns Jellyfin's query wrapper with an empty `Items` array and zero `TotalRecordCount`, because Pelagos has **not** indexed any BoxSets or collection memberships. Nonexistent or inaccessible items yield 404, other-user requests are refused, and unsupported rich field projections yield 501. Paging fields are accepted and preserved. This is tested server behavior, **not** real BoxSet support or TV-client acceptance ([CI 40031984883](https://github.com/sguzman/pelagos/actions/runs/40031984883)).
