@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 30%` across 135 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 30%` across 136 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40021221370](https://github.com/sguzman/pelagos/actions/runs/40021221370) — authorized per-series NextUp, resumable filtering, watched progression, full Rust tests, formatting, Clippy and pinned contract guards.
+**Latest passing CI:** [run 40021920924](https://github.com/sguzman/pelagos/actions/runs/40021920924) — multi-series watched NextUp, per-user recency ordering, revocation, resume selection, full Rust tests, formatting, Clippy and pinned source checks.
 
 ## 🚀 Current starter
 
@@ -83,6 +83,8 @@ Pelagos now persists a first-indexed timestamp in catalog schema v3, preserving 
 The latest-media API now supports Jellyfin's Episode-to-Series grouping when explicitly restricted to `includeItemTypes=Episode` (with default `groupItems=true` or explicit true). A Series replaces its individual episodes when multiple matching episodes exist, with a truthful `ChildCount`; a singleton remains an Episode. Group counts are computed before applying the requested result limit. Other default/mixed latest grouping still returns 501 until audio albums, photo albums, and full collection-type rules are modeled. This is native HTTP-tested, **not** unmodified-client acceptance.
 
 The pinned `GET /Shows/NextUp` has an explicitly **per-series** subset: callers supply `seriesId`, and Pelagos selects the first recognized unplayed episode after the highest watched season/episode index. `enableResumable=false` can suppress the selected episode if it has saved progress; `startIndex`, `limit`, `enableImages` and `enableUserData` are scoped to the authenticated viewer. Broad NextUp discovery, episode versions, specials, cutoff and rewatching remain unsupported, and unmodified-client compatibility is not claimed.
+
+`GET /Shows/NextUp` now implements both selected-Series behavior (`seriesId`) and a conservative general feed that includes only visible recognized series with a recorded watch history. The feed chooses each series' next episode after its highest watched index and ranks by the user's latest recorded playback date. It preserves personal authorization, pagination, and basic resume exclusion. Upstream advanced handling of specials, alternate media versions, rewatching, date cutoffs, and library preference exclusions is still unsupported, and unmodified-client compatibility remains untested.
 
 ## 🦀 Architecture and independence
 

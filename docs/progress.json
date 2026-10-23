@@ -1764,6 +1764,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T234",
+              "emoji": "📡",
+              "name": "Private multi-series NextUp recommendations ordered by latest watched date",
+              "checks": [
+                {
+                  "title": "Discover only permitted recognized series with saved playback history, select each next episode after the highest watched position, and rank by personal last-played date with pagination",
+                  "passed": true,
+                  "evidence": "src/shows.rs — scoped series grouping using batched user-state and deterministic ranked QueryResult"
+                },
+                {
+                  "title": "CI verifies multiple series with deterministic per-user playback dates, ignored unstarted series, independent account state, page boundaries, resumable exclusions, restart and library revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40021920924 — native Rust integration/unit tests, formatting, Clippy and pinned route/source/evidence guards passed"
+                },
+                {
+                  "title": "Full Jellyfin next-up date cutoff, alternate episode versions, specials, per-library exclusions, rewatching, and actual unmodified TV/web client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         }
