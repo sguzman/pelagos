@@ -56,7 +56,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -106,8 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .state_dir
             .clone()
             .unwrap_or_else(identity::default_state_dir);
-        let user = pelagos::auth::create_user(&state_dir, username, password)
-            .map_err(|e| -> Box<dyn std::error::Error> { e })?;
+        let user = pelagos::auth::create_user(&state_dir, username, password)?;
         println!("created user: {} ({})", user.name, user.id);
         return Ok(());
     }
