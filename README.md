@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 25%` across 120 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 26%` across 121 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40003332448](https://github.com/sguzman/pelagos/actions/runs/40003332448) — administrator-only media folder queries, format, Clippy, native HTTP tests and progress guards.
+**Latest passing CI:** [run 40004088369](https://github.com/sguzman/pelagos/actions/runs/40004088369) — safe bound server URL, admin media folders, authenticated catalog, formatting, Clippy, Rust tests and tracking checks.
 
 ## 🚀 Current starter
 
@@ -61,6 +61,8 @@ The current authenticated `GET /Users/{userId}` only resolves the current accoun
 A new authenticated `GET /Items/Root` (and legacy `/Users/{userId}/Items/Root`) provides a stable virtual user root. `GET /Items?parentId=<rootId>` navigates only permission-granted collection folders, including empty libraries; ancestor chains connect them to the virtual root. `/Items` now validates supported `SortName`, ascending/descending order, user ownership and image/UserData suppression; unsupported sort and field projections return 501. These are synthetic-tested subsets, not full upstream query or real-client parity.
 
 The scoped `GET /Library/MediaFolders` exposes indexed collection roots, including empty libraries, to administrators only. Ordinary accounts remain forbidden even with media grants, and physical filesystem paths are not included in these DTOs. Hidden/disabled library configuration and full Jellyfin admin behavior remain unimplemented.
+
+System info now reports `LocalAddress` from a concrete listening IPv4/IPv6 socket, using the actual bound port, never from the incoming HTTP `Host` header. Wildcard binds intentionally return null rather than an invalid `0.0.0.0` or `::` URL. UDP LAN discovery continues to choose its address per requester. This network contract remains synthetic-tested; actual Smart TV connection is not verified.
 
 ## 🦀 Architecture and independence
 
