@@ -11,6 +11,7 @@ pub mod identity;
 pub mod media;
 pub mod playback;
 pub mod playstate;
+pub mod resume;
 pub mod probe;
 pub(crate) mod query_filters;
 pub mod search;
