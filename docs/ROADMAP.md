@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `██░░░░░░░░ 23%` across 113 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `██░░░░░░░░ 24%` across 116 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -81,7 +81,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `███░░░░░░░ 34%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 36%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -112,7 +112,7 @@
   - [x] CI tests anonymous rejection, public/private identity agreement and honest system flags — GitHub Actions 39995545838 — full Rust system info and pinned controller regression tests passed
   - [ ] Unmodified Jellyfin Smart TV and administration clients accept the system-info responses
 
-### 👥 P4 — Authentication and user state — `███░░░░░░░ 34%`
+### 👥 P4 — Authentication and user state — `████░░░░░░ 37%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -146,8 +146,12 @@
   - [x] Implement per-user played/unplayed and favorite/unfavorite Jellyfin routes with private persistent SQLite state — src/user_data.rs — independent Pelagos database, user-scoped flag updates, play-count and last-played fields
   - [x] CI verifies individual user isolation, restart persistence, repeat handling, legacy endpoint authorization and revocation — GitHub Actions 39981559797 — formatting, Clippy, SQLite and HTTP tests passed
   - [ ] Unmodified Jellyfin TV/mobile clients agree on played state, sync updates and watched-count semantics
+- 👤 **T118 — Self-scoped Jellyfin user lookup by ID** — `███████░░░ 67%`
+  - [x] Serve pinned GET /Users/{userId} for authenticated account only, matching /Users/Me without exposing other users — src/auth_api.rs; tests/user_lookup_http.rs — self lookup, inaccessible account 404, token validation
+  - [x] CI verifies account equality, cross-account privacy and revoked token denial — GitHub Actions 39997998461 — formatting, Clippy, HTTP tests and source tracking passed
+  - [ ] Unmodified Jellyfin clients validate full UserDto parity, admin identity permissions and user directory behavior
 
-### 🧭 P5 — General API contracts — `████░░░░░░ 40%`
+### 🧭 P5 — General API contracts — `████░░░░░░ 43%`
 
 - 🔎 **T120 — Search and query APIs** — `░░░░░░░░░░ 0%`
   - [ ] Implement search, suggestions, sorting, filters and item pagination
@@ -189,8 +193,12 @@
   - [x] Expose pinned UserItems/{itemId}/UserData GET and Users/{userId}/Items/{itemId}/UserData GET from private per-user SQLite state — src/user_data.rs; tests/user_data_http.rs — authorized current-user reads, independent from Jellyfin state
   - [x] CI verifies uninitialized state, watched/favorite persistence, cross-account denial and grant revocation — GitHub Actions 39997380191 — complete Rust CI passed with GET regressions
   - [ ] Unmodified Jellyfin clients verify read/write UserData DTO parity and synchronization semantics
+- ✍️ **T130 — Transactional Jellyfin UserData item updates** — `███████░░░ 67%`
+  - [x] Implement pinned POST UserItems/{itemId}/UserData and legacy route for supported played, favorite, play-count and resume-tick fields with strict unsupported-input handling — src/user_data.rs; tests/user_data_update_http.rs — private transactional SQLite updates with guarded field validation
+  - [x] CI verifies atomic rejection, caller/library isolation, negative positions, persistent flags, idempotency and grant revocation — GitHub Actions 39998782291 — complete Rust CI passed on main
+  - [ ] Unmodified Jellyfin clients validate full UpdateUserItemDataDto, preference fields, event synchronization and resume semantics
 
-## 📚 M2 — Full media library and metadata — `███░░░░░░░ 25%`
+## 📚 M2 — Full media library and metadata — `███░░░░░░░ 27%`
 
 **Gate:** Every core library type can be scanned, indexed, enriched, queried and updated like Jellyfin.
 
@@ -252,7 +260,7 @@
   - [x] CI proves 304 without bytes and invalidation after edit without reindexing — GitHub Actions 39993608914 — artwork integration tests, permissions, format and Clippy passed
   - [ ] Unmodified Jellyfin TV/image clients validate conditional artwork fetches and account privacy
 
-### 🎼 P8 — Library feature APIs — `██░░░░░░░░ 22%`
+### 🎼 P8 — Library feature APIs — `███░░░░░░░ 29%`
 
 - 🎬 **T220 — Movie and TV collections** — `░░░░░░░░░░ 0%`
   - [ ] Implement movies, series, playlists, collections and multiple versions
@@ -278,6 +286,10 @@
   - [x] List locally indexed primary image tags and actual sizes via GET /Items/{id}/Images without raw paths or fabricated dimensions — src/artwork.rs — authenticated Jellyfin ImageInfo subset, read-only metadata and missing-image behavior
   - [x] CI verifies authenticated HTTP contract, representative fixtures and Rust quality gates — GitHub Actions 39988687987 — scoped ImageInfo listing, privacy, HTTP and Rust validation passed
   - [ ] Unmodified Jellyfin Smart TV clients validate this behavior with real libraries and metadata
+- 📦 **T227 — Indexed native container metadata on library items** — `███████░░░ 67%`
+  - [x] Emit filename-derived media Container from indexed relative paths, omitting it from virtual library and folder items — src/catalog_api.rs; tests/catalog_http.rs — MP4/MKV/FLAC DTOs and private folder metadata
+  - [x] CI verifies container DTO regression and full existing catalog suite — GitHub Actions 39998201271 — formatting, Clippy, catalog HTTP and full test checks passed
+  - [ ] Unmodified Jellyfin clients and pinned BaseItemDto metadata differential validate container consistency
 
 ## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `███░░░░░░░ 34%`
 
