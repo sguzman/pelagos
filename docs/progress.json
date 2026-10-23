@@ -507,6 +507,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T106",
+              "emoji": "🌐",
+              "name": "Safe concrete listener URL in Jellyfin system identity",
+              "checks": [
+                {
+                  "title": "Advertise actual IPv4/IPv6 HTTP listener in System/Info/Public and authorized System/Info, keeping wildcard hosts unadvertised",
+                  "passed": true,
+                  "evidence": "src/app.rs; src/main.rs; tests/http.rs; tests/system_info_http.rs — concrete bind URL and matching system identity without Host trust"
+                },
+                {
+                  "title": "CI verifies loopback, LAN IPv4, bracketed IPv6, wildcard suppression, hostile Host input and actual bound port plumbing",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40004088369 — formatting, Clippy, all Rust tests, roadmap and upstream contract guards passed"
+                },
+                {
+                  "title": "Real Jellyfin web/TV app discovery and connection verifies advertised URL, proxy behavior and multi-interface host selection",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
