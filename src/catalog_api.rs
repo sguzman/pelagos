@@ -70,10 +70,54 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Items", get(items))
         .route("/Items/{item_id}", get(item))
+        .route("/Items/{item_id}/Ancestors", get(ancestors))
         .route("/Users/{user_id}/Items", get(user_items))
         .route("/Users/{user_id}/Items/{item_id}", get(user_item))
         .route("/UserViews", get(user_views))
         .route("/Users/{user_id}/Views", get(user_views_legacy))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AncestorsQuery {
+    user_id: Option<String>,
+}
+
+/// Pinned Jellyfin v12.3 ancestor order is immediate parent first.
+/// Resolve only from the authenticated user's accessible graph, so neither
+/// ancestor IDs nor artwork leak across ungranted library roots.
+async fn ancestors(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+    Query(query): Query<AncestorsQuery>,
+) -> Result<Json<Vec<ItemDto>>, StatusCode> {
+    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query.user_id.as_deref().is_some_and(|id| id != user.id) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let nodes = accessible_nodes(state.clone(), headers.clone()).await?;
+    let by_id: HashMap<String, ItemDto> = nodes
+        .into_iter()
+        .map(|node| (node.id.clone(), node))
+        .collect();
+    let mut next = by_id
+        .get(&item_id)
+        .ok_or(StatusCode::NOT_FOUND)?
+        .parent_id
+        .clone();
+    let mut seen = HashSet::new();
+    let mut parents = Vec::new();
+    while let Some(id) = next {
+        if !seen.insert(id.clone()) {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        let parent = by_id.get(&id).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        next = parent.parent_id.clone();
+        parents.push(parent.clone());
+    }
+    attach_user_data(&state, headers, &mut parents).await?;
+    Ok(Json(parents))
 }
 
 pub(crate) fn stable_id(root: &str, name: &str) -> String {
