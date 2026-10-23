@@ -288,7 +288,12 @@ async fn serve_file(
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
-    let range = match headers.get(RANGE) {
+    let mut ranges = headers.get_all(RANGE).iter();
+    let first = ranges.next();
+    if ranges.next().is_some() {
+        return Ok(invalid_range(size));
+    }
+    let range = match first {
         None => None,
         Some(value) => match value.to_str().ok().and_then(|raw| parse_range(raw, size)) {
             Some(range) => Some(range),

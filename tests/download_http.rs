@@ -197,6 +197,20 @@ async fn admin_only_download_is_confined_and_has_attachment_headers() {
         .unwrap();
     assert_eq!(opaque_direct.status(), StatusCode::RANGE_NOT_SATISFIABLE);
     assert_eq!(opaque_direct.headers()[header::CONTENT_RANGE], "bytes */11");
+    let duplicate = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(video.as_str())
+                .header("X-Emby-Token", &admin.access_token)
+                .header(header::RANGE, "bytes=0-1")
+                .header(header::RANGE, "bytes=4-5")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(duplicate.status(), StatusCode::RANGE_NOT_SATISFIABLE);
     let original = request(&router, &old, Some(&viewer.access_token), None).await;
     assert!(
         original
