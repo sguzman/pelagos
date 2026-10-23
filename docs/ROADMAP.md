@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `█░░░░░░░░░ 10%` across 87 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `█░░░░░░░░░ 10%` across 88 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 31%`
 
@@ -219,11 +219,11 @@
   - [x] CI verifies nested synthetic library folder navigation, item-ID and missing-parent behavior — GitHub Actions 39957906828 — Rust/HTTP tests, Clippy, format and ledger checks succeeded
   - [ ] Unmodified Jellyfin TV clients browse seasons, metadata and artwork in real libraries
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 5%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `█░░░░░░░░░ 10%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█░░░░░░░░░ 13%`
+### ▶️ P9 — Streaming engine — `██░░░░░░░░ 22%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -245,6 +245,10 @@
   - [x] Rust invokes FFprobe read-only with bounded output, timeout and no shell — src/probe.rs; src/main.rs — probe CLI and isolated subprocess bridge
   - [x] CI passes synthetic FFprobe success, failure, malformed output and deadline regression tests — GitHub Actions 39952135417 — FFprobe process unit tests, Clippy and formatting passed
   - [ ] Real FFprobe executable and real media stream/metadata profiles pass platform acceptance
+- 🎬 **T305 — Authenticated static video HTTP byte-range streaming** — `███████░░░ 67%`
+  - [x] Implement admin-gated GET/HEAD static video route, MIME, byte ranges and source-root confinement — src/streaming.rs; src/app.rs — direct file streaming via tokio-util; no remux/transcode claim
+  - [x] CI tests full/partial/HEAD, 416 ranges, authorization, indexed symlink escape and CLI/API consistency — GitHub Actions 39958988196: formatting, Clippy, Rust HTTP range and symlink regression tests, roadmap/matrix checks passed
+  - [ ] Real Jellyfin TV apps direct-play, seek and resume across tested codecs and devices
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

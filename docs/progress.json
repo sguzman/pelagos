@@ -1111,6 +1111,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T305",
+              "emoji": "🎬",
+              "name": "Authenticated static video HTTP byte-range streaming",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement admin-gated GET/HEAD static video route, MIME, byte ranges and source-root confinement",
+                  "passed": true,
+                  "evidence": "src/streaming.rs; src/app.rs — direct file streaming via tokio-util; no remux/transcode claim"
+                },
+                {
+                  "title": "CI tests full/partial/HEAD, 416 ranges, authorization, indexed symlink escape and CLI/API consistency",
+                  "passed": true,
+                  "evidence": "GitHub Actions 39958988196: formatting, Clippy, Rust HTTP range and symlink regression tests, roadmap/matrix checks passed"
+                },
+                {
+                  "title": "Real Jellyfin TV apps direct-play, seek and resume across tested codecs and devices",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
