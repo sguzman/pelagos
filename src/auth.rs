@@ -34,13 +34,39 @@ pub struct UserPolicy {
     pub is_disabled: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ClientMetadata {
+    pub client: Option<String>,
+    pub device_id: Option<String>,
+    pub device_name: Option<String>,
+    pub application_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct SessionInfo {
+    pub id: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub client: Option<String>,
+    pub device_id: Option<String>,
+    pub device_name: Option<String>,
+    pub application_version: Option<String>,
+    pub server_id: String,
+    pub is_active: bool,
+    pub supports_media_control: bool,
+    pub supports_remote_control: bool,
+    pub playable_media_types: Vec<String>,
+    pub supported_commands: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Login {
     pub user: User,
     pub access_token: String,
     pub server_id: String,
-    pub session_info: Option<serde_json::Value>,
+    pub session_info: SessionInfo,
 }
 
 fn state_db(state_dir: &Path) -> Result<PathBuf> {
@@ -78,6 +104,14 @@ fn database(state_dir: &Path) -> Result<Connection> {
              digest BLOB PRIMARY KEY NOT NULL,
              user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
              created_unix INTEGER NOT NULL DEFAULT (unixepoch())
+         );
+         CREATE TABLE IF NOT EXISTS pelagos_sessions(
+             id TEXT PRIMARY KEY NOT NULL,
+             digest BLOB NOT NULL UNIQUE REFERENCES pelagos_tokens(digest) ON DELETE CASCADE,
+             client TEXT,
+             device_id TEXT,
+             device_name TEXT,
+             application_version TEXT
          );",
     )?;
     Ok(db)
@@ -158,6 +192,22 @@ pub fn authenticate(
     password: &str,
     server_id: &str,
 ) -> Result<Option<Login>> {
+    authenticate_with_client(
+        state_dir,
+        name,
+        password,
+        server_id,
+        ClientMetadata::default(),
+    )
+}
+
+pub fn authenticate_with_client(
+    state_dir: &Path,
+    name: &str,
+    password: &str,
+    server_id: &str,
+    metadata: ClientMetadata,
+) -> Result<Option<Login>> {
     if !valid_username(name) || password.len() > MAX_PASSWORD_BYTES {
         return Ok(None);
     }
@@ -194,12 +244,41 @@ pub fn authenticate(
         params![id],
         |row| user_from_row(row, server_id),
     )?;
+    let session_id = Uuid::new_v4().simple().to_string();
+    tx.execute(
+        "INSERT INTO pelagos_sessions(
+            id, digest, client, device_id, device_name, application_version
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            session_id,
+            digest.as_slice(),
+            metadata.client,
+            metadata.device_id,
+            metadata.device_name,
+            metadata.application_version,
+        ],
+    )?;
     tx.commit()?;
+    let session_info = SessionInfo {
+        id: session_id,
+        user_id: user.id.clone(),
+        user_name: user.name.clone(),
+        client: metadata.client,
+        device_id: metadata.device_id,
+        device_name: metadata.device_name,
+        application_version: metadata.application_version,
+        server_id: server_id.to_owned(),
+        is_active: true,
+        supports_media_control: false,
+        supports_remote_control: false,
+        playable_media_types: Vec::new(),
+        supported_commands: Vec::new(),
+    };
     Ok(Some(Login {
         user,
         access_token: token,
         server_id: server_id.to_owned(),
-        session_info: None,
+        session_info,
     }))
 }
 
@@ -290,6 +369,43 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+
+    #[test]
+    fn clients_receive_persistent_session_metadata_with_token_revocation() {
+        let dir = tempfile::tempdir().unwrap();
+        create_user(dir.path(), "viewer", "secure-test-passphrase").unwrap();
+        let metadata = ClientMetadata {
+            client: Some("Jellyfin Android TV".to_owned()),
+            device_id: Some("tv-device-1".to_owned()),
+            device_name: Some("Living Room".to_owned()),
+            application_version: Some("1.0.0".to_owned()),
+        };
+        let result = authenticate_with_client(
+            dir.path(),
+            "viewer",
+            "secure-test-passphrase",
+            "server",
+            metadata,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(result.session_info.client.as_deref(), Some("Jellyfin Android TV"));
+        assert_eq!(result.session_info.device_id.as_deref(), Some("tv-device-1"));
+        assert_eq!(result.session_info.user_name, "viewer");
+        assert_eq!(result.session_info.user_id, result.user.id);
+        assert!(!result.session_info.supports_remote_control);
+        let db = database(dir.path()).unwrap();
+        let sessions: i64 = db
+            .query_row("SELECT COUNT(*) FROM pelagos_sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sessions, 1);
+        assert!(revoke(dir.path(), &result.access_token).unwrap());
+        let sessions: i64 = db
+            .query_row("SELECT COUNT(*) FROM pelagos_sessions", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sessions, 0);
     }
 
     #[test]
