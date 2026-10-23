@@ -179,7 +179,6 @@ fn catalog_nodes(
                         size: None,
                         user_data: None,
                         image_tags: None,
-        image_tags: None,
                     });
                 }
                 parent_id = folder_id;
