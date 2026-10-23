@@ -7,7 +7,7 @@ use std::{
 };
 
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
     extract::{Path as RoutePath, State},
     http::{
@@ -17,6 +17,7 @@ use axum::{
     response::Response,
     routing::get,
 };
+use serde::Serialize;
 use tokio::io::AsyncReadExt;
 use tokio_util::io::ReaderStream;
 
@@ -153,16 +154,11 @@ pub(crate) fn image_tag(image: &catalog::CatalogFile) -> Option<String> {
     ))
 }
 
-async fn image_response(
+async fn selected_image(
     state: Arc<AppState>,
     headers: HeaderMap,
     item_id: String,
-    image_type: String,
-    head_only: bool,
-) -> Result<Response, StatusCode> {
-    if image_type != "Primary" {
-        return Err(StatusCode::NOT_FOUND);
-    }
+) -> Result<catalog::CatalogFile, StatusCode> {
     let (dir, allowed) = auth_api::library_scope(state, headers).await?;
     let selected = tokio::task::spawn_blocking(move || {
         let mut files = catalog::all_files(&dir)?;
@@ -177,7 +173,20 @@ async fn image_response(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .ok_or(StatusCode::NOT_FOUND)
+}
+
+async fn image_response(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    item_id: String,
+    image_type: String,
+    head_only: bool,
+) -> Result<Response, StatusCode> {
+    if image_type != "Primary" {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let selected = selected_image(state, headers, item_id).await?;
     let (opened, path, size) = tokio::task::spawn_blocking(move || {
         streaming::open_confined(
             Path::new(&selected.root),
@@ -209,6 +218,52 @@ async fn image_response(
         HeaderValue::from_static("private, max-age=0"),
     );
     Ok(response)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct ImageInfo {
+    image_type: &'static str,
+    image_index: Option<usize>,
+    image_tag: String,
+    size: u64,
+}
+
+/// The image collection API lists only present, indexed local primary artwork.
+/// Original filesystem paths, blurhash and unknown image dimensions are not
+/// invented or exposed.
+async fn image_infos(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item_id): RoutePath<String>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<ImageInfo>>, StatusCode> {
+    let readable = catalog_api::accessible_nodes(state.clone(), headers.clone()).await?;
+    if !readable.iter().any(|item| item.id == item_id) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let image = match selected_image(state, headers, item_id).await {
+        Ok(image) => image,
+        Err(StatusCode::NOT_FOUND) => return Ok(Json(Vec::new())),
+        Err(error) => return Err(error),
+    };
+    let details = tokio::task::spawn_blocking(move || {
+        let tag = image_tag(&image);
+        let size = std::fs::symlink_metadata(
+            Path::new(&image.root).join(&image.relative_path)
+        ).ok().filter(|meta| meta.file_type().is_file()).map(|meta| meta.len());
+        tag.zip(size)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let Some((image_tag, size)) = details else {
+        return Ok(Json(Vec::new()));
+    };
+    Ok(Json(vec![ImageInfo {
+        image_type: "Primary",
+        image_index: None,
+        image_tag,
+        size,
+    }]))
 }
 
 async fn primary(
@@ -251,6 +306,7 @@ async fn indexed_head_primary(
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
+        .route("/Items/{item_id}/Images", get(image_infos))
         .route(
             "/Items/{item_id}/Images/{image_type}",
             get(primary).head(head_primary),
