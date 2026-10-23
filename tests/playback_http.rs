@@ -115,6 +115,16 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     .unwrap()
     .unwrap()
     .access_token;
+    let current_user = auth::authenticate(
+        &state_dir,
+        "admin",
+        "strong-playback-test-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .user
+    .id;
     let app_state =
         AppState::with_auth_dir("server".to_owned(), state_dir).with_probe_executable(executable);
     let router = app::router(Arc::new(app_state));
@@ -184,6 +194,85 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     let response: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(response["MediaSources"][0]["SupportsDirectStream"], false);
     assert_eq!(response["MediaSources"][0]["SupportsTranscoding"], false);
+    let accepted_user = format!("{route}?userId={current_user}");
+    assert_eq!(
+        request(&router, "GET", &accepted_user, Some(&token), "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&router, "GET", &format!("{route}?userId=someone-else"), Some(&token), "")
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &route,
+            Some(&token),
+            r#"{"UserId":"someone-else","EnableDirectPlay":true}"#,
+        )
+        .await
+        .status(),
+        StatusCode::FORBIDDEN
+    );
+    // Deprecated query arguments take precedence over POST body arguments.
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &accepted_user,
+            Some(&token),
+            r#"{"UserId":"someone-else","EnableDirectPlay":true}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &format!("{route}?enableDirectPlay=true"),
+            Some(&token),
+            r#"{"EnableDirectPlay":false}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &format!("{route}?startTimeTicks=0"),
+            Some(&token),
+            r#"{"StartTimeTicks":1000}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    for (uri, expected) in [
+        (format!("{route}?startTimeTicks=-1"), StatusCode::BAD_REQUEST),
+        (format!("{route}?startTimeTicks=1000"), StatusCode::NOT_IMPLEMENTED),
+        (format!("{route}?audioStreamIndex=1"), StatusCode::NOT_IMPLEMENTED),
+        (format!("{route}?subtitleStreamIndex=0"), StatusCode::NOT_IMPLEMENTED),
+        (format!("{route}?autoOpenLiveStream=true"), StatusCode::NOT_IMPLEMENTED),
+        (format!("{route}?mediaSourceId=unmatched"), StatusCode::NOT_IMPLEMENTED),
+        (format!("{route}?enableDirectPlay=false"), StatusCode::NOT_IMPLEMENTED),
+    ] {
+        assert_eq!(
+            request(&router, "POST", &uri, Some(&token), "{}")
+                .await
+                .status(),
+            expected,
+            "{uri}"
+        );
+    }
     let rejected = request(
         &router,
         "POST",
