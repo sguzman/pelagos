@@ -190,6 +190,49 @@ struct NextUpQuery {
     enable_rewatching: Option<bool>,
 }
 
+/// Parse the UTC form emitted by Pelagos/Jellyfin for saved playback dates.
+/// A structured key avoids incorrect text ordering between ".500Z" and "Z".
+fn utc_date_key(raw: &str) -> Option<(u16, u8, u8, u8, u8, u8, u32)> {
+    let body = raw.strip_suffix('Z')?;
+    if body.len() < 19 || &body[4..5] != "-" || &body[7..8] != "-"
+        || &body[10..11] != "T" || &body[13..14] != ":" || &body[16..17] != ":"
+    {
+        return None;
+    }
+    let parse = |a: usize, b: usize| body.get(a..b)?.parse::<u8>().ok();
+    let year = body.get(..4)?.parse::<u16>().ok()?;
+    let month = parse(5, 7)?;
+    let day = parse(8, 10)?;
+    let hour = parse(11, 13)?;
+    let minute = parse(14, 16)?;
+    let second = parse(17, 19)?;
+    if year == 0 || !(1..=12).contains(&month) || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if day == 0 || day > days {
+        return None;
+    }
+    let fraction = body.get(19..)?;
+    let nanos = if fraction.is_empty() {
+        0
+    } else {
+        let digits = fraction.strip_prefix('.')?;
+        if digits.is_empty() || digits.len() > 9 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let count = digits.len();
+        digits.parse::<u32>().ok()? * 10_u32.pow((9 - count) as u32)
+    };
+    Some((year, month, day, hour, minute, second, nanos))
+}
+
 /// Conservative pinned Jellyfin v12.3 Shows/NextUp subset.
 /// Without seriesId, only watched series with a recorded play timestamp enter
 /// the suggestions, ordered by recent playback. Only locally recognized
@@ -204,17 +247,21 @@ async fn next_up(
     if query.user_id.as_deref().is_some_and(|id| id != user.id) {
         return Err(StatusCode::FORBIDDEN);
     }
-    if query.parent_id.is_some()
-        || query.fields.is_some()
+    if query.fields.is_some()
         || query.image_type_limit.is_some()
         || query.enable_image_types.is_some()
-        || query.next_up_date_cutoff.is_some()
+        || (query.parent_id.is_some() && query.series_id.is_some())
+        || (query.next_up_date_cutoff.is_some() && query.series_id.is_some())
         || query.enable_total_record_count == Some(false)
         || query.enable_rewatching == Some(true)
         || query.limit == Some(0)
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
+    let cutoff = match query.next_up_date_cutoff.as_deref() {
+        Some(raw) => Some(utc_date_key(raw).ok_or(StatusCode::BAD_REQUEST)?),
+        None => None,
+    };
     let series_id = query.series_id.as_deref();
     let nodes = catalog_api::accessible_nodes(state.clone(), headers).await?;
     if let Some(series_id) = series_id {
@@ -225,6 +272,20 @@ async fn next_up(
             return Err(StatusCode::NOT_FOUND);
         }
     }
+    // A library CollectionFolder is the supported parent scope. Nested
+    // Jellyfin parent views and channel-specific NextUp queries are not yet
+    // modeled; reject rather than returning a misleading global feed.
+    if let Some(parent) = query.parent_id.as_deref() {
+        let folder = nodes.iter().find(|item| item.id == parent && item.is_folder)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        if folder.item_type != "CollectionFolder" {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
+    let parent_graph = nodes
+        .iter()
+        .map(|item| (item.id.clone(), item.parent_id.clone()))
+        .collect::<std::collections::HashMap<_, _>>();
     let mut episodes = nodes
         .into_iter()
         .filter(|item| {
@@ -235,6 +296,17 @@ async fn next_up(
                     .is_some_and(|id| series_id.is_none_or(|selected| selected == id))
                 && item.parent_index_number.is_some_and(|season| season > 0)
                 && item.index_number.is_some()
+                && query.parent_id.as_deref().is_none_or(|parent| {
+                    let mut current = item.parent_id.as_deref();
+                    for _ in 0..1024 {
+                        match current {
+                            Some(id) if id == parent => return true,
+                            Some(id) => current = parent_graph.get(id).and_then(|p| p.as_deref()),
+                            None => return false,
+                        }
+                    }
+                    false
+                })
         })
         .collect::<Vec<_>>();
     episodes.sort_by(|a, b| {
@@ -273,6 +345,14 @@ async fn next_up(
         // with playback history. Explicit seriesId is allowed to start from
         // the first episode even without a watched episode.
         if series_id.is_none() && last_played_date.is_none() {
+            continue;
+        }
+        if cutoff.is_some_and(|earliest| {
+            !last_played_date
+                .as_deref()
+                .and_then(utc_date_key)
+                .is_some_and(|watched| watched >= earliest)
+        }) {
             continue;
         }
         let highest_watched = group
@@ -344,6 +424,32 @@ async fn episodes(
     Query(query): Query<ShowQuery>,
 ) -> Result<Json<ShowResult>, StatusCode> {
     show_items(state, headers, series_id, query, true).await
+}
+
+#[cfg(test)]
+mod next_up_date_tests {
+    use super::utc_date_key;
+
+    #[test]
+    fn parses_rfc3339_utc_saved_timestamps_and_validates_calendar() {
+        assert_eq!(
+            utc_date_key("2026-01-02T03:04:05Z"),
+            utc_date_key("2026-01-02T03:04:05.000Z")
+        );
+        assert!(
+            utc_date_key("2026-01-02T03:04:05.100Z")
+                < utc_date_key("2026-01-02T03:04:05.200Z")
+        );
+        assert!(utc_date_key("2024-02-29T23:59:59.999999999Z").is_some());
+        for bad in [
+            "", "2026-02-29T00:00:00Z", "2026-13-01T00:00:00Z",
+            "2026-01-01T24:00:00Z", "2026-01-01T00:60:00Z",
+            "2026-01-01T00:00:00.1234567890Z", "2026-01-01",
+            "2026-01-01T00:00:00+01:00",
+        ] {
+            assert!(utc_date_key(bad).is_none(), "{bad}");
+        }
+    }
 }
 
 pub fn router() -> Router<Arc<AppState>> {
