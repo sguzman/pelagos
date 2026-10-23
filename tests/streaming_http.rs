@@ -77,6 +77,20 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
         b"2345"
     );
 
+    for (uri, expected) in [
+        (format!("/Videos/{id}/stream?static=true&container=mp4"), StatusCode::OK),
+        (format!("/Videos/{id}/stream?static=true&container=mkv"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Videos/{id}/stream?static=true&startTimeTicks=1"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Videos/{id}/stream?static=true&startTimeTicks=-1"), StatusCode::BAD_REQUEST),
+        (format!("/Videos/{id}/stream?static=true&audioCodec=aac"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Videos/{id}/stream?static=true&videoCodec=h264"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Videos/{id}/stream?static=true&subtitleStreamIndex=2"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Videos/{id}/stream?static=true&mediaSourceId=wrong"), StatusCode::NOT_IMPLEMENTED),
+    ] {
+        let result = call(&app, "GET", &uri, Some(&token), None).await;
+        assert_eq!(result.status(), expected, "request: {uri}");
+    }
+
     let named_path = format!("/Videos/{id}/stream.mp4?static=true");
     let named = call(&app, "GET", &named_path, Some(&token), Some("bytes=1-3")).await;
     assert_eq!(named.status(), StatusCode::PARTIAL_CONTENT);
