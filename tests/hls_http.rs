@@ -450,9 +450,7 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     );
     std::fs::write(&source, b"modified audio media after publication").unwrap();
     assert_eq!(
-        request(&app, "GET", &first, Some(&listener))
-            .await
-            .status(),
+        request(&app, "GET", &first, Some(&listener)).await.status(),
         StatusCode::NOT_FOUND
     );
     auth::revoke(&state_dir, &listener).unwrap();
