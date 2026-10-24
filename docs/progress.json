@@ -2682,17 +2682,17 @@
               "progress": 67,
               "checks": [
                 {
-                  "title": "Wire the verified private 2–4-rendition FFmpeg MPEG-TS builder to an explicit video master.m3u8 renditions query; isolate cache by rendition count and expose measured ordered variant manifests and bounded token-scoped nested segments",
+                  "title": "Wire the verified private 2–4-rendition FFmpeg MPEG-TS builder to opt-in video master.m3u8 with bounded seek offsets; isolate cache by rendition count and offset and expose measured peak-bandwidth/probed-resolution variant manifests and token-scoped segments",
                   "passed": true,
-                  "evidence": "src/hls_http.rs rendition_count/PublishedVariant/generate_hls_playlist/video_variant_segment/serve_segment, src/hls.rs generate_adaptive_segmented_vod, src/transcode.rs MpegTsQuality; legacy one-rendition remains default"
+                  "evidence": "src/hls.rs generate_adaptive_segmented_vod_from/measured_peak_transport_bandwidth/HlsSegmentedArtifact.resolution; src/hls_http.rs generate_hls_playlist/start_time_ticks/PublishedVariant/video_variant_segment; source-pinned FFmpeg CPU targets and verified transport windows"
                 },
                 {
-                  "title": "Real FFmpeg/FFprobe HTTP CI verifies two distinct measured-bandwidth variants, nested VOD playlists, TS payload sync, ranged reads, authenticated cache reuse, sibling-token denial, grant revocation and publication cleanup",
+                  "title": "Native real FFmpeg/FFprobe CI verifies two distinct renditions at initial and positive seek offsets, aligned measured segment windows, proven resolution metadata, peak segment bandwidth, real MPEG-TS/range transport, token isolation, grant revocation and cache separation",
                   "passed": true,
-                  "evidence": "GitHub Actions 40129423881 and 40129582393 — formatting, Clippy, full Rust tests and real FFmpeg/FFprobe video transport fixtures passed"
+                  "evidence": "GitHub Actions 40130559026, 40130666000, 40130755719, 40131080470 — complete Rust formatting, Clippy, HTTP/unit, real FFmpeg/FFprobe and pinned matrix checks passed"
                 },
                 {
-                  "title": "3–4-rendition HTTP fixture and varying bitrate networks, seamless switching/timebase consistency, seeked or audio ABR, long VOD, full Jellyfin HLS/DASH and unmodified Smart TV acceptance",
+                  "title": "3–4-rendition sustained client test matrix, seamless multi-rendition timebase switching, audio ABR, long VOD, complete Jellyfin HLS/DASH, and unmodified Smart TV acceptance",
                   "passed": false
                 }
               ]
