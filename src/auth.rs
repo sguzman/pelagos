@@ -819,15 +819,19 @@ pub fn list_sessions_with_activity(
             let reported: Option<String> = row.get(16)?;
             let profile: Option<String> = row.get(13)?;
             let icon_url: Option<String> = row.get(15)?;
-            let capabilities = reported.map(|_| DeviceCapabilitiesDto {
-                playable_media_types: parse_session_items(row.get(8).unwrap_or_default()),
-                supported_commands: parse_session_items(row.get(9).unwrap_or_default()),
-                supports_media_control: row.get(7).unwrap_or(false),
-                supports_persistent_identifier: row.get(12).unwrap_or(true),
-                device_profile: profile.and_then(|text| serde_json::from_str(&text).ok()),
-                app_store_url: row.get(14).unwrap_or_default(),
-                icon_url,
-            });
+            let capabilities = if reported.is_some() {
+                Some(DeviceCapabilitiesDto {
+                    playable_media_types: parse_session_items(row.get(8)?),
+                    supported_commands: parse_session_items(row.get(9)?),
+                    supports_media_control: row.get(7)?,
+                    supports_persistent_identifier: row.get(12)?,
+                    device_profile: profile.and_then(|text| serde_json::from_str(&text).ok()),
+                    app_store_url: row.get(14)?,
+                    icon_url,
+                })
+            } else {
+                None
+            };
             Ok(SessionInfo {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
