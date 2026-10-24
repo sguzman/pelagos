@@ -149,11 +149,7 @@ async fn device_options(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(
-        found
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::NOT_FOUND)?,
-    ))
+    Ok(Json(found.ok_or(StatusCode::NOT_FOUND)?))
 }
 
 /// Pinned POST /Devices/Options name-only subset. Unsupported options
