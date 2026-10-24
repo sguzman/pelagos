@@ -189,11 +189,7 @@ pub enum UserNameUpdate {
 
 /// Change an account's login name without changing its identity, grants,
 /// password hash or existing sessions. Normalize in the same transaction.
-pub fn rename_user(
-    state_dir: &Path,
-    user_id: &str,
-    new_name: &str,
-) -> Result<UserNameUpdate> {
+pub fn rename_user(state_dir: &Path, user_id: &str, new_name: &str) -> Result<UserNameUpdate> {
     if !valid_username(new_name) {
         return Err("invalid username".into());
     }

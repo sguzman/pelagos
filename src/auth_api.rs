@@ -104,12 +104,10 @@ async fn update_user_name(
         return Err(StatusCode::BAD_REQUEST);
     }
     let dir = state_dir(&state)?;
-    match tokio::task::spawn_blocking(move || {
-        auth::rename_user(&dir, &user_id, &patch.name)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    match tokio::task::spawn_blocking(move || auth::rename_user(&dir, &user_id, &patch.name))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     {
         auth::UserNameUpdate::Updated => Ok(StatusCode::NO_CONTENT),
         auth::UserNameUpdate::NotFound => Err(StatusCode::NOT_FOUND),
