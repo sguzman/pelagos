@@ -299,7 +299,13 @@ pub async fn generate_segmented_vod(
     if inspected.streams.is_empty() {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "source has no audio or video"));
     }
-    let segment_count = (source_seconds / f64::from(target_seconds)).ceil() as usize;
+    let mut segment_count = (source_seconds / f64::from(target_seconds)).ceil() as usize;
+    // A tiny final remainder belongs to the preceding full window.
+    let final_remainder = source_seconds
+        - (segment_count.saturating_sub(1) as f64 * f64::from(target_seconds));
+    if segment_count > 1 && final_remainder < 0.1 {
+        segment_count -= 1;
+    }
     if segment_count == 0 || segment_count > MAX_ENCODED_SEGMENTS {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "HLS window count exceeds limit"));
     }
