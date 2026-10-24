@@ -587,6 +587,46 @@ pub fn router() -> Router<Arc<AppState>> {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn bounded_hls_generation_queue_coalesces_and_recovers_after_cancellation() {
+        let registry = Arc::new(HlsRegistry::new(PathBuf::from("ffmpeg")));
+        let active = registry.jobs.try_acquire().unwrap();
+        let queued = (0..4)
+            .map(|_| registry.waiters.try_acquire().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            registry.acquire_generation().await.err().unwrap(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        drop(queued);
+        assert_eq!(registry.waiters.available_permits(), 4);
+
+        let waiting_registry = registry.clone();
+        let waiting = tokio::spawn(async move {
+            let _permit = waiting_registry.acquire_generation().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(!waiting.is_finished());
+        assert_eq!(registry.waiters.available_permits(), 3);
+        waiting.abort();
+        assert!(waiting.await.is_err());
+        assert_eq!(registry.waiters.available_permits(), 4);
+
+        let next_registry = registry.clone();
+        let pending = tokio::spawn(async move {
+            let _permit = next_registry.acquire_generation().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(!pending.is_finished());
+        drop(active);
+        tokio::time::timeout(Duration::from_secs(2), pending)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(registry.waiters.available_permits(), 4);
+        assert!(registry.jobs.try_acquire().is_ok());
+    }
+
     #[test]
     fn published_bundles_are_token_scoped_bounded_and_cleaned_after_last_reader() {
         let temp = tempfile::tempdir().unwrap();
