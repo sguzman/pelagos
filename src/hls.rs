@@ -645,6 +645,16 @@ mod tests {
         let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
         assert!(manifest.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
         assert!(manifest.contains("#EXT-X-ENDLIST"));
+        let media_playlist_probe =
+            probe::probe(&artifact.playlist_path, Path::new("ffprobe"), PROBE_TIMEOUT)
+                .await
+                .unwrap();
+        assert!(
+            media_playlist_probe
+                .streams
+                .iter()
+                .any(|stream| stream["codec_name"].as_str() == Some("aac"))
+        );
 
         let ladder = generate_adaptive_vod(
             &controller,
@@ -667,6 +677,10 @@ mod tests {
         assert!(!ladder.variants.is_empty());
         assert_eq!(ladder.variants.len(), ladder.renditions.len());
         assert!(ladder.master_path.exists());
+        let master_probe = probe::probe(&ladder.master_path, Path::new("ffprobe"), PROBE_TIMEOUT)
+            .await
+            .unwrap();
+        assert!(!master_probe.streams.is_empty());
         for variant in &ladder.renditions {
             assert!(variant.transport_bytes >= 188);
             assert_eq!(variant.transport_bytes % 188, 0);
