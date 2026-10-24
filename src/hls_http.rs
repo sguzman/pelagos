@@ -1105,7 +1105,10 @@ mod tests {
             start_time_ticks: 0,
             rendition_count: 1,
         };
-        assert_eq!(registry.cached(&key).unwrap().id, "playlist-2");
+        // Multiple synthetic entries use the same cache key; the most
+        // recently used publication is now returned, rather than the one
+        // with the highest original insertion position.
+        assert_eq!(registry.cached(&key).unwrap().id, "playlist-0");
         assert!(
             registry
                 .cached(&CacheLookup {
