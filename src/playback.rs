@@ -583,6 +583,76 @@ mod tests {
     }
 
     #[test]
+    fn pinned_direct_play_profiles_filter_container_codecs_and_static_bitrate() {
+        let probe = probe::ProbeReport {
+            path: PathBuf::from("feature.mp4"),
+            size_bytes: 42,
+            format: Some(json!({"bit_rate":"4000000"})),
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"h264","bit_rate":"3500000"}),
+                json!({"index":1,"codec_type":"audio","codec_name":"aac","bit_rate":"500000"}),
+            ],
+            chapters: vec![],
+        };
+        let source = source_from_probe("movie", "video", Path::new("feature.mp4"), &probe);
+        let valid = json!({
+            "DirectPlayProfiles":[
+                {"Type":"Video","Container":"mp4,webm","VideoCodec":"h264,hevc","AudioCodec":"aac"}
+            ]
+        });
+        assert_eq!(profile_allows_direct_file(&valid, &source, &probe), Ok(true));
+        for unsupported in [
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mkv"}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Audio","Container":"mp4"}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4","VideoCodec":"hevc"}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4","AudioCodec":"flac"}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],"MaxStaticBitrate":3_000_000}),
+            json!({"DirectPlayProfiles":[]}),
+        ] {
+            assert_eq!(
+                profile_allows_direct_file(&unsupported, &source, &probe),
+                Ok(false)
+            );
+        }
+        let allowed_negative = json!({
+            "DirectPlayProfiles":[{"Type":"Video","Container":"-mkv","VideoCodec":"-hevc"}]
+        });
+        assert_eq!(profile_allows_direct_file(&allowed_negative, &source, &probe), Ok(true));
+        let rejected_negative = json!({
+            "DirectPlayProfiles":[{"Type":"Video","Container":"-mp4"}]
+        });
+        assert_eq!(profile_allows_direct_file(&rejected_negative, &source, &probe), Ok(false));
+        let static_limit = json!({
+            "DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],
+            "MaxStaticBitrate":4_000_000
+        });
+        assert_eq!(profile_allows_direct_file(&static_limit, &source, &probe), Ok(true));
+        for invalid in [
+            json!({"DirectPlayProfiles":{} }),
+            json!({"DirectPlayProfiles":[{"Type":"Unknown","Container":"mp4"}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4","Unknown":true}]}),
+            json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],"MaxStaticBitrate":-1}),
+        ] {
+            assert_eq!(
+                profile_allows_direct_file(&invalid, &source, &probe),
+                Err(StatusCode::BAD_REQUEST)
+            );
+        }
+        assert_eq!(
+            profile_allows_direct_file(
+                &json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],"CodecProfiles":[{"Type":"Video"}]}),
+                &source,
+                &probe,
+            ),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        assert!(profile_contains("", "anything"));
+        assert!(profile_contains("h264,hevc", "H264"));
+        assert!(!profile_contains("-h264,hevc", "h264"));
+        assert!(profile_contains("-h264,hevc", "flac"));
+    }
+
+    #[test]
     fn audio_sources_use_the_audio_stream_route() {
         let source = probe::ProbeReport {
             path: PathBuf::from("sound.flac"),
