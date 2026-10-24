@@ -369,9 +369,18 @@ mod tests {
     #[test]
     fn measured_multi_segment_manifest_has_bounded_independent_uris_and_ceil_target() {
         let segments = vec![
-            HlsSegment { duration_seconds: 1.5, transport_bytes: 376 },
-            HlsSegment { duration_seconds: 2.125, transport_bytes: 752 },
-            HlsSegment { duration_seconds: 0.5, transport_bytes: 188 },
+            HlsSegment {
+                duration_seconds: 1.5,
+                transport_bytes: 376,
+            },
+            HlsSegment {
+                duration_seconds: 2.125,
+                transport_bytes: 752,
+            },
+            HlsSegment {
+                duration_seconds: 0.5,
+                transport_bytes: 188,
+            },
         ];
         assert_eq!(
             render_vod_media_playlist(&segments).unwrap(),
@@ -380,20 +389,26 @@ mod tests {
         let single = render_vod_media_playlist(&[HlsSegment {
             duration_seconds: 6.125,
             transport_bytes: 376,
-        }]).unwrap();
+        }])
+        .unwrap();
         assert!(single.contains("#EXT-X-TARGETDURATION:7\n"));
         assert!(single.contains("#EXTINF:6.125,\nsegment00000.ts\n"));
     }
 
     #[test]
     fn manifest_refuses_unverified_segment_bytes_and_duration_overflow() {
-        let valid = HlsSegment { duration_seconds: 1.0, transport_bytes: 376 };
+        let valid = HlsSegment {
+            duration_seconds: 1.0,
+            transport_bytes: 376,
+        };
         assert_eq!(
             render_vod_media_playlist(&[]).unwrap_err().kind(),
             io::ErrorKind::InvalidInput
         );
         assert_eq!(
-            render_vod_media_playlist(&vec![valid; 513]).unwrap_err().kind(),
+            render_vod_media_playlist(&vec![valid; 513])
+                .unwrap_err()
+                .kind(),
             io::ErrorKind::InvalidInput
         );
         for duration_seconds in [f64::NAN, f64::INFINITY, -1.0, 0.0, 86_401.0] {
@@ -401,7 +416,9 @@ mod tests {
                 render_vod_media_playlist(&[HlsSegment {
                     duration_seconds,
                     ..valid
-                }]).unwrap_err().kind(),
+                }])
+                .unwrap_err()
+                .kind(),
                 io::ErrorKind::InvalidInput
             );
         }
@@ -410,15 +427,25 @@ mod tests {
                 render_vod_media_playlist(&[HlsSegment {
                     transport_bytes,
                     ..valid
-                }]).unwrap_err().kind(),
+                }])
+                .unwrap_err()
+                .kind(),
                 io::ErrorKind::InvalidInput
             );
         }
         assert_eq!(
             render_vod_media_playlist(&[
-                HlsSegment { duration_seconds: 50_000.0, ..valid },
-                HlsSegment { duration_seconds: 40_000.0, ..valid }
-            ]).unwrap_err().kind(),
+                HlsSegment {
+                    duration_seconds: 50_000.0,
+                    ..valid
+                },
+                HlsSegment {
+                    duration_seconds: 40_000.0,
+                    ..valid
+                }
+            ])
+            .unwrap_err()
+            .kind(),
             io::ErrorKind::InvalidInput
         );
     }
