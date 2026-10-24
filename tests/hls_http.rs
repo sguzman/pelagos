@@ -1135,12 +1135,33 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     for username in ["alice", "bob"] {
         auth::grant_library(&state_dir, username, &library).unwrap();
     }
-    let admin = auth::authenticate(&state_dir, "admin", "adaptive-concurrency-admin-password", "server")
-        .unwrap().unwrap().access_token;
-    let alice = auth::authenticate(&state_dir, "alice", "adaptive-concurrency-alice-password", "server")
-        .unwrap().unwrap().access_token;
-    let bob = auth::authenticate(&state_dir, "bob", "adaptive-concurrency-bob-password", "server")
-        .unwrap().unwrap().access_token;
+    let admin = auth::authenticate(
+        &state_dir,
+        "admin",
+        "adaptive-concurrency-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let alice = auth::authenticate(
+        &state_dir,
+        "alice",
+        "adaptive-concurrency-alice-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let bob = auth::authenticate(
+        &state_dir,
+        "bob",
+        "adaptive-concurrency-bob-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state_dir.clone(),
@@ -1163,13 +1184,11 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     assert_ne!(alice_master, bob_master);
     assert_eq!(alice_master.matches("#EXT-X-STREAM-INF:").count(), 2);
     assert_eq!(bob_master.matches("#EXT-X-STREAM-INF:").count(), 2);
-    for (owner, other, master) in [
-        (&alice, &bob, &alice_master),
-        (&bob, &alice, &bob_master),
-    ] {
+    for (owner, other, master) in [(&alice, &bob, &alice_master), (&bob, &alice, &bob_master)] {
         assert!(!master.contains(owner));
         assert!(!master.contains(other));
-        let variants = master.lines()
+        let variants = master
+            .lines()
             .filter(|line| line.starts_with("hls1/"))
             .collect::<Vec<_>>();
         assert_eq!(variants.len(), 2);
@@ -1179,7 +1198,9 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
         for (variant_index, segment_index) in [(0, 0), (1, 1), (0, 1), (1, 0)] {
             let media_path = format!("/Videos/{item}/{}", variants[variant_index]);
             assert_eq!(
-                request(&app, "GET", &media_path, Some(other)).await.status(),
+                request(&app, "GET", &media_path, Some(other))
+                    .await
+                    .status(),
                 StatusCode::NOT_FOUND
             );
             let media = request(&app, "GET", &media_path, Some(owner)).await;
@@ -1190,7 +1211,9 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
                 "/Videos/{item}/hls1/{publication_id}/variant{variant_index:02}/{segment_index}.ts"
             );
             assert_eq!(
-                request(&app, "GET", &segment_path, Some(other)).await.status(),
+                request(&app, "GET", &segment_path, Some(other))
+                    .await
+                    .status(),
                 StatusCode::NOT_FOUND
             );
             let transport = request(&app, "GET", &segment_path, Some(owner)).await;
