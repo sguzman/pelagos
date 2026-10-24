@@ -49,9 +49,14 @@ async fn disabled_policy_subset_revokes_sessions_and_protects_administrators() {
     let admin = auth::authenticate(&state, "admin", "disable-account-admin-password", "server")
         .unwrap()
         .unwrap();
-    let viewer = auth::authenticate(&state, "viewer", "disable-account-viewer-password", "server")
-        .unwrap()
-        .unwrap();
+    let viewer = auth::authenticate(
+        &state,
+        "viewer",
+        "disable-account-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
     let other_session = auth::authenticate(
         &state,
         "viewer",
@@ -120,9 +125,11 @@ async fn disabled_policy_subset_revokes_sessions_and_protects_administrators() {
         unsupported.status() == StatusCode::UNPROCESSABLE_ENTITY
             || unsupported.status() == StatusCode::BAD_REQUEST
     );
-    assert!(auth::identify(&state, &viewer.access_token, "server")
-        .unwrap()
-        .is_some());
+    assert!(
+        auth::identify(&state, &viewer.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
 
     assert_eq!(
         call(&router, "POST", &route, Some(&admin.access_token), valid)
