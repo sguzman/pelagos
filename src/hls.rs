@@ -72,10 +72,7 @@ pub async fn generate_single_segment_vod(
                 "transport has no finite, positive bounded duration",
             )
         })?;
-    if transport_bytes < 188
-        || transport_bytes % 188 != 0
-        || inspection.streams.is_empty()
-    {
+    if transport_bytes < 188 || transport_bytes % 188 != 0 || inspection.streams.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "transport must contain MPEG-TS packets and stream metadata",
@@ -125,13 +122,11 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"6.125"},"streams":[{"codec_name":"aac"}]}'"#,
         );
-        let controller =
-            TranscodeController::new(ffmpeg, 1, Duration::from_secs(2), 1024).unwrap();
+        let controller = TranscodeController::new(ffmpeg, 1, Duration::from_secs(2), 1024).unwrap();
         let bundle = temp.path().join("vod");
-        let info =
-            generate_single_segment_vod(&controller, &ffprobe, &input, &bundle)
-                .await
-                .unwrap();
+        let info = generate_single_segment_vod(&controller, &ffprobe, &input, &bundle)
+            .await
+            .unwrap();
         assert_eq!(info.transport_bytes, 376);
         assert_eq!(info.duration_seconds, 6.125);
         assert_eq!(stdfs::metadata(info.segment_path).unwrap().len(), 376);
@@ -167,26 +162,19 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"NaN"},"streams":[{"codec_name":"aac"}]}'"#,
         );
-        let controller = TranscodeController::new(
-            ffmpeg.clone(),
-            1,
-            Duration::from_secs(2),
-            1024,
-        )
-        .unwrap();
+        let controller =
+            TranscodeController::new(ffmpeg.clone(), 1, Duration::from_secs(2), 1024).unwrap();
         let invalid_dir = temp.path().join("invalid");
-        let error =
-            generate_single_segment_vod(&controller, &ffprobe, &input, &invalid_dir)
-                .await
-                .unwrap_err();
+        let error = generate_single_segment_vod(&controller, &ffprobe, &input, &invalid_dir)
+            .await
+            .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!invalid_dir.exists());
         let too_small = TranscodeController::new(ffmpeg, 1, Duration::from_secs(2), 100).unwrap();
         let overflow_dir = temp.path().join("overflow");
-        let error =
-            generate_single_segment_vod(&too_small, &ffprobe, &input, &overflow_dir)
-                .await
-                .unwrap_err();
+        let error = generate_single_segment_vod(&too_small, &ffprobe, &input, &overflow_dir)
+            .await
+            .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(!overflow_dir.exists());
     }
