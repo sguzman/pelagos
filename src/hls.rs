@@ -360,6 +360,7 @@ async fn generate_segmented_vod_with_quality(
     if !start_seconds.is_finite()
         || start_seconds < 0.0
         || start_seconds >= source_seconds
+        || source_seconds - start_seconds < 0.1
         || start_seconds > 600.0
     {
         return Err(io::Error::new(
@@ -885,6 +886,7 @@ mod tests {
             ("negative", -1.0),
             ("past-end", 4.1),
             ("at-end", 4.0),
+            ("tiny-tail", 3.95),
             ("nan", f64::NAN),
             ("infinite", f64::INFINITY),
         ] {
