@@ -34,7 +34,7 @@ struct DeviceResults {
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/Devices", get(devices))
+        .route("/Devices", get(devices).delete(delete_device))
         .route("/Devices/Info", get(device_info))
 }
 
@@ -100,4 +100,31 @@ async fn device_info(
         .find(|device| device.id == id)
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+
+/** Revokes all access tokens attached to one recorded device ID.
+ * The pinned upstream endpoint can revoke an array of IDs; this subset
+ * accepts exactly one and refuses unknown devices rather than treating
+ * the operation as a successful deletion of unseen state.
+ */
+async fn delete_device(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<DeviceByIdQuery>,
+) -> Result<StatusCode, StatusCode> {
+    let dir = administrator_state(state, headers).await?;
+    if query.id.is_empty() || query.id.len() > 256 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let device_id = query.id;
+    let result = tokio::task::spawn_blocking(move || {
+        auth::revoke_registered_device_sessions(&dir, &device_id)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match result {
+        auth::DeviceSessionRevocation::Revoked => Ok(StatusCode::NO_CONTENT),
+        auth::DeviceSessionRevocation::NotFound => Err(StatusCode::BAD_REQUEST),
+    }
 }
