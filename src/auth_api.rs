@@ -711,22 +711,27 @@ struct SessionQuery {
     controllable_by_user_id: Option<String>,
 }
 
-/// The current session index is persistent, not yet Jellyfin's activity/remote
-/// control model. Refuse those unimplemented filters instead of pretending parity.
+/// Last-activity filtering uses timestamps of successful authenticated
+/// requests, not playback heartbeat or client remote-control capabilities.
+
 async fn sessions(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(query): Query<SessionQuery>,
 ) -> Result<Json<Vec<auth::SessionInfo>>, StatusCode> {
     let (user, _) = authenticated(state.clone(), headers).await?;
-    if query.active_within_seconds.is_some() || query.controllable_by_user_id.is_some() {
+    if query.controllable_by_user_id.is_some() {
         return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    if query.active_within_seconds.is_some_and(|value| value > 31_536_000) {
+        return Err(StatusCode::BAD_REQUEST);
     }
     let dir = state_dir(&state)?;
     let server_id = state.server_id().to_owned();
     let device = query.device_id;
+    let active_within = query.active_within_seconds;
     let found = tokio::task::spawn_blocking(move || {
-        auth::list_sessions(&dir, &user, &server_id, device.as_deref())
+        auth::list_sessions(&dir, &user, &server_id, device.as_deref(), active_within)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
