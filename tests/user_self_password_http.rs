@@ -111,7 +111,7 @@ async fn self_change_cannot_target_another_account_or_reset_without_password() {
         .method("POST")
         .uri(format!("/Users/Password?userId={}", admin.user.id))
         .header("Content-Type", "application/json")
-        .header("X-Emby-Token", &member.access_token)
+        .header("X-Emby-Token", member.access_token.as_str())
         .body(Body::from(valid.to_string()))
         .unwrap();
     assert_eq!(
