@@ -1,17 +1,92 @@
 //! Bounded, CPU-first FFmpeg MPEG-TS transcode job runner.
 //! This is not yet an HLS/DASH scheduler, Jellyfin PlaybackInfo transcode
 //! response, GPU accelerator, or complete Smart TV playback implementation.
-use std::{io, path::Path, process::Stdio, time::Duration};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::Arc,
+    time::Duration,
+};
 
 use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
+    sync::Semaphore,
     time,
 };
 
 pub const MAX_TRANSCODE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_STDERR_BYTES: u64 = 16 * 1024;
+
+/// A synchronous drop guard also removes partial output if the caller
+/// cancels its Rust future before a timeout or FFmpeg exit is observed.
+struct PartialOutput {
+    path: PathBuf,
+    committed: bool,
+}
+
+impl Drop for PartialOutput {
+    fn drop(&mut self) {
+        if !self.committed {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+/// Semaphore admission bounds concurrent FFmpeg work independently of
+/// transport requests. Queued tasks spawn no child until granted a permit.
+#[derive(Clone)]
+pub struct TranscodeController {
+    executable: PathBuf,
+    permits: Arc<Semaphore>,
+    capacity: usize,
+    deadline: Duration,
+    max_bytes: u64,
+}
+
+impl TranscodeController {
+    pub fn new(
+        executable: PathBuf,
+        capacity: usize,
+        deadline: Duration,
+        max_bytes: u64,
+    ) -> io::Result<Self> {
+        if !(1..=16).contains(&capacity)
+            || deadline.is_zero()
+            || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid FFmpeg capacity, deadline or byte ceiling",
+            ));
+        }
+        Ok(Self {
+            executable,
+            permits: Arc::new(Semaphore::new(capacity)),
+            capacity,
+            deadline,
+            max_bytes,
+        })
+    }
+
+    pub fn active_jobs(&self) -> usize {
+        self.capacity - self.permits.available_permits()
+    }
+
+    pub async fn run(&self, source: &Path, output: &Path) -> io::Result<u64> {
+        let _permit = self.permits.acquire().await.map_err(io::Error::other)?;
+        transcode_mpegts(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes,
+        )
+        .await
+    }
+}
 
 /// Transcode one local file into a newly created, size-bounded MPEG-TS file.
 /// The executable receives a fixed argument sequence, never a shell command.
@@ -47,6 +122,10 @@ pub async fn transcode_mpegts(
         .write(true)
         .open(output)
         .await?;
+    let mut partial = PartialOutput {
+        path: output.to_path_buf(),
+        committed: false,
+    };
     let result = time::timeout(deadline, async {
         let mut command = Command::new(executable);
         command
@@ -126,18 +205,15 @@ pub async fn transcode_mpegts(
 
     drop(destination);
     match result {
-        Ok(Ok(written)) => Ok(written),
-        Ok(Err(error)) => {
-            let _ = fs::remove_file(output).await;
-            Err(error)
+        Ok(Ok(written)) => {
+            partial.committed = true;
+            Ok(written)
         }
-        Err(_) => {
-            let _ = fs::remove_file(output).await;
-            Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "FFmpeg exceeded transcode deadline",
-            ))
-        }
+        Ok(Err(error)) => Err(error),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "FFmpeg exceeded transcode deadline",
+        )),
     }
 }
 
