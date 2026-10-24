@@ -206,7 +206,12 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let partial_head = request_range(&app, "HEAD", first_path, &viewer, "bytes=188-375").await;
     assert_eq!(partial_head.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(partial_head.headers()[header::CONTENT_LENGTH], "188");
-    assert!(to_bytes(partial_head.into_body(), 4096).await.unwrap().is_empty());
+    assert!(
+        to_bytes(partial_head.into_body(), 4096)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     for invalid in ["bytes=0-1,3-4", "bytes=999999999-", "bytes=-0"] {
         let response = request_range(&app, "GET", first_path, &viewer, invalid).await;
         assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
