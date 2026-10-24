@@ -536,6 +536,40 @@ async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
     assert_eq!(payload["MediaSources"][0]["SupportsDirectPlay"], true);
     assert_eq!(payload["MediaSources"][0]["SupportsTranscoding"], false);
 
+    for (profile, expected) in [
+        (
+            serde_json::json!({
+                "DirectPlayProfiles":[{"Type":"Audio","Container":"flac","AudioCodec":"flac"}]
+            }),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles":[{"Type":"Audio","Container":"mp3","AudioCodec":"flac"}]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles":[{"Type":"Audio","Container":"flac","AudioCodec":"aac"}]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+    ] {
+        assert_eq!(
+            request(
+                &router,
+                "POST",
+                &route,
+                Some(&viewer),
+                &serde_json::json!({"DeviceProfile":profile}).to_string(),
+            )
+            .await
+            .status(),
+            expected
+        );
+    }
+
     auth::revoke_library(&state_dir, "listener", &root).unwrap();
     assert_eq!(
         request(&router, "GET", &route, Some(&viewer), "")
