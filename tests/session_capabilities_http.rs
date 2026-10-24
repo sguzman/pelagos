@@ -45,7 +45,7 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
         "server".to_owned(),
         state.clone(),
     )));
-    let route = "/Sessions/Capabilities?playableMediaTypes=Audio,Video&supportedCommands=Play,Pause&supportsMediaControl=true";
+    let route = "/Sessions/Capabilities?playableMediaTypes=Audio,Video&supportedCommands=Play,PlayState&supportsMediaControl=true";
     assert_eq!(
         call(&router, "POST", route, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -68,6 +68,18 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
         .status(),
         StatusCode::BAD_REQUEST
     );
+    for invalid in [
+        "/Sessions/Capabilities?supportedCommands=Pause",
+        "/Sessions/Capabilities?supportedCommands=NoSuchCommand",
+        "/Sessions/Capabilities?playableMediaTypes=Video,Music",
+    ] {
+        assert_eq!(
+            call(&router, "POST", invalid, Some(&first.access_token))
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
     assert_eq!(
         call(&router, "POST", route, Some(&first.access_token))
             .await
@@ -99,7 +111,7 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
     );
     assert_eq!(
         reported["SupportedCommands"],
-        serde_json::json!(["Play", "Pause"])
+        serde_json::json!(["Play", "PlayState"])
     );
     assert_eq!(untouched["SupportsMediaControl"], false);
     assert_eq!(untouched["Capabilities"], Value::Null);
@@ -164,7 +176,7 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_malformed_device_p
     let route = "/Sessions/Capabilities/Full";
     let payload = serde_json::json!({
         "PlayableMediaTypes": "Audio,Video",
-        "SupportedCommands": ["Play", "Pause"],
+        "SupportedCommands": ["Play", "PlayState"],
         "SupportsMediaControl": true,
         "SupportsPersistentIdentifier": true
     });
@@ -196,6 +208,16 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_malformed_device_p
         StatusCode::FORBIDDEN
     );
     assert_eq!(
+        report_full(
+            &router,
+            Some(&viewer.access_token),
+            route,
+            serde_json::json!({"SupportedCommands":["Pause"]}),
+        )
+        .await,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
         report_full(&router, Some(&viewer.access_token), route, payload).await,
         StatusCode::NO_CONTENT
     );
@@ -208,7 +230,7 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_malformed_device_p
     );
     assert_eq!(
         sessions[0]["SupportedCommands"],
-        serde_json::json!(["Play", "Pause"])
+        serde_json::json!(["Play", "PlayState"])
     );
 }
 
@@ -251,7 +273,7 @@ async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomic
     });
     let payload = serde_json::json!({
         "PlayableMediaTypes": ["Video","Audio"],
-        "SupportedCommands": "Play,Pause",
+        "SupportedCommands": "Play,PlayState",
         "SupportsMediaControl": true,
         "SupportsPersistentIdentifier": true,
         "DeviceProfile": profile,
