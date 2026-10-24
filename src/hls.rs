@@ -567,15 +567,31 @@ impl HlsAdaptiveSegmentedArtifact {
     }
 }
 
-/// Only measured window durations within half a second of their matching
-/// position are permitted; missing or drifting windows are not a ladder.
+/// Both individual window durations and accumulated window boundaries must
+/// stay within half a second. Per-segment comparison alone allows drift to
+/// grow unbounded across a long adaptive ladder, breaking rendition switches.
 fn adaptive_segments_aligned(reference: &[HlsSegment], next: &[HlsSegment]) -> bool {
-    reference.len() == next.len()
-        && !reference.is_empty()
-        && reference
-            .iter()
-            .zip(next)
-            .all(|(a, b)| (a.duration_seconds - b.duration_seconds).abs() <= 0.5)
+    if reference.len() != next.len() || reference.is_empty() {
+        return false;
+    }
+    let mut reference_elapsed = 0.0_f64;
+    let mut next_elapsed = 0.0_f64;
+    for (a, b) in reference.iter().zip(next) {
+        if !a.duration_seconds.is_finite()
+            || !b.duration_seconds.is_finite()
+            || a.duration_seconds <= 0.0
+            || b.duration_seconds <= 0.0
+            || (a.duration_seconds - b.duration_seconds).abs() > 0.5
+        {
+            return false;
+        }
+        reference_elapsed += a.duration_seconds;
+        next_elapsed += b.duration_seconds;
+        if (reference_elapsed - next_elapsed).abs() > 0.5 {
+            return false;
+        }
+    }
+    true
 }
 
 /// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
@@ -818,6 +834,34 @@ mod tests {
         stdfs::write(&path, format!("#!/bin/sh\n{script}\n")).unwrap();
         stdfs::set_permissions(&path, stdfs::Permissions::from_mode(0o700)).unwrap();
         path
+    }
+
+    #[test]
+    fn adaptive_alignment_bounds_cumulative_drift_at_every_switch_boundary() {
+        let window = |duration_seconds| HlsSegment {
+            duration_seconds,
+            transport_bytes: 376,
+        };
+        let reference = vec![window(2.0); 8];
+        let gradual_drift = vec![window(2.2); 8];
+        // Every segment is individually within 0.5s, but after three
+        // windows the switching clocks diverge by 0.6 seconds.
+        assert!(!adaptive_segments_aligned(&reference, &gradual_drift));
+        let bounded_jitter = (0..8)
+            .map(|index| window(if index % 2 == 0 { 2.2 } else { 1.8 }))
+            .collect::<Vec<_>>();
+        assert!(adaptive_segments_aligned(&reference, &bounded_jitter));
+        assert!(adaptive_segments_aligned(&reference, &reference));
+        assert!(!adaptive_segments_aligned(&reference[..7], &reference));
+        assert!(!adaptive_segments_aligned(&[], &[]));
+        assert!(!adaptive_segments_aligned(
+            &reference,
+            &vec![window(2.51); 8]
+        ));
+        assert!(!adaptive_segments_aligned(
+            &reference,
+            &vec![window(f64::NAN); 8]
+        ));
     }
 
     #[test]
