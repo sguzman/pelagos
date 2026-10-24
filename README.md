@@ -20,7 +20,7 @@
 
 ## 📊 Development status
 
-`████░░░░░░ 38%` across 170 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`████░░░░░░ 38%` across 171 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
 **Latest verified implementation CI:** [run 40125584569](https://github.com/sguzman/pelagos/actions/runs/40125584569) — real FFmpeg/FFprobe HLS audio/video transport, authenticated MPEG-TS byte ranges, strict Rust formatting and Clippy, the full HTTP/unit suite, and pinned source/API and roadmap checks.
 

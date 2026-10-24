@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 38%` across 170 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 38%` across 171 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -506,7 +506,7 @@
   - [x] Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override — GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed
   - [ ] Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance
 
-### ⚙️ P10 — Transcoding and GPU — `███░░░░░░░ 34%`
+### ⚙️ P10 — Transcoding and GPU — `████░░░░░░ 38%`
 
 - 🧱 **T310 — FFmpeg job controller** — `███████░░░ 67%`
   - [x] Implement process supervision, concurrency, cancellation and cleanup — src/transcode.rs TranscodeController, transcode_mpegts, try_run, bounded FFmpeg stdout/stderr, kill_on_drop, PartialOutput cancellation cleanup and atomic create_new target; fixed CPU-first H.264/AAC MPEG-TS command
@@ -532,6 +532,10 @@
   - [x] Implement token-scoped, revision-keyed bounded audio/video HLS playlist and MPEG-TS transport with master/media URLs, seek/cache/ranges, concurrent request coalescing and post-wait/post-encode authorization revalidation — src/hls_http.rs generate_hls_playlist/reauthorize_publication/HlsRegistry and serve_segment; src/hls.rs bounded MPEG-TS builders; pinned Jellyfin v12.3 DynamicHlsController
   - [x] Native CI with FFmpeg/FFprobe and HTTP/unit checks proves request coalescing, queued grant-revocation denial, token revocation, source replacement rejection, source-bound private transport, HEAD and range validators — GitHub Actions 40125584569, 40126691873, 40127607569 and 40129045623 — all-target Rust tests, Clippy, rustfmt, pinned matrices passed; queued waiter rechecks token, library grant and original media source revision
   - [ ] Full upstream HLS negotiation and codec options, multi-rendition HTTP ABR/DASH, multi-hour live/long VOD scheduler, consistent timeline, real-client token forwarding and unmodified Jellyfin TV/mobile playback acceptance
+- 📡 **T341 — Authenticated opt-in multi-rendition video HLS master and nested segment transport** — `███████░░░ 67%`
+  - [x] Wire the verified private 2–4-rendition FFmpeg MPEG-TS builder to an explicit video master.m3u8 renditions query; isolate cache by rendition count and expose measured ordered variant manifests and bounded token-scoped nested segments — src/hls_http.rs rendition_count/PublishedVariant/generate_hls_playlist/video_variant_segment/serve_segment, src/hls.rs generate_adaptive_segmented_vod, src/transcode.rs MpegTsQuality; legacy one-rendition remains default
+  - [x] Real FFmpeg/FFprobe HTTP CI verifies two distinct measured-bandwidth variants, nested VOD playlists, TS payload sync, ranged reads, authenticated cache reuse, sibling-token denial, grant revocation and publication cleanup — GitHub Actions 40129423881 and 40129582393 — formatting, Clippy, full Rust tests and real FFmpeg/FFprobe video transport fixtures passed
+  - [ ] 3–4-rendition HTTP fixture and varying bitrate networks, seamless switching/timebase consistency, seeked or audio ABR, long VOD, full Jellyfin HLS/DASH and unmodified Smart TV acceptance
 
 ### 💬 P11 — Subtitles and ancillary streams — `░░░░░░░░░░ 0%`
 

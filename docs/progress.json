@@ -2674,6 +2674,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T341",
+              "emoji": "📡",
+              "name": "Authenticated opt-in multi-rendition video HLS master and nested segment transport",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Wire the verified private 2–4-rendition FFmpeg MPEG-TS builder to an explicit video master.m3u8 renditions query; isolate cache by rendition count and expose measured ordered variant manifests and bounded token-scoped nested segments",
+                  "passed": true,
+                  "evidence": "src/hls_http.rs rendition_count/PublishedVariant/generate_hls_playlist/video_variant_segment/serve_segment, src/hls.rs generate_adaptive_segmented_vod, src/transcode.rs MpegTsQuality; legacy one-rendition remains default"
+                },
+                {
+                  "title": "Real FFmpeg/FFprobe HTTP CI verifies two distinct measured-bandwidth variants, nested VOD playlists, TS payload sync, ranged reads, authenticated cache reuse, sibling-token denial, grant revocation and publication cleanup",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40129423881 and 40129582393 — formatting, Clippy, full Rust tests and real FFmpeg/FFprobe video transport fixtures passed"
+                },
+                {
+                  "title": "3–4-rendition HTTP fixture and varying bitrate networks, seamless switching/timebase consistency, seeked or audio ABR, long VOD, full Jellyfin HLS/DASH and unmodified Smart TV acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
