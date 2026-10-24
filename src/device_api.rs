@@ -61,7 +61,7 @@ async fn devices(
     headers: HeaderMap,
     Query(query): Query<DeviceListQuery>,
 ) -> Result<Json<DeviceResults>, StatusCode> {
-    let dir = administrator_state(state, headers).await?;
+    let dir = administrator_state(state.clone(), headers).await?;
     let requested_user = query
         .user_id
         .as_deref()
