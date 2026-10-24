@@ -637,12 +637,13 @@ pub fn identify(state_dir: &Path, token: &str, server_id: &str) -> Result<Option
              JOIN pelagos_users u ON u.id=t.user_id
              WHERE t.digest=?1 AND u.disabled=0
              ON CONFLICT(session_id) DO UPDATE SET
-                 last_seen_unix=excluded.last_seen_unix",
+                 last_seen_unix=excluded.last_seen_unix
+             WHERE excluded.last_seen_unix>pelagos_session_activity.last_seen_unix",
             params![digest.as_slice()],
         )?;
         db.execute(
             "UPDATE pelagos_devices SET last_authenticated_unix=unixepoch()
-             WHERE id IN (
+             WHERE last_authenticated_unix<unixepoch() AND id IN (
                  SELECT s.device_id FROM pelagos_sessions s
                  JOIN pelagos_tokens t ON t.digest=s.digest
                  JOIN pelagos_users u ON u.id=t.user_id
