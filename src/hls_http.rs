@@ -1,6 +1,10 @@
 //! Bounded, token-scoped Jellyfin-shaped HLS VOD HTTP subset.
 //! This does not implement dynamic HLS scheduling or Smart TV parity.
-use crate::{app::AppState, auth_api, hls, playback, streaming, transcode::TranscodeController};
+use crate::{
+    app::AppState,
+    auth_api, hls, playback, streaming,
+    transcode::{MpegTsQuality, TranscodeController},
+};
 use axum::{
     Router,
     body::Body,
@@ -36,6 +40,13 @@ const MAX_MANIFEST: usize = 32 * 1024;
 const MAX_SEGMENT_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug)]
+struct PublishedVariant {
+    name: String,
+    media_playlist: String,
+    segments: Vec<(PathBuf, u64)>,
+}
+
+#[derive(Debug)]
 struct Published {
     id: String,
     item: String,
@@ -46,11 +57,13 @@ struct Published {
     source_modified: Option<std::time::SystemTime>,
     target_seconds: u32,
     start_time_ticks: u64,
+    rendition_count: u8,
     private_root: PathBuf,
     main_playlist: String,
     master_playlist: String,
     media_playlist: String,
     segments: Vec<(PathBuf, u64)>,
+    variants: Vec<PublishedVariant>,
 }
 impl Drop for Published {
     fn drop(&mut self) {
@@ -67,6 +80,7 @@ struct CacheLookup<'a> {
     modified: Option<std::time::SystemTime>,
     target_seconds: u32,
     start_time_ticks: u64,
+    rendition_count: u8,
 }
 
 /// Small private cache; a segment request holds its own Arc during eviction.
@@ -143,6 +157,7 @@ impl HlsRegistry {
                     && entry.source_modified == query.modified
                     && entry.target_seconds == query.target_seconds
                     && entry.start_time_ticks == query.start_time_ticks
+                    && entry.rendition_count == query.rendition_count
             })
             .cloned()
     }
@@ -211,6 +226,7 @@ fn set_private_headers(response: &mut Response, mime: &'static str, size: usize)
 struct PlaylistQuery {
     segment_length: Option<u32>,
     start_time_ticks: Option<i64>,
+    renditions: Option<u8>,
 }
 
 async fn video_main(
@@ -293,6 +309,13 @@ async fn generate_hls_playlist(
         return Err(StatusCode::BAD_REQUEST);
     }
     let start_time_ticks = start_time_ticks as u64;
+    let rendition_count = query.renditions.unwrap_or(1);
+    if !(1..=4).contains(&rendition_count) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if rendition_count > 1 && (!master || expected_kind != "video" || start_time_ticks != 0) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     let (source, kind) = playback::media_file(&state, item.clone(), scope).await?;
@@ -314,6 +337,7 @@ async fn generate_hls_playlist(
         modified: source_modified,
         target_seconds,
         start_time_ticks,
+        rendition_count,
     };
     if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
@@ -408,11 +432,13 @@ async fn generate_hls_playlist(
         source_modified,
         target_seconds,
         start_time_ticks,
+        rendition_count,
         private_root,
         main_playlist: playlist,
         master_playlist,
         media_playlist,
         segments,
+        variants: Vec::new(),
     });
     cleanup.armed = false;
     registry.publish(publication);
@@ -859,11 +885,13 @@ mod tests {
                 source_modified: None,
                 target_seconds: 2,
                 start_time_ticks: 0,
+                rendition_count: 1,
                 private_root: root,
                 main_playlist: String::new(),
                 master_playlist: String::new(),
                 media_playlist: String::new(),
                 segments: Vec::new(),
+                variants: Vec::new(),
             }));
         }
         assert!(
@@ -891,6 +919,7 @@ mod tests {
             modified: None,
             target_seconds: 2,
             start_time_ticks: 0,
+            rendition_count: 1,
         };
         assert_eq!(registry.cached(&key).unwrap().id, "playlist-2");
         assert!(
@@ -957,11 +986,13 @@ mod tests {
             source_modified: None,
             target_seconds: 2,
             start_time_ticks: 0,
+            rendition_count: 1,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
             media_playlist: String::new(),
             segments: Vec::new(),
+            variants: Vec::new(),
         }));
         assert!(
             registry
