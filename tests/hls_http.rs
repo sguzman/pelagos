@@ -936,7 +936,9 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     assert_eq!(triple_response.status(), StatusCode::OK);
     let triple_master = text_body(triple_response).await;
     assert_eq!(
-        triple_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
+        triple_master
+            .matches("#EXT-X-STREAM-INF:BANDWIDTH=")
+            .count(),
         3
     );
     assert_eq!(triple_master.matches(",RESOLUTION=640x360").count(), 3);
