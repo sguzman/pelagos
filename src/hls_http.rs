@@ -431,9 +431,13 @@ async fn generate_hls_playlist(
                 return Err(StatusCode::NOT_IMPLEMENTED);
             }
             master_playlist.push_str(&format!(
-                "#EXT-X-STREAM-INF:BANDWIDTH={}\nhls1/{id}/{name}/index.m3u8\n",
+                "#EXT-X-STREAM-INF:BANDWIDTH={}",
                 variant.bandwidth
             ));
+            if let Some((width, height)) = variant.resolution {
+                master_playlist.push_str(&format!(",RESOLUTION={width}x{height}"));
+            }
+            master_playlist.push_str(&format!("\nhls1/{id}/{name}/index.m3u8\n"));
             let mut media_playlist = tokio::fs::read_to_string(&rendition.playlist_path)
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
