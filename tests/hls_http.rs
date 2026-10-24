@@ -937,7 +937,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     let bandwidths = master
         .lines()
         .filter_map(|line| line.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
-        .map(|number| number.parse::<u64>().unwrap())
+        .map(|attributes| attributes.split(',').next().unwrap().parse::<u64>().unwrap())
         .collect::<Vec<_>>();
     assert!(bandwidths[0] > 0 && bandwidths[0] < bandwidths[1]);
     let playlist_id = paths[0].split('/').nth(1).unwrap().to_owned();
