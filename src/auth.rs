@@ -632,6 +632,16 @@ pub fn identify(state_dir: &Path, token: &str, server_id: &str) -> Result<Option
                  last_seen_unix=excluded.last_seen_unix",
             params![digest.as_slice()],
         )?;
+        db.execute(
+            "UPDATE pelagos_devices SET last_authenticated_unix=unixepoch()
+             WHERE id IN (
+                 SELECT s.device_id FROM pelagos_sessions s
+                 JOIN pelagos_tokens t ON t.digest=s.digest
+                 JOIN pelagos_users u ON u.id=t.user_id
+                 WHERE t.digest=?1 AND u.disabled=0 AND s.device_id IS NOT NULL
+             )",
+            params![digest.as_slice()],
+        )?;
     }
     Ok(user)
 }
@@ -819,7 +829,8 @@ pub struct DeviceInfoDto {
     pub app_name: Option<String>,
     pub app_version: Option<String>,
     pub last_user_id: Option<String>,
-    // Login timestamps are not Jellyfin's general "last activity".
+    // Latest observed authenticated device request, not Jellyfin's
+    // complete activity or playback event history.
     pub date_last_activity: Option<String>,
     pub capabilities: DeviceCapabilitiesDto,
     pub icon_url: Option<String>,
@@ -854,7 +865,8 @@ fn query_registered_devices(
                 COALESCE(c.playable_media_types,''),
                 COALESCE(c.supported_commands,''),
                 COALESCE(c.supports_media_control,0),
-                COALESCE(c.supports_persistent_identifier,1)
+                COALESCE(c.supports_persistent_identifier,1),
+                strftime('%Y-%m-%dT%H:%M:%SZ',d.last_authenticated_unix,'unixepoch')
          FROM pelagos_devices d
          LEFT JOIN pelagos_users u ON u.id=d.last_user_id
          LEFT JOIN pelagos_sessions s ON s.id=(
@@ -879,7 +891,7 @@ fn query_registered_devices(
             app_version: row.get(4)?,
             last_user_id: row.get(5)?,
             last_user_name: row.get(6)?,
-            date_last_activity: None,
+            date_last_activity: row.get(11)?,
             capabilities: DeviceCapabilitiesDto {
                 playable_media_types: parse_session_items(row.get(7)?),
                 supported_commands: parse_session_items(row.get(8)?),
