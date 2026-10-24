@@ -231,6 +231,8 @@ struct PlaylistQuery {
     segment_length: Option<u32>,
     start_time_ticks: Option<i64>,
     renditions: Option<u8>,
+    media_source_id: Option<String>,
+    enable_adaptive_bitrate_streaming: Option<bool>,
 }
 
 async fn video_main(
@@ -313,14 +315,33 @@ async fn generate_hls_playlist(
         return Err(StatusCode::BAD_REQUEST);
     }
     let start_time_ticks = start_time_ticks as u64;
-    let rendition_count = query.renditions.unwrap_or(1);
-    if !(1..=4).contains(&rendition_count) {
+    // The pinned v12.3 master routes carry MediaSourceId and the opt-in
+    // adaptive switch. Pelagos PlaybackInfo currently exposes one source
+    // whose ID exactly equals the item ID; never silently transcode a
+    // different requested source or ignore an explicit adaptive choice.
+    let rendition_count = query.renditions.unwrap_or(if query.enable_adaptive_bitrate_streaming
+        == Some(true)
+    {
+        2
+    } else {
+        1
+    });
+    if !(1..=4).contains(&rendition_count)
+        || (rendition_count > 1 && query.enable_adaptive_bitrate_streaming == Some(false))
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     if rendition_count > 1 && !master {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    if query
+        .media_source_id
+        .as_deref()
+        .is_some_and(|id| id != item)
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     let (source, kind) = playback::media_file(&state, item.clone(), scope).await?;
     if kind != expected_kind {
