@@ -821,6 +821,46 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_bandwidth_uses_largest_verified_window_instead_of_file_average() {
+        let windows = vec![
+            HlsSegment {
+                duration_seconds: 2.0,
+                transport_bytes: 1880,
+            },
+            HlsSegment {
+                duration_seconds: 0.5,
+                transport_bytes: 3760,
+            },
+        ];
+        let peak = measured_peak_transport_bandwidth(&windows).unwrap();
+        assert_eq!(peak, 60_160);
+        let misleading_average = (5640.0_f64 * 8.0 / 2.5).ceil() as u64;
+        assert!(peak > misleading_average);
+        for invalid in [
+            vec![],
+            vec![HlsSegment {
+                duration_seconds: f64::NAN,
+                transport_bytes: 188,
+            }],
+            vec![HlsSegment {
+                duration_seconds: 2.0,
+                transport_bytes: 187,
+            }],
+            vec![HlsSegment {
+                duration_seconds: 0.001,
+                transport_bytes: 188_000_000,
+            }],
+        ] {
+            assert_eq!(
+                measured_peak_transport_bandwidth(&invalid)
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::InvalidData
+            );
+        }
+    }
+
+    #[test]
     fn measured_multi_segment_manifest_has_bounded_independent_uris_and_ceil_target() {
         let segments = vec![
             HlsSegment {
