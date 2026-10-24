@@ -124,20 +124,20 @@ async fn elevated_ordinary_password_reset_invalidates_existing_sessions() {
         .status(),
         StatusCode::BAD_REQUEST
     );
-    assert!(auth::identify(&state, &viewer.access_token, "server")
-        .unwrap()
-        .is_some());
+    assert!(
+        auth::identify(&state, &viewer.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
 
-    let response = call(
-        &router,
-        "POST",
-        &target,
-        Some(&admin.access_token),
-        request,
-    )
-    .await;
+    let response = call(&router, "POST", &target, Some(&admin.access_token), request).await;
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    assert!(to_bytes(response.into_body(), 1024).await.unwrap().is_empty());
+    assert!(
+        to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     for token in [&viewer.access_token, &second.access_token] {
         assert_eq!(
             call(&router, "GET", "/Users/Me", Some(token), json!({}))
@@ -151,10 +151,9 @@ async fn elevated_ordinary_password_reset_invalidates_existing_sessions() {
             .unwrap()
             .is_none()
     );
-    let new_login =
-        auth::authenticate(&state, "viewer", password, "server")
-            .unwrap()
-            .unwrap();
+    let new_login = auth::authenticate(&state, "viewer", password, "server")
+        .unwrap()
+        .unwrap();
     assert_eq!(new_login.user.id, viewer.user.id);
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
