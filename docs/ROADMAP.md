@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 38%` across 168 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 38%` across 169 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -423,7 +423,7 @@
   - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
   - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 40%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 41%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
@@ -506,7 +506,7 @@
   - [x] Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override — GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed
   - [ ] Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance
 
-### ⚙️ P10 — Transcoding and GPU — `██░░░░░░░░ 17%`
+### ⚙️ P10 — Transcoding and GPU — `███░░░░░░░ 27%`
 
 - 🧱 **T310 — FFmpeg job controller** — `███████░░░ 67%`
   - [x] Implement process supervision, concurrency, cancellation and cleanup — src/transcode.rs TranscodeController, transcode_mpegts, try_run, bounded FFmpeg stdout/stderr, kill_on_drop, PartialOutput cancellation cleanup and atomic create_new target; fixed CPU-first H.264/AAC MPEG-TS command
@@ -524,6 +524,10 @@
   - [ ] Implement active transcoding state, progress, bandwidth and resume reporting
   - [ ] Automated tests and Jellyfin baseline fixture verify active transcoding state, progress, bandwidth and resume reporting
   - [ ] Production or real-client acceptance validates active transcoding state, progress, bandwidth and resume reporting
+- 📼 **T339 — Bounded FFmpeg-backed single-segment adaptive HLS VOD artifact subset** — `███████░░░ 67%`
+  - [x] Implement numeric validated H.264/AAC FFmpeg quality targets, FFprobe-duration validated one-segment HLS VOD playlists, sorted measured-bandwidth adaptive master playlist and cancel-safe private output cleanup without shell command construction — src/transcode.rs MpegTsQuality/try_run_with_quality/transcode_mpegts_with_quality; src/hls.rs generate_single_segment_vod/generate_adaptive_vod/render_vod_master_playlist; pinned Jellyfin v12.3 HLS transport contracts remain separate
+  - [x] Native CI verifies real Ubuntu FFmpeg AAC and H.264 MPEG-TS output, FFprobe verification, two synthetic adaptive bitrate renditions, valid master sequence and measured bandwidth, invalid encoder input, rollback and HLS cleanup — GitHub Actions 40117291803, 40117792953 and 40117919015 — full Rust unit tests including real FFmpeg/FFprobe smoke, rustfmt, clippy -D warnings, source/controller matrices and roadmap checks passed
+  - [ ] Real multi-segment timeline, adaptive rendition switching, HLS/DASH HTTP/manifest client compatibility, Smart TV client acceptance and production transcoding lifecycle
 
 ### 💬 P11 — Subtitles and ancillary streams — `░░░░░░░░░░ 0%`
 

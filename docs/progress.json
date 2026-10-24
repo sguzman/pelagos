@@ -2630,6 +2630,28 @@
                 }
               ],
               "progress": 0
+            },
+            {
+              "id": "T339",
+              "emoji": "📼",
+              "name": "Bounded FFmpeg-backed single-segment adaptive HLS VOD artifact subset",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement numeric validated H.264/AAC FFmpeg quality targets, FFprobe-duration validated one-segment HLS VOD playlists, sorted measured-bandwidth adaptive master playlist and cancel-safe private output cleanup without shell command construction",
+                  "passed": true,
+                  "evidence": "src/transcode.rs MpegTsQuality/try_run_with_quality/transcode_mpegts_with_quality; src/hls.rs generate_single_segment_vod/generate_adaptive_vod/render_vod_master_playlist; pinned Jellyfin v12.3 HLS transport contracts remain separate"
+                },
+                {
+                  "title": "Native CI verifies real Ubuntu FFmpeg AAC and H.264 MPEG-TS output, FFprobe verification, two synthetic adaptive bitrate renditions, valid master sequence and measured bandwidth, invalid encoder input, rollback and HLS cleanup",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40117291803, 40117792953 and 40117919015 — full Rust unit tests including real FFmpeg/FFprobe smoke, rustfmt, clippy -D warnings, source/controller matrices and roadmap checks passed"
+                },
+                {
+                  "title": "Real multi-segment timeline, adaptive rendition switching, HLS/DASH HTTP/manifest client compatibility, Smart TV client acceptance and production transcoding lifecycle",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
