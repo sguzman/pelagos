@@ -25,11 +25,7 @@ async fn call(router: &Router, path: &str, token: Option<&str>) -> Response {
         .unwrap()
 }
 
-async fn report(
-    router: &Router,
-    path: &str,
-    token: &str,
-) -> StatusCode {
+async fn report(router: &Router, path: &str, token: &str) -> StatusCode {
     router
         .clone()
         .oneshot(
