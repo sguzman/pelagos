@@ -7,9 +7,9 @@ use std::{
     time::Duration,
 };
 
-use tokio::{fs::OpenOptions, io::AsyncWriteExt};
+use tokio::{fs::{self, OpenOptions}, io::AsyncWriteExt};
 
-use crate::{probe, transcode::TranscodeController};
+use crate::{probe, transcode::{MpegTsQuality, TranscodeController}};
 
 const SEGMENT_NAME: &str = "segment00000.ts";
 const PLAYLIST_NAME: &str = "index.m3u8";
@@ -107,6 +107,16 @@ pub async fn generate_single_segment_vod(
     source: &Path,
     output_dir: &Path,
 ) -> io::Result<HlsVodArtifact> {
+    generate_single_segment_vod_with_quality(controller, ffprobe, source, output_dir, None).await
+}
+
+async fn generate_single_segment_vod_with_quality(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    quality: Option<MpegTsQuality>,
+) -> io::Result<HlsVodArtifact> {
     // Create the directory synchronously before the first suspension point,
     // ensuring the drop guard exists whenever cancellation is possible.
     std::fs::create_dir(output_dir)?;
@@ -115,7 +125,10 @@ pub async fn generate_single_segment_vod(
         committed: false,
     };
     let segment_path = output_dir.join(SEGMENT_NAME);
-    let transport_bytes = controller.try_run(source, &segment_path).await?;
+    let transport_bytes = match quality {
+        Some(profile) => controller.try_run_with_quality(source, &segment_path, profile).await?,
+        None => controller.try_run(source, &segment_path).await?,
+    };
     let inspection = probe::probe(&segment_path, ffprobe, PROBE_TIMEOUT).await?;
     let duration_seconds = inspection
         .format
@@ -153,6 +166,101 @@ pub async fn generate_single_segment_vod(
         segment_path,
         duration_seconds,
         transport_bytes,
+    })
+}
+
+/// A single bounded VOD rendition and its measured peak segment bandwidth.
+/// This first stage contains one segment per rendition, not yet rolling HLS.
+#[derive(Debug, Clone)]
+pub struct HlsAdaptiveArtifact {
+    pub master_path: PathBuf,
+    pub variants: Vec<HlsVariant>,
+    pub renditions: Vec<HlsVodArtifact>,
+}
+
+/// Generate 2–4 independent CPU bitrate-target renditions and a master
+/// playlist ordered by measured transport bandwidth, not requested targets.
+/// Equal-bandwidth duplicates are removed instead of inventing differences.
+/// Every output is private and atomically created; any error rolls the
+/// bundle directory back, including partially completed variants.
+pub async fn generate_adaptive_vod(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    qualities: &[MpegTsQuality],
+) -> io::Result<HlsAdaptiveArtifact> {
+    if !(2..=4).contains(&qualities.len()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "HLS ladder requires two to four requested renditions",
+        ));
+    }
+    std::fs::create_dir(output_dir)?;
+    let mut partial = PartialBundle {
+        dir: output_dir.to_path_buf(),
+        committed: false,
+    };
+    let mut staged = Vec::new();
+    for (index, quality) in qualities.iter().enumerate() {
+        let name = format!("candidate{index:02}");
+        let rendition = generate_single_segment_vod_with_quality(
+            controller,
+            ffprobe,
+            source,
+            &output_dir.join(&name),
+            Some(*quality),
+        )
+        .await?;
+        let bandwidth = (rendition.transport_bytes as f64 * 8.0 / rendition.duration_seconds)
+            .ceil() as u64;
+        if bandwidth == 0 || bandwidth > 1_000_000_000 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "measured HLS segment bandwidth is invalid",
+            ));
+        }
+        staged.push((bandwidth, name, rendition));
+    }
+    staged.sort_by_key(|(bandwidth, _, _)| *bandwidth);
+    let mut variants = Vec::new();
+    let mut renditions = Vec::new();
+    let mut previous = 0_u64;
+    for (bandwidth, name, rendition) in staged {
+        let previous_path = output_dir.join(&name);
+        if bandwidth == previous {
+            fs::remove_dir_all(previous_path).await?;
+            continue;
+        }
+        let new_name = format!("variant{:02}", variants.len());
+        fs::rename(&previous_path, output_dir.join(&new_name)).await?;
+        let playlist_name = format!("{new_name}/index.m3u8");
+        variants.push(HlsVariant {
+            playlist_name,
+            bandwidth,
+            resolution: None,
+        });
+        renditions.push(HlsVodArtifact {
+            playlist_path: output_dir.join(&new_name).join(PLAYLIST_NAME),
+            segment_path: output_dir.join(&new_name).join(SEGMENT_NAME),
+            ..rendition
+        });
+        previous = bandwidth;
+    }
+    let manifest = render_vod_master_playlist(&variants)?;
+    let master_path = output_dir.join("master.m3u8");
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&master_path)
+        .await?;
+    file.write_all(manifest.as_bytes()).await?;
+    file.flush().await?;
+    partial.committed = true;
+    Ok(HlsAdaptiveArtifact {
+        master_path,
+        variants,
+        renditions,
     })
 }
 
