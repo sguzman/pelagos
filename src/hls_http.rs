@@ -7,7 +7,9 @@ use axum::{
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
+        header::{
+            ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
+        },
     },
     response::Response,
     routing::get,
@@ -21,7 +23,10 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{io::{AsyncReadExt, AsyncSeekExt}, sync::Semaphore};
+use tokio::{
+    io::{AsyncReadExt, AsyncSeekExt},
+    sync::Semaphore,
+};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -458,8 +463,7 @@ async fn serve_segment(
         Body::from_stream(ReaderStream::new(file.take(length)))
     };
     let mut response = Response::new(body);
-    let response_length =
-        usize::try_from(length).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let response_length = usize::try_from(length).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     set_private_headers(&mut response, "video/mp2t", response_length);
     response
         .headers_mut()
