@@ -190,13 +190,7 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"2.5"},"streams":[{"codec_name":"aac"}]}'"#,
         );
-        let c = TranscodeController::new(
-            bad_packets,
-            1,
-            Duration::from_secs(2),
-            1024,
-        )
-        .unwrap();
+        let c = TranscodeController::new(bad_packets, 1, Duration::from_secs(2), 1024).unwrap();
         let bad_dir = temp.path().join("malformed");
         assert_eq!(
             generate_single_segment_vod(&c, &good_probe, &input, &bad_dir)
@@ -213,13 +207,7 @@ mod tests {
             "empty-ffprobe",
             r#"printf '%s' '{"format":{"duration":"2.5"},"streams":[]}'"#,
         );
-        let c = TranscodeController::new(
-            good_packets,
-            1,
-            Duration::from_secs(2),
-            1024,
-        )
-        .unwrap();
+        let c = TranscodeController::new(good_packets, 1, Duration::from_secs(2), 1024).unwrap();
         let empty_dir = temp.path().join("no-streams");
         assert_eq!(
             generate_single_segment_vod(&c, &no_streams, &input, &empty_dir)
@@ -238,13 +226,8 @@ mod tests {
         stdfs::write(&input, b"synthetic").unwrap();
         let long_running = executable(temp.path(), "sleep-ffmpeg", "exec sleep 2");
         let fake_probe = executable(temp.path(), "fake-ffprobe", "exit 1");
-        let controller = TranscodeController::new(
-            long_running,
-            1,
-            Duration::from_secs(5),
-            1024,
-        )
-        .unwrap();
+        let controller =
+            TranscodeController::new(long_running, 1, Duration::from_secs(5), 1024).unwrap();
         let dir = temp.path().join("cancelled");
         let job_dir = dir.clone();
         let job = tokio::spawn(async move {
