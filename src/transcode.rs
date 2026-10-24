@@ -450,6 +450,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn real_ffmpeg_video_transport_contains_h264_when_ci_requires_it() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("tiny-video.avi");
+        let input = Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=160x90:rate=15:duration=1",
+                "-c:v",
+                "mpeg4",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            input.status.success(),
+            "fixture FFmpeg failed: {}",
+            String::from_utf8_lossy(&input.stderr)
+        );
+        let output = temp.path().join("video.ts");
+        let bytes = transcode_mpegts(
+            Path::new("ffmpeg"),
+            &source,
+            &output,
+            Duration::from_secs(25),
+            4 * 1024 * 1024,
+        )
+        .await
+        .unwrap();
+        assert!(bytes >= 188);
+        assert_eq!(bytes % 188, 0);
+        let probe = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "v",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+            ])
+            .arg(&output)
+            .output()
+            .await
+            .unwrap();
+        assert!(probe.status.success());
+        assert!(String::from_utf8_lossy(&probe.stdout).contains("h264"));
+    }
+
+    #[tokio::test]
     async fn semaphore_limits_concurrent_jobs_without_spawning_queued_outputs() {
         let (_temp, executable, source, first_output) = fixture("sleep 1; printf 'done'");
         let second_output = first_output.with_file_name("second.ts");
