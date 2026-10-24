@@ -92,15 +92,11 @@ async fn device_info(
         return Err(StatusCode::BAD_REQUEST);
     }
     let id = query.id;
-    let devices = tokio::task::spawn_blocking(move || auth::list_registered_devices(&dir, None))
+    let device = tokio::task::spawn_blocking(move || auth::registered_device_info(&dir, &id))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    devices
-        .into_iter()
-        .find(|device| device.id == id)
-        .map(Json)
-        .ok_or(StatusCode::NOT_FOUND)
+    Ok(Json(device.ok_or(StatusCode::NOT_FOUND)?))
 }
 
 /** Revokes all access tokens attached to one recorded device ID.
