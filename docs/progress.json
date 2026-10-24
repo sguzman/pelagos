@@ -3226,17 +3226,17 @@
               "name": "Durable administrator device display-name override",
               "checks": [
                 {
-                  "title": "Implement elevated GET /Devices/Options and name-only POST /Devices/Options with a separate persistent custom label that never changes device ID, original device name or token grants",
+                  "title": "Implement elevated GET /Devices/Options and name-only POST /Devices/Options with persistent custom labels and stable numeric DeviceOptionsDto IDs, never changing device identity, original name or active token grants",
                   "passed": true,
-                  "evidence": "src/auth.rs registered_device_options/rename_registered_device; src/device_api.rs device_options/update_device_options; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions"
+                  "evidence": "src/auth.rs registered_device_options/rename_registered_device, pelagos_device_option_ids and transactional lazy ID migration; src/device_api.rs; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions"
                 },
                 {
-                  "title": "Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable device ID, no token disruption, inventory projection and restart persistence",
+                  "title": "Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable option numeric ID through repeat login/restart, lazy legacy mapping, no token disruption and inventory projection",
                   "passed": true,
-                  "evidence": "GitHub Actions 40051766079 — native HTTP, Rust unit, formatting, Clippy and pinned matrix checks passed"
+                  "evidence": "GitHub Actions 40051766079 and 40052163479 — full Rust unit/HTTP, rustfmt, Clippy and pinned source/roadmap checks passed"
                 },
                 {
-                  "title": "Full upstream DeviceOptionsDto numeric Id, clearing custom names, multi-device administration and unmodified client acceptance",
+                  "title": "Full upstream DeviceOptionsDto option clearing semantics, multi-device administration and unmodified Jellyfin client acceptance",
                   "passed": false
                 }
               ],

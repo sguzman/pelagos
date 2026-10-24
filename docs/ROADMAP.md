@@ -652,9 +652,9 @@
   - [x] Native HTTP CI verifies anonymous/member denial, missing and unknown IDs, sibling-session invalidation, other-device isolation, registration persistence and new login after revocation — GitHub Actions 40051766079 — complete Rust tests, formatting, Clippy, ledger and pinned upstream checks passed
   - [ ] Upstream multi-device query arrays, concurrent session race testing and unmodified device-management client acceptance
 - ✏️ **T524 — Durable administrator device display-name override** — `███████░░░ 67%`
-  - [x] Implement elevated GET /Devices/Options and name-only POST /Devices/Options with a separate persistent custom label that never changes device ID, original device name or token grants — src/auth.rs registered_device_options/rename_registered_device; src/device_api.rs device_options/update_device_options; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions
-  - [x] Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable device ID, no token disruption, inventory projection and restart persistence — GitHub Actions 40051766079 — native HTTP, Rust unit, formatting, Clippy and pinned matrix checks passed
-  - [ ] Full upstream DeviceOptionsDto numeric Id, clearing custom names, multi-device administration and unmodified client acceptance
+  - [x] Implement elevated GET /Devices/Options and name-only POST /Devices/Options with persistent custom labels and stable numeric DeviceOptionsDto IDs, never changing device identity, original name or active token grants — src/auth.rs registered_device_options/rename_registered_device, pelagos_device_option_ids and transactional lazy ID migration; src/device_api.rs; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions
+  - [x] Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable option numeric ID through repeat login/restart, lazy legacy mapping, no token disruption and inventory projection — GitHub Actions 40051766079 and 40052163479 — full Rust unit/HTTP, rustfmt, Clippy and pinned source/roadmap checks passed
+  - [ ] Full upstream DeviceOptionsDto option clearing semantics, multi-device administration and unmodified Jellyfin client acceptance
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 
