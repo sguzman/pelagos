@@ -319,13 +319,12 @@ async fn generate_hls_playlist(
     // adaptive switch. Pelagos PlaybackInfo currently exposes one source
     // whose ID exactly equals the item ID; never silently transcode a
     // different requested source or ignore an explicit adaptive choice.
-    let rendition_count = query.renditions.unwrap_or(if query.enable_adaptive_bitrate_streaming
-        == Some(true)
-    {
+    let default_renditions = if query.enable_adaptive_bitrate_streaming == Some(true) {
         2
     } else {
         1
-    });
+    };
+    let rendition_count = query.renditions.unwrap_or(default_renditions);
     if !(1..=4).contains(&rendition_count)
         || (rendition_count > 1 && query.enable_adaptive_bitrate_streaming == Some(false))
     {
@@ -338,7 +337,7 @@ async fn generate_hls_playlist(
     if query
         .media_source_id
         .as_deref()
-        .is_some_and(|id| id != item)
+        .is_some_and(|id| id != item.as_str())
     {
         return Err(StatusCode::NOT_FOUND);
     }
