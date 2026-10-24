@@ -20,6 +20,22 @@ use tokio::{
 pub const MAX_TRANSCODE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_STDERR_BYTES: u64 = 16 * 1024;
 
+/// Fixed numeric rate targets for later HLS renditions. These are FFmpeg
+/// encoder targets; actual playlist bandwidth must be measured separately.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MpegTsQuality {
+    pub video_kbps: u32,
+    pub audio_kbps: u32,
+}
+
+impl MpegTsQuality {
+    fn valid(self) -> bool {
+        (300..=20_000).contains(&self.video_kbps)
+            && (32..=320).contains(&self.audio_kbps)
+    }
+}
+
+
 /// A synchronous drop guard also removes partial output if the caller
 /// cancels its Rust future before a timeout or FFmpeg exit is observed.
 struct PartialOutput {
@@ -93,6 +109,37 @@ impl TranscodeController {
         self.transcode(source, output).await
     }
 
+    /// As with try_run, full-capacity workers reject extra callers before
+    /// allocating files or launching FFmpeg. Quality fields are numeric only.
+    pub async fn try_run_with_quality(
+        &self,
+        source: &Path,
+        output: &Path,
+        quality: MpegTsQuality,
+    ) -> io::Result<u64> {
+        if !quality.valid() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid MPEG-TS encoder target bitrates",
+            ));
+        }
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_with_quality(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes,
+            quality,
+        )
+        .await
+    }
+
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
@@ -118,6 +165,36 @@ pub async fn transcode_mpegts(
     output: &Path,
     deadline: Duration,
     max_bytes: u64,
+) -> io::Result<u64> {
+    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None).await
+}
+
+/// Separate, validated encoder profile used for media variants. No shell
+/// interpretation and no caller-supplied FFmpeg argument strings.
+pub async fn transcode_mpegts_with_quality(
+    executable: &Path,
+    source: &Path,
+    output: &Path,
+    deadline: Duration,
+    max_bytes: u64,
+    quality: MpegTsQuality,
+) -> io::Result<u64> {
+    if !quality.valid() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid MPEG-TS encoder target bitrates",
+        ));
+    }
+    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, Some(quality)).await
+}
+
+async fn transcode_mpegts_inner(
+    executable: &Path,
+    source: &Path,
+    output: &Path,
+    deadline: Duration,
+    max_bytes: u64,
+    quality: Option<MpegTsQuality>,
 ) -> io::Result<u64> {
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -161,7 +238,15 @@ pub async fn transcode_mpegts(
             .arg("-preset")
             .arg("veryfast")
             .arg("-c:a")
-            .arg("aac")
+            .arg("aac");
+        if let Some(quality) = quality {
+            command
+                .arg("-b:v")
+                .arg(format!("{}k", quality.video_kbps))
+                .arg("-b:a")
+                .arg(format!("{}k", quality.audio_kbps));
+        }
+        command
             .arg("-f")
             .arg("mpegts")
             .arg("pipe:1")
