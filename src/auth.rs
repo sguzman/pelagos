@@ -131,6 +131,10 @@ fn database(state_dir: &Path) -> Result<Connection> {
              last_user_id TEXT REFERENCES pelagos_users(id) ON DELETE SET NULL,
              last_authenticated_unix INTEGER NOT NULL DEFAULT (unixepoch())
          );
+         CREATE TABLE IF NOT EXISTS pelagos_device_option_ids(
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             device_id TEXT NOT NULL UNIQUE REFERENCES pelagos_devices(id) ON DELETE CASCADE
+         );
          CREATE TABLE IF NOT EXISTS pelagos_library_access(
              user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
              root TEXT NOT NULL,
@@ -542,6 +546,10 @@ pub fn authenticate_with_client(
                 user.id,
             ],
         )?;
+        tx.execute(
+            "INSERT OR IGNORE INTO pelagos_device_option_ids(device_id) VALUES(?1)",
+            params![device_id],
+        )?;
     }
     tx.commit()?;
     let session_info = SessionInfo {
@@ -859,29 +867,42 @@ pub fn revoke_registered_device_sessions(
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct DeviceOptionsDto {
+    pub id: i64,
     pub device_id: String,
     pub custom_name: Option<String>,
 }
 
-/// Sparse pinned DeviceOptionsDto: the upstream numeric database Id is not
-/// exposed because a stable equivalent has not yet been migrated to Pelagos.
+/// Resolve a stable Pelagos-owned numeric option ID. Previously registered
+/// devices are assigned one lazily and transactionally on their first lookup.
 pub fn registered_device_options(
     state_dir: &Path,
     device_id: &str,
 ) -> Result<Option<DeviceOptionsDto>> {
-    let db = database(state_dir)?;
-    Ok(db
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    tx.execute(
+        "INSERT OR IGNORE INTO pelagos_device_option_ids(device_id)
+         SELECT id FROM pelagos_devices WHERE id=?1",
+        params![device_id],
+    )?;
+    let info = tx
         .query_row(
-            "SELECT custom_name FROM pelagos_devices WHERE id=?1",
+            "SELECT o.id,d.custom_name
+             FROM pelagos_device_option_ids o
+             JOIN pelagos_devices d ON d.id=o.device_id
+             WHERE d.id=?1",
             params![device_id],
             |row| {
                 Ok(DeviceOptionsDto {
+                    id: row.get(0)?,
                     device_id: device_id.to_owned(),
-                    custom_name: row.get(0)?,
+                    custom_name: row.get(1)?,
                 })
             },
         )
-        .optional()?)
+        .optional()?;
+    tx.commit()?;
+    Ok(info)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
