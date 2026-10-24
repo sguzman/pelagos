@@ -761,6 +761,23 @@ pub fn list_registered_devices(
     state_dir: &Path,
     user_filter: Option<&str>,
 ) -> Result<Vec<DeviceInfoDto>> {
+    query_registered_devices(state_dir, user_filter, None)
+}
+
+pub fn registered_device_info(
+    state_dir: &Path,
+    device_id: &str,
+) -> Result<Option<DeviceInfoDto>> {
+    Ok(query_registered_devices(state_dir, None, Some(device_id))?
+        .into_iter()
+        .next())
+}
+
+fn query_registered_devices(
+    state_dir: &Path,
+    user_filter: Option<&str>,
+    device_filter: Option<&str>,
+) -> Result<Vec<DeviceInfoDto>> {
     let db = database(state_dir)?;
     let mut query = db.prepare(
         "SELECT d.id,d.name,d.custom_name,d.app_name,d.app_version,
@@ -780,9 +797,10 @@ pub fn list_registered_devices(
          )
          LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
          WHERE (?1 IS NULL OR d.last_user_id=?1)
+           AND (?2 IS NULL OR d.id=?2)
          ORDER BY d.id",
     )?;
-    let rows = query.query_map(params![user_filter], |row| {
+    let rows = query.query_map(params![user_filter, device_filter], |row| {
         Ok(DeviceInfoDto {
             id: row.get(0)?,
             name: row.get(1)?,
