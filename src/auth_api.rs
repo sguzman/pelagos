@@ -366,11 +366,22 @@ async fn user_by_id(
     RoutePath(user_id): RoutePath<String>,
     headers: HeaderMap,
 ) -> Result<Json<User>, StatusCode> {
-    let (user, _) = authenticated(state, headers).await?;
-    if user.id != user_id {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    if current.id == user_id {
+        return Ok(Json(current));
+    }
+    if !current.policy.is_administrator || user_id.len() > 128 {
         return Err(StatusCode::NOT_FOUND);
     }
-    Ok(Json(user))
+    let dir = state_dir(&state)?;
+    let server_id = state.server_id().to_owned();
+    let requested = tokio::task::spawn_blocking(move || {
+        auth::find_user(&dir, &user_id, &server_id)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(requested.ok_or(StatusCode::NOT_FOUND)?))
 }
 
 async fn logout(

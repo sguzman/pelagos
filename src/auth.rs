@@ -180,6 +180,22 @@ pub fn list_users(state_dir: &Path, server_id: &str) -> Result<Vec<User>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Read one account without ever projecting password material.
+pub fn find_user(state_dir: &Path, user_id: &str, server_id: &str) -> Result<Option<User>> {
+    let db = database(state_dir)?;
+    Ok(db
+        .query_row(
+            "SELECT u.id,u.username,u.is_admin,u.disabled,
+                    (u.is_admin=1 OR EXISTS(
+                       SELECT 1 FROM pelagos_download_grants d WHERE d.user_id=u.id
+                    ))
+             FROM pelagos_users u WHERE u.id=?1",
+            params![user_id],
+            |row| user_from_row(row, server_id),
+        )
+        .optional()?)
+}
+
 /// Restrict the first policy mutation to disabling/enabling ordinary accounts.
 /// Revoking all outstanding tokens in the same transaction makes disabling
 /// immediately effective, including for previously authenticated clients.
