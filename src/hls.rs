@@ -856,11 +856,11 @@ mod tests {
         assert!(!adaptive_segments_aligned(&[], &[]));
         assert!(!adaptive_segments_aligned(
             &reference,
-            &vec![window(2.51); 8]
+            &[window(2.51); 8]
         ));
         assert!(!adaptive_segments_aligned(
             &reference,
-            &vec![window(f64::NAN); 8]
+            &[window(f64::NAN); 8]
         ));
     }
 
