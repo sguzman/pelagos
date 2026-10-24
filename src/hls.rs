@@ -992,6 +992,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn real_ffmpeg_multisegment_playlist_demuxes_when_ci_requires_it() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("five-seconds.wav");
+        let samples = vec![0_u8; 80_000];
+        let mut wav = Vec::with_capacity(44 + samples.len());
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36_u32 + samples.len() as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&8_000_u32.to_le_bytes());
+        wav.extend_from_slice(&16_000_u32.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(samples.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&samples);
+        stdfs::write(&input, wav).unwrap();
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(20),
+            4 * 1024 * 1024,
+        )
+        .unwrap();
+        let dir = temp.path().join("multisegment");
+        let artifact = generate_segmented_vod(
+            &controller,
+            Path::new("ffprobe"),
+            &input,
+            &dir,
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 3);
+        assert_eq!(artifact.segments.len(), 3);
+        let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        for (i, path) in artifact.segment_paths.iter().enumerate() {
+            assert!(path.exists());
+            assert_eq!(stdfs::metadata(path).unwrap().len() % 188, 0);
+            assert!(manifest.contains(&format!("segment{i:05}.ts")));
+            let details = probe::probe(path, Path::new("ffprobe"), PROBE_TIMEOUT)
+                .await
+                .unwrap();
+            assert!(
+                details
+                    .streams
+                    .iter()
+                    .any(|stream| stream["codec_name"].as_str() == Some("aac"))
+            );
+        }
+        let assembled = probe::probe(&artifact.playlist_path, Path::new("ffprobe"), PROBE_TIMEOUT)
+            .await
+            .unwrap();
+        assert!(assembled.streams.iter().any(|s| s["codec_name"].as_str() == Some("aac")));
+        assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
+        artifact.remove().unwrap();
+        assert!(!dir.exists());
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_hls_vod_bundle_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
