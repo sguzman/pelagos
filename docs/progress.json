@@ -2634,21 +2634,21 @@
             {
               "id": "T339",
               "emoji": "📼",
-              "name": "Bounded FFmpeg-backed single-segment adaptive HLS VOD artifact subset",
+              "name": "Bounded FFmpeg-backed segmented and adaptive private HLS VOD artifacts",
               "progress": 67,
               "checks": [
                 {
-                  "title": "Implement numeric validated H.264/AAC FFmpeg quality targets, FFprobe-duration validated one-segment HLS VOD playlists, sorted measured-bandwidth adaptive master playlist and cancel-safe private output cleanup without shell command construction",
+                  "title": "Implement validated CPU-first FFmpeg H.264/AAC time-window MPEG-TS segments, bounded independently probed multi-segment VOD media playlists with explicit transport discontinuities, sorted measured-bandwidth 2–4 rendition adaptive master playlists, byte/deadline/admission limits and cancellation-safe private cleanup",
                   "passed": true,
-                  "evidence": "src/transcode.rs MpegTsQuality/try_run_with_quality/transcode_mpegts_with_quality; src/hls.rs generate_single_segment_vod/generate_adaptive_vod/render_vod_master_playlist; pinned Jellyfin v12.3 HLS transport contracts remain separate"
+                  "evidence": "src/transcode.rs TranscodeController/try_run_window/try_run_window_with_quality; src/hls.rs render_vod_media_playlist_inner/generate_segmented_vod/generate_adaptive_segmented_vod/render_vod_master_playlist; private artifact only, pinned Jellyfin v12.3 HLS service integration remains separate"
                 },
                 {
-                  "title": "Native CI verifies real Ubuntu FFmpeg AAC and H.264 MPEG-TS output, FFprobe verification, two synthetic adaptive bitrate renditions, valid master sequence and measured bandwidth, invalid encoder input, rollback and HLS cleanup",
+                  "title": "Native CI verifies real AAC and H.264 FFmpeg segments individually decode, assembled VOD FFprobe demuxes, bounded measured rendition ordering, TS packet integrity, clock-reset tags, invalid windows/manifest rejection, atomic rollback and aborted job cleanup",
                   "passed": true,
-                  "evidence": "GitHub Actions 40117291803, 40117792953 and 40117919015 — full Rust unit tests including real FFmpeg/FFprobe smoke, rustfmt, clippy -D warnings, source/controller matrices and roadmap checks passed"
+                  "evidence": "GitHub Actions 40119907876, 40120255492, 40120684358 and 40120903534 — full Rust unit/HTTP suite, actual Ubuntu FFmpeg/FFprobe audio/video multi-window HLS, rustfmt, clippy -D warnings, pinned source/API matrices and roadmap gates passed"
                 },
                 {
-                  "title": "Real multi-segment timeline, adaptive rendition switching, HLS/DASH HTTP/manifest client compatibility, Smart TV client acceptance and production transcoding lifecycle",
+                  "title": "Production multi-hour segment timelines, authenticated Jellyfin HLS/DASH HTTP routes, true adaptive rendition switching, unmodified Smart TV/mobile client acceptance and transcoder lifecycle parity",
                   "passed": false
                 }
               ]

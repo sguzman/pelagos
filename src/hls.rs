@@ -1,6 +1,7 @@
-//! Minimal bounded single-segment HLS VOD artifact from a verified MPEG-TS
-//! transcode. Adaptive rendition sets, seeking and Jellyfin HLS routes are
-//! not implemented here. Do not advertise general HLS client compatibility.
+//! Bounded private HLS VOD artifacts: verified single/multi MPEG-TS segments
+//! and measured adaptive rendition playlists. Independent FFmpeg windows
+//! declare clock discontinuities. No authenticated Jellyfin HLS/DASH routes,
+//! full-length scheduling or unmodified TV-client compatibility are claimed.
 use std::{
     io,
     path::{Path, PathBuf},
