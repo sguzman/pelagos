@@ -310,7 +310,9 @@ async fn transcode_mpegts_inner(
             .arg("-c:a")
             .arg("aac");
         if let Some(window) = window {
-            command.arg("-t").arg(format!("{:.3}", window.duration_seconds));
+            command
+                .arg("-t")
+                .arg(format!("{:.3}", window.duration_seconds));
             command.arg("-avoid_negative_ts").arg("make_zero");
         }
         if let Some(quality) = quality {
