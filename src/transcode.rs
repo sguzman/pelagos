@@ -149,7 +149,12 @@ impl TranscodeController {
         duration_seconds: f64,
     ) -> io::Result<u64> {
         self.try_run_window_capped(
-            source, output, start_seconds, duration_seconds, self.max_bytes, None,
+            source,
+            output,
+            start_seconds,
+            duration_seconds,
+            self.max_bytes,
+            None,
         )
         .await
     }
@@ -165,7 +170,12 @@ impl TranscodeController {
         quality: MpegTsQuality,
     ) -> io::Result<u64> {
         self.try_run_window_capped(
-            source, output, start_seconds, duration_seconds, self.max_bytes, Some(quality),
+            source,
+            output,
+            start_seconds,
+            duration_seconds,
+            self.max_bytes,
+            Some(quality),
         )
         .await
     }
