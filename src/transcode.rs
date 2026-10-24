@@ -138,6 +138,35 @@ impl TranscodeController {
         .await
     }
 
+    /// Produce one independently encoded, timestamp-reset MPEG-TS segment.
+    /// Input offsets are numeric seconds, validated before reserving workers.
+    /// FFmpeg inherits all existing stdout caps, process timeouts and cleanup.
+    pub async fn try_run_window(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_inner(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes,
+            None,
+            Some(window),
+        )
+        .await
+    }
+
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
@@ -147,6 +176,33 @@ impl TranscodeController {
             self.max_bytes,
         )
         .await
+    }
+}
+
+/// A bounded seeking window, never constructed from untrusted FFmpeg strings.
+#[derive(Debug, Clone, Copy)]
+struct TranscodeWindow {
+    start_seconds: f64,
+    duration_seconds: f64,
+}
+
+impl TranscodeWindow {
+    fn new(start_seconds: f64, duration_seconds: f64) -> io::Result<Self> {
+        if !start_seconds.is_finite()
+            || !duration_seconds.is_finite()
+            || !(0.0..=86_400.0).contains(&start_seconds)
+            || !(0.1..=30.0).contains(&duration_seconds)
+            || start_seconds + duration_seconds > 86_400.0
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid bounded FFmpeg media window",
+            ));
+        }
+        Ok(Self {
+            start_seconds,
+            duration_seconds,
+        })
     }
 }
 
@@ -164,7 +220,7 @@ pub async fn transcode_mpegts(
     deadline: Duration,
     max_bytes: u64,
 ) -> io::Result<u64> {
-    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None).await
+    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None, None).await
 }
 
 /// Separate, validated encoder profile used for media variants. No shell
@@ -190,6 +246,7 @@ pub async fn transcode_mpegts_with_quality(
         deadline,
         max_bytes,
         Some(quality),
+        None,
     )
     .await
 }
@@ -201,6 +258,7 @@ async fn transcode_mpegts_inner(
     deadline: Duration,
     max_bytes: u64,
     quality: Option<MpegTsQuality>,
+    window: Option<TranscodeWindow>,
 ) -> io::Result<u64> {
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -232,7 +290,13 @@ async fn transcode_mpegts_inner(
             .arg("-nostdin")
             .arg("-hide_banner")
             .arg("-loglevel")
-            .arg("error")
+            .arg("error");
+        if let Some(window) = window {
+            command
+                .arg("-ss")
+                .arg(format!("{:.3}", window.start_seconds));
+        }
+        command
             .arg("-i")
             .arg(source)
             .arg("-map")
@@ -245,6 +309,10 @@ async fn transcode_mpegts_inner(
             .arg("veryfast")
             .arg("-c:a")
             .arg("aac");
+        if let Some(window) = window {
+            command.arg("-t").arg(format!("{:.3}", window.duration_seconds));
+            command.arg("-avoid_negative_ts").arg("make_zero");
+        }
         if let Some(quality) = quality {
             command
                 .arg("-b:v")
