@@ -1057,8 +1057,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     assert!(fourth_body.contains("#EXT-X-ENDLIST"));
     assert!(fourth_body.contains("0.ts"));
     let fourth_publication = fourth_path.split('/').nth(1).unwrap();
-    let fourth_segment =
-        format!("/Videos/{id}/hls1/{fourth_publication}/variant03/0.ts");
+    let fourth_segment = format!("/Videos/{id}/hls1/{fourth_publication}/variant03/0.ts");
     let fourth_transport = request(&app, "GET", &fourth_segment, Some(&owner)).await;
     assert_eq!(fourth_transport.status(), StatusCode::OK);
     let fourth_bytes = to_bytes(fourth_transport.into_body(), 8 * 1024 * 1024)
