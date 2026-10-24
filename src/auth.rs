@@ -764,10 +764,7 @@ pub fn list_registered_devices(
     query_registered_devices(state_dir, user_filter, None)
 }
 
-pub fn registered_device_info(
-    state_dir: &Path,
-    device_id: &str,
-) -> Result<Option<DeviceInfoDto>> {
+pub fn registered_device_info(state_dir: &Path, device_id: &str) -> Result<Option<DeviceInfoDto>> {
     Ok(query_registered_devices(state_dir, None, Some(device_id))?
         .into_iter()
         .next())
