@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 35%` across 157 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 35%` across 158 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -565,7 +565,7 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 38%`
+## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 40%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
@@ -631,6 +631,10 @@
   - [x] Implement pinned POST /Users/Password self-account subset requiring CurrentPw and NewPw, with current-session preservation and other-session revocation in one authentication transaction — src/auth.rs change_own_password; src/auth_api.rs change_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword
   - [x] Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login — GitHub Actions 40046475207 and 40046592852: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned contract gates passed; the latter includes transaction-time credential revalidation
   - [ ] Full Jellyfin UpdateUserPassword semantics, concurrent reset/login adversarial acceptance and unmodified Jellyfin client behavior verified
+- ✏️ **T518 — Modern Jellyfin user rename endpoint using shared privileged account update** — `███████░░░ 67%`
+  - [x] Implement modern pinned POST /Users optional userId subset with strict Name-only DTO and unified administrator-only rename handling — src/auth_api.rs update_user_name_modern/update_user_name_inner; src/auth.rs rename_user; pinned Jellyfin v12.3 UserController.UpdateUser
+  - [x] Full Rust CI verifies missing/foreign account, non-admin and unauthenticated denial, unknown field rejection, stable user identity and token, old/new login and administrator self-rename — GitHub Actions 40047064155 — format, Clippy, Rust unit and HTTP integrations, ledger and pinned contract matrices passed
+  - [ ] Full upstream UserDto/Configuration and self-preference semantics, differential concurrency and real unmodified Jellyfin client acceptance
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 

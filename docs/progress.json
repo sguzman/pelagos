@@ -3109,6 +3109,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T518",
+              "emoji": "✏️",
+              "name": "Modern Jellyfin user rename endpoint using shared privileged account update",
+              "checks": [
+                {
+                  "title": "Implement modern pinned POST /Users optional userId subset with strict Name-only DTO and unified administrator-only rename handling",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs update_user_name_modern/update_user_name_inner; src/auth.rs rename_user; pinned Jellyfin v12.3 UserController.UpdateUser"
+                },
+                {
+                  "title": "Full Rust CI verifies missing/foreign account, non-admin and unauthenticated denial, unknown field rejection, stable user identity and token, old/new login and administrator self-rename",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40047064155 — format, Clippy, Rust unit and HTTP integrations, ledger and pinned contract matrices passed"
+                },
+                {
+                  "title": "Full upstream UserDto/Configuration and self-preference semantics, differential concurrency and real unmodified Jellyfin client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
