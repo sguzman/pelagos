@@ -273,48 +273,74 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     });
     assert_eq!(
         request(
-            &router, "POST", "/Sessions/Capabilities/Full",
+            &router,
+            "POST",
+            "/Sessions/Capabilities/Full",
             Some(&token),
             &serde_json::json!({"DeviceProfile":allowed_profile}).to_string(),
-        ).await.status(),
+        )
+        .await
+        .status(),
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        request(&router, "POST", &route, Some(&token), "{}")
+            .await
+            .status(),
         StatusCode::OK
     );
     assert_eq!(
-        request(&router, "GET", &route, Some(&token), "").await.status(),
+        request(&router, "GET", &route, Some(&token), "")
+            .await
+            .status(),
         StatusCode::OK
     );
     assert_eq!(
         request(
-            &router, "POST", "/Sessions/Capabilities/Full",
+            &router,
+            "POST",
+            "/Sessions/Capabilities/Full",
             Some(&token),
             &serde_json::json!({"DeviceProfile":denied_profile}).to_string(),
-        ).await.status(),
+        )
+        .await
+        .status(),
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        request(&router, "POST", &route, Some(&token), "{}")
+            .await
+            .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(
         request(
-            &router, "POST", &route, Some(&token),
+            &router,
+            "POST",
+            &route,
+            Some(&token),
             &serde_json::json!({"DeviceProfile":allowed_profile}).to_string(),
-        ).await.status(),
+        )
+        .await
+        .status(),
         StatusCode::OK
     );
     assert_eq!(
         request(
-            &router, "POST", "/Sessions/Capabilities/Full",
-            Some(&token), "{}"
-        ).await.status(),
+            &router,
+            "POST",
+            "/Sessions/Capabilities/Full",
+            Some(&token),
+            "{}"
+        )
+        .await
+        .status(),
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        request(&router, "POST", &route, Some(&token), "{}")
+            .await
+            .status(),
         StatusCode::OK
     );
 
