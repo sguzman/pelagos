@@ -202,3 +202,59 @@ async fn privileged_single_device_logout_revokes_only_matching_device_sessions()
         StatusCode::OK
     );
 }
+
+#[tokio::test]
+async fn encoded_device_ids_are_decoded_before_session_revocation() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    auth::create_user(&state, "admin", "encoded-device-admin-password").unwrap();
+    auth::create_user(&state, "viewer", "encoded-device-viewer-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "encoded-device-admin-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate_with_client(
+        &state,
+        "viewer",
+        "encoded-device-viewer-password",
+        "server",
+        ClientMetadata {
+            client: Some("Jellyfin web".to_owned()),
+            device_id: Some("bedroom tv".to_owned()),
+            device_name: Some("Browser".to_owned()),
+            application_version: Some("1.0".to_owned()),
+        },
+    )
+    .unwrap()
+    .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    assert_eq!(
+        call(
+            &router,
+            "DELETE",
+            "/Devices?id=bedroom%20tv",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert!(
+        auth::identify(&state, &viewer.access_token, "server")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=bedroom%20tv",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+}
