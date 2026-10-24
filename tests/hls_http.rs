@@ -191,6 +191,41 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert!(manifest.starts_with("#EXTM3U\n"));
     assert!(manifest.contains("#EXT-X-DISCONTINUITY"));
     assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
+    // Seeked HLS is a new publication containing only the remaining
+    // source duration. Identical requests reuse that publication rather
+    // than sharing an incorrect zero-offset cache entry.
+    let seek_route = format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=10000000");
+    let seek_response = request(&app, "GET", &seek_route, Some(&viewer)).await;
+    assert_eq!(seek_response.status(), StatusCode::OK);
+    let seek_manifest = text_body(seek_response).await;
+    assert_eq!(
+        seek_manifest
+            .lines()
+            .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+            .count(),
+        1
+    );
+    assert_ne!(seek_manifest, manifest);
+    assert_eq!(
+        text_body(request(&app, "GET", &seek_route, Some(&viewer)).await).await,
+        seek_manifest
+    );
+    let zero_offset_route = format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=0");
+    assert_eq!(
+        text_body(request(&app, "GET", &zero_offset_route, Some(&viewer)).await).await,
+        manifest
+    );
+    for invalid in [
+        format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=-1"),
+        format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=6000000001"),
+        format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=invalid"),
+    ] {
+        assert_eq!(
+            request(&app, "GET", &invalid, Some(&viewer)).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
     assert!(!manifest.contains(&viewer));
     assert!(!manifest.contains("segment00000.ts"));
     let segment_paths = manifest
