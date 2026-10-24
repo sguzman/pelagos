@@ -148,6 +148,49 @@ async fn privileged_single_device_logout_revokes_only_matching_device_sessions()
             .unwrap()
             .is_some()
     );
+    assert_eq!(
+        call(
+            &router,
+            "DELETE",
+            "/Devices?id=tv-1&id=unknown",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    assert!(
+        auth::identify(&state, &fresh.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        auth::identify(&state, &other.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        call(
+            &router,
+            "DELETE",
+            "/Devices?id=tv-1&id=tv-2",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert!(
+        auth::identify(&state, &fresh.access_token, "server")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        auth::identify(&state, &other.access_token, "server")
+            .unwrap()
+            .is_none()
+    );
+
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state,
