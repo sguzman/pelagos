@@ -1,12 +1,15 @@
-use std::{path::Path, process::Command, sync::Arc};
 use axum::{
     Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
     response::Response,
 };
-use pelagos::{app::{self, AppState}, auth, catalog};
+use pelagos::{
+    app::{self, AppState},
+    auth, catalog,
+};
 use serde_json::Value;
+use std::{path::Path, process::Command, sync::Arc};
 use tower::ServiceExt;
 
 async fn request(app: &Router, method: &str, path: &str, token: Option<&str>) -> Response {
@@ -14,7 +17,10 @@ async fn request(app: &Router, method: &str, path: &str, token: Option<&str>) ->
     if let Some(token) = token {
         req = req.header("X-Emby-Token", token);
     }
-    app.clone().oneshot(req.body(Body::empty()).unwrap()).await.unwrap()
+    app.clone()
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
 }
 
 async fn text_body(response: Response) -> String {
@@ -35,9 +41,17 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let source = library.join("Feature.avi");
     let created = Command::new("ffmpeg")
         .args([
-            "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=15:duration=2.5",
-            "-c:v", "mpeg4", "-y",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=160x90:rate=15:duration=2.5",
+            "-c:v",
+            "mpeg4",
+            "-y",
         ])
         .arg(&source)
         .output()
@@ -51,32 +65,54 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     auth::create_user(&state_dir, "admin", "hls-route-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "hls-route-viewer-password").unwrap();
     let admin = auth::authenticate(&state_dir, "admin", "hls-route-admin-password", "server")
-        .unwrap().unwrap().access_token;
+        .unwrap()
+        .unwrap()
+        .access_token;
     let sibling = auth::authenticate(&state_dir, "admin", "hls-route-admin-password", "server")
-        .unwrap().unwrap().access_token;
+        .unwrap()
+        .unwrap()
+        .access_token;
     let viewer = auth::authenticate(&state_dir, "viewer", "hls-route-viewer-password", "server")
-        .unwrap().unwrap().access_token;
+        .unwrap()
+        .unwrap()
+        .access_token;
     let app = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(), state_dir.clone(),
+        "server".to_owned(),
+        state_dir.clone(),
     )));
     let items = request(&app, "GET", "/Items", Some(&admin)).await;
-    let values: Value = serde_json::from_slice(&to_bytes(items.into_body(), 65536).await.unwrap())
-        .unwrap();
+    let values: Value =
+        serde_json::from_slice(&to_bytes(items.into_body(), 65536).await.unwrap()).unwrap();
     let id = values["Items"][0]["Id"].as_str().unwrap();
     let route = format!("/Videos/{id}/main.m3u8?segmentLength=2");
-    assert_eq!(request(&app, "GET", &route, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        request(&app, "GET", &route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         request(&app, "GET", &route, Some(&viewer)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(&app, "GET", &format!("/Videos/{id}/main.m3u8?segmentLength=0"), Some(&admin))
-            .await.status(),
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{id}/main.m3u8?segmentLength=0"),
+            Some(&admin)
+        )
+        .await
+        .status(),
         StatusCode::BAD_REQUEST
     );
     assert_eq!(
-        request(&app, "GET", &format!("/Videos/{id}/main.m3u8?bogus=1"), Some(&admin))
-            .await.status(),
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{id}/main.m3u8?bogus=1"),
+            Some(&admin)
+        )
+        .await
+        .status(),
         StatusCode::BAD_REQUEST
     );
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
@@ -93,7 +129,8 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
     assert!(!manifest.contains(&viewer));
     assert!(!manifest.contains("segment00000.ts"));
-    let segment_paths = manifest.lines()
+    let segment_paths = manifest
+        .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
         .map(|line| format!("/Videos/{id}/{line}"))
         .collect::<Vec<_>>();
@@ -102,7 +139,9 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let response = request(&app, "GET", first_path, Some(&viewer)).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()[header::CONTENT_TYPE], "video/mp2t");
-    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await.unwrap();
+    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .unwrap();
     assert!(bytes.len() >= 188 && bytes.len() % 188 == 0);
     for packet in bytes.chunks_exact(188) {
         assert_eq!(packet[0], 0x47);
@@ -110,29 +149,70 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let head = request(&app, "HEAD", first_path, Some(&viewer)).await;
     assert_eq!(head.status(), StatusCode::OK);
     assert_eq!(
-        head.headers()[header::CONTENT_LENGTH].to_str().unwrap().parse::<usize>().unwrap(),
+        head.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap(),
         bytes.len()
     );
     assert!(to_bytes(head.into_body(), 4096).await.unwrap().is_empty());
-    assert_eq!(request(&app, "GET", first_path, None).await.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(request(&app, "GET", first_path, Some(&sibling)).await.status(), StatusCode::NOT_FOUND);
-    assert_eq!(request(&app, "GET", first_path, Some(&admin)).await.status(), StatusCode::NOT_FOUND);
     assert_eq!(
-        request(&app, "GET", &format!("{first_path}X"), Some(&viewer)).await.status(),
+        request(&app, "GET", first_path, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(&app, "GET", first_path, Some(&sibling))
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(&app, "GET", &segment_paths[1], Some(&viewer)).await.status(),
+        request(&app, "GET", first_path, Some(&admin))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(&app, "GET", &format!("{first_path}X"), Some(&viewer))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(&app, "GET", &segment_paths[1], Some(&viewer))
+            .await
+            .status(),
         StatusCode::OK
     );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
-    assert_eq!(request(&app, "GET", first_path, Some(&viewer)).await.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        request(&app, "GET", first_path, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
-    assert_eq!(request(&app, "GET", first_path, Some(&viewer)).await.status(), StatusCode::OK);
+    assert_eq!(
+        request(&app, "GET", first_path, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::OK
+    );
     auth::revoke(&state_dir, &viewer).unwrap();
-    assert_eq!(request(&app, "GET", first_path, Some(&viewer)).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        request(&app, "GET", first_path, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
     drop(app);
-    let playlist_id = manifest.lines().find(|l| l.starts_with("hls1/")).unwrap()
-        .split('/').nth(1).unwrap();
+    let playlist_id = manifest
+        .lines()
+        .find(|l| l.starts_with("hls1/"))
+        .unwrap()
+        .split('/')
+        .nth(1)
+        .unwrap();
     assert!(!Path::new(&std::env::temp_dir().join(format!("pelagos-hls-{playlist_id}"))).exists());
 }
