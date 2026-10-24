@@ -850,10 +850,6 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
             format!("/Audio/{id}/master.m3u8?renditions=2"),
             StatusCode::NOT_IMPLEMENTED,
         ),
-        (
-            format!("/Videos/{id}/master.m3u8?renditions=2&startTimeTicks=10000000"),
-            StatusCode::NOT_IMPLEMENTED,
-        ),
     ] {
         assert_eq!(
             request(&app, "GET", &uri, Some(&owner)).await.status(),
@@ -872,6 +868,53 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     assert!(!master.contains(&owner));
     assert!(master.contains("variant00/index.m3u8"));
     assert!(master.contains("variant01/index.m3u8"));
+
+    // Both independently encoded variants start at the same requested
+    // validated source offset; the cache key and private manifest differ
+    // from the zero-offset publication.
+    let seek_route = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&startTimeTicks=10000000"
+    );
+    let seek_response = request(&app, "GET", &seek_route, Some(&owner)).await;
+    assert_eq!(seek_response.status(), StatusCode::OK);
+    let seek_master = text_body(seek_response).await;
+    assert_eq!(seek_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    let seek_variants = seek_master
+        .lines()
+        .filter(|line| line.starts_with("hls1/"))
+        .collect::<Vec<_>>();
+    assert_eq!(seek_variants.len(), 2);
+    assert_ne!(seek_master, master);
+    let seek_pub = seek_variants[0].split('/').nth(1).unwrap();
+    for (index, variant) in seek_variants.iter().enumerate() {
+        let media_route = format!("/Videos/{id}/{variant}");
+        let playlist_response = request(&app, "GET", &media_route, Some(&owner)).await;
+        assert_eq!(playlist_response.status(), StatusCode::OK);
+        let playlist = text_body(playlist_response).await;
+        assert!(playlist.contains("#EXT-X-ENDLIST"));
+        let transport_route =
+            format!("/Videos/{id}/hls1/{seek_pub}/variant{index:02}/0.ts");
+        let transport = request(&app, "GET", &transport_route, Some(&owner)).await;
+        assert_eq!(transport.status(), StatusCode::OK);
+        let bytes = to_bytes(transport.into_body(), 8 * 1024 * 1024).await.unwrap();
+        assert!(!bytes.is_empty());
+        assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+    }
+    assert_eq!(
+        text_body(request(&app, "GET", &seek_route, Some(&owner)).await).await,
+        seek_master
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&startTimeTicks=-1"),
+            Some(&owner),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
     let paths = master
         .lines()
         .filter(|line| line.starts_with("hls1/"))
