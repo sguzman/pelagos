@@ -690,7 +690,11 @@ mod tests {
             assert!(!dir.exists());
         }
         let bundle_dir = temp.path().join("rollback");
-        assert!(generate_segmented_vod(&runner, &fail_second, &source, &bundle_dir, 2).await.is_err());
+        assert!(
+            generate_segmented_vod(&runner, &fail_second, &source, &bundle_dir, 2)
+                .await
+                .is_err()
+        );
         assert!(!bundle_dir.exists());
     }
 
