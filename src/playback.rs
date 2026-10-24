@@ -378,6 +378,7 @@ fn profile_allows_direct_file(
         .media_streams
         .iter()
         .any(|s| s.stream_type == "Video");
+    let mut matched = false;
     for rule in rules {
         let properties = rule.as_object().ok_or(StatusCode::BAD_REQUEST)?;
         if properties
@@ -447,10 +448,10 @@ fn profile_allows_direct_file(
                     .is_some_and(|codec| profile_contains(matcher, codec))
             });
         if compatible {
-            return Ok(true);
+            matched = true;
         }
     }
-    Ok(false)
+    Ok(matched)
 }
 
 /// Lookup only authorized, indexed audio/video and resolve them within the root.
