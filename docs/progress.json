@@ -3199,7 +3199,7 @@
               "progress": 67
             },
             {
-              "id": "T520",
+              "id": "T523",
               "emoji": "🚪",
               "name": "Administrator single-device logout with transactional session revocation",
               "checks": [
@@ -3221,7 +3221,7 @@
               "progress": 67
             },
             {
-              "id": "T521",
+              "id": "T524",
               "emoji": "✏️",
               "name": "Durable administrator device display-name override",
               "checks": [
