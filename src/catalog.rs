@@ -131,14 +131,64 @@ fn media_kind(kind: MediaKind) -> &'static str {
 /// Scans completely before beginning a transaction. If the read-only walk fails,
 /// no existing catalog rows can be deleted or replaced.
 pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
+    index_internal(state_dir, root, None)?
+        .ok_or_else(|| "unexpected duplicate during library refresh".into())
+}
+
+/// Atomically register and index a new library with an independent display
+/// name. Returns false for a duplicate root or a case-insensitive name clash.
+pub fn register_named(state_dir: &Path, root: &Path, name: &str) -> Result<bool> {
+    Ok(index_internal(state_dir, root, Some(name))?.is_some())
+}
+
+fn index_internal(
+    state_dir: &Path,
+    root: &Path,
+    chosen_name: Option<&str>,
+) -> Result<Option<CatalogSummary>> {
     let root = canonical_root(root)?;
     let scan = media::scan(&root)?;
     let mut db = connect(state_dir)?;
     let tx = db.transaction()?;
-    tx.execute(
-        "INSERT OR IGNORE INTO libraries(root) VALUES (?1)",
-        params![path_text(&root)?],
-    )?;
+    if let Some(name) = chosen_name {
+        if name.is_empty()
+            || name.len() > 255
+            || name.trim() != name
+            || name.chars().any(char::is_control)
+        {
+            return Err("invalid display name".into());
+        }
+        let registered = {
+            let mut stmt = tx.prepare("SELECT root, display_name FROM libraries ORDER BY root")?;
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        if registered.iter().any(|(saved_root, label)| {
+            saved_root == path_text(&root).unwrap_or_default()
+                || label
+                    .as_deref()
+                    .unwrap_or_else(|| {
+                        Path::new(saved_root)
+                            .file_name()
+                            .and_then(|part| part.to_str())
+                            .unwrap_or("Library")
+                    })
+                    .eq_ignore_ascii_case(name)
+        }) {
+            return Ok(None);
+        }
+        tx.execute(
+            "INSERT INTO libraries(root, display_name) VALUES (?1, ?2)",
+            params![path_text(&root)?, name],
+        )?;
+    } else {
+        tx.execute(
+            "INSERT OR IGNORE INTO libraries(root) VALUES (?1)",
+            params![path_text(&root)?],
+        )?;
+    }
     tx.execute_batch(
         "CREATE TEMP TABLE IF NOT EXISTS pelagos_seen(path TEXT PRIMARY KEY);
          DELETE FROM pelagos_seen;",
@@ -174,12 +224,12 @@ pub fn index(state_dir: &Path, root: &Path) -> Result<CatalogSummary> {
     )?;
     tx.commit()?;
 
-    Ok(CatalogSummary {
+    Ok(Some(CatalogSummary {
         library_root: path_text(&root)?.to_string(),
         indexed: scan.files.len(),
         stale_removed,
         database: state_dir.join(DB_NAME),
-    })
+    }))
 }
 
 /// Atomically rescan *only* previously registered roots into private SQLite.
