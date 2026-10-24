@@ -645,9 +645,7 @@ mod tests {
 
     #[tokio::test]
     async fn bounded_window_jobs_validate_offsets_and_retain_stdout_guard() {
-        let (_temp, executable, source, output) = fixture(
-            "printf 'WIN:'; printf '%s|' \"$@\"",
-        );
+        let (_temp, executable, source, output) = fixture("printf 'WIN:'; printf '%s|' \"$@\"");
         let controller =
             TranscodeController::new(executable, 1, Duration::from_secs(3), 2048).unwrap();
         for (start, duration) in [
