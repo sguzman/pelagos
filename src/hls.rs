@@ -1040,6 +1040,7 @@ mod tests {
         wav.extend_from_slice(&8_000_u32.to_le_bytes());
         wav.extend_from_slice(&16_000_u32.to_le_bytes());
         wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
         wav.extend_from_slice(b"data");
         wav.extend_from_slice(&(samples.len() as u32).to_le_bytes());
         wav.extend_from_slice(&samples);
