@@ -217,7 +217,14 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
         StatusCode::NO_CONTENT
     );
     let cleared = response_json(
-        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+        call(
+            &restarted,
+            "GET",
+            path,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
     )
     .await;
     assert_eq!(cleared["CustomName"], Value::Null);
@@ -261,19 +268,23 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
         StatusCode::NO_CONTENT
     );
     let cleared_again = response_json(
-        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+        call(
+            &restarted,
+            "GET",
+            path,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
     )
     .await;
     assert_eq!(cleared_again["CustomName"], Value::Null);
-    for invalid in [json!({}), json!({"CustomName":true}), json!({"CustomName":123})] {
-        let response = call(
-            &router,
-            "POST",
-            path,
-            Some(&admin.access_token),
-            invalid,
-        )
-        .await;
+    for invalid in [
+        json!({}),
+        json!({"CustomName":true}),
+        json!({"CustomName":123}),
+    ] {
+        let response = call(&router, "POST", path, Some(&admin.access_token), invalid).await;
         assert!(
             response.status() == StatusCode::BAD_REQUEST
                 || response.status() == StatusCode::UNPROCESSABLE_ENTITY
