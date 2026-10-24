@@ -227,6 +227,19 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
         .status(),
         StatusCode::OK
     );
+    let seek_part = request(
+        &app,
+        "GET",
+        &format!("/Videos/{id}/hls1/{sought_id}/0.ts"),
+        Some(&viewer),
+    )
+    .await;
+    assert_eq!(seek_part.status(), StatusCode::OK);
+    let seek_bytes = to_bytes(seek_part.into_body(), 4 * 1024 * 1024)
+        .await
+        .unwrap();
+    assert!(!seek_bytes.is_empty() && seek_bytes.len() % 188 == 0);
+    assert!(seek_bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
     assert_eq!(
         text_body(request(&app, "GET", &seek_route, Some(&viewer)).await).await,
         seek_manifest
