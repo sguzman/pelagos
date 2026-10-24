@@ -540,19 +540,55 @@ mod tests {
             target_seconds: 2,
         };
         assert_eq!(registry.cached(&key).unwrap().id, "playlist-2");
-        assert!(registry.cached(&CacheLookup { token: "other", ..key }).is_none());
-        assert!(registry.cached(&CacheLookup { kind: "audio", ..key }).is_none());
-        assert!(registry.cached(&CacheLookup { item: "media-2", ..key }).is_none());
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    token: "other",
+                    ..key
+                })
+                .is_none()
+        );
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    kind: "audio",
+                    ..key
+                })
+                .is_none()
+        );
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    item: "media-2",
+                    ..key
+                })
+                .is_none()
+        );
         assert!(registry.cached(&CacheLookup { size: 2, ..key }).is_none());
-        assert!(registry.cached(&CacheLookup { target_seconds: 3, ..key }).is_none());
-        assert!(registry.cached(&CacheLookup {
-            modified: Some(std::time::SystemTime::now()),
-            ..key
-        }).is_none());
-        assert!(registry.cached(&CacheLookup {
-            source: Path::new("/private/other"),
-            ..key
-        }).is_none());
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    target_seconds: 3,
+                    ..key
+                })
+                .is_none()
+        );
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    modified: Some(std::time::SystemTime::now()),
+                    ..key
+                })
+                .is_none()
+        );
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    source: Path::new("/private/other"),
+                    ..key
+                })
+                .is_none()
+        );
         let in_flight = registry
             .lookup("playlist-0", "media-1", "video", owner)
             .unwrap();
