@@ -345,13 +345,8 @@ mod tests {
     async fn semaphore_limits_concurrent_jobs_without_spawning_queued_outputs() {
         let (_temp, executable, source, first_output) = fixture("sleep 1; printf 'done'");
         let second_output = first_output.with_file_name("second.ts");
-        let controller = TranscodeController::new(
-            executable,
-            1,
-            Duration::from_secs(5),
-            64,
-        )
-        .unwrap();
+        let controller =
+            TranscodeController::new(executable, 1, Duration::from_secs(5), 64).unwrap();
         let running = controller.clone();
         let first_source = source.clone();
         let first_path = first_output.clone();
@@ -375,15 +370,15 @@ mod tests {
         assert_eq!(controller.active_jobs(), 0);
         assert_eq!(stdfs::read(&first_output).unwrap(), b"done");
         assert_eq!(stdfs::read(&second_output).unwrap(), b"done");
-        assert!(TranscodeController::new(
-            PathBuf::from("ffmpeg"), 0, Duration::from_secs(5), 64
-        ).is_err());
+        assert!(
+            TranscodeController::new(PathBuf::from("ffmpeg"), 0, Duration::from_secs(5), 64)
+                .is_err()
+        );
     }
 
     #[tokio::test]
     async fn cancelled_transcode_removes_partial_output_and_kills_child() {
-        let (_temp, executable, source, output) =
-            fixture("printf 'partial'; exec sleep 2");
+        let (_temp, executable, source, output) = fixture("printf 'partial'; exec sleep 2");
         let output_in_job = output.clone();
         let job = tokio::spawn(async move {
             transcode_mpegts(
