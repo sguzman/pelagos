@@ -43,7 +43,10 @@ pub struct HlsVariant {
 /// playlist paths can enter this HLS master playlist.
 pub fn render_vod_master_playlist(variants: &[HlsVariant]) -> io::Result<String> {
     if variants.is_empty() || variants.len() > 8 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid variant count"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid variant count",
+        ));
     }
     let mut master = String::from("#EXTM3U\n#EXT-X-VERSION:3\n");
     let mut previous_bandwidth = 0_u64;
@@ -320,10 +323,22 @@ mod tests {
         );
         for invalid in [
             vec![],
-            vec![HlsVariant { playlist_name: "../index.m3u8".to_owned(), ..variants[0].clone() }],
-            vec![HlsVariant { bandwidth: 0, ..variants[0].clone() }],
-            vec![HlsVariant { bandwidth: 1_000_000_001, ..variants[0].clone() }],
-            vec![HlsVariant { resolution: Some((1, 720)), ..variants[0].clone() }],
+            vec![HlsVariant {
+                playlist_name: "../index.m3u8".to_owned(),
+                ..variants[0].clone()
+            }],
+            vec![HlsVariant {
+                bandwidth: 0,
+                ..variants[0].clone()
+            }],
+            vec![HlsVariant {
+                bandwidth: 1_000_000_001,
+                ..variants[0].clone()
+            }],
+            vec![HlsVariant {
+                resolution: Some((1, 720)),
+                ..variants[0].clone()
+            }],
             vec![variants[1].clone(), variants[0].clone()],
             vec![variants[0].clone(), variants[0].clone()],
         ] {
