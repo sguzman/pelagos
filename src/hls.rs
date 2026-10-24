@@ -302,15 +302,7 @@ pub async fn generate_segmented_vod(
     output_dir: &Path,
     target_seconds: u32,
 ) -> io::Result<HlsSegmentedArtifact> {
-    generate_segmented_vod_from(
-        controller,
-        ffprobe,
-        source,
-        output_dir,
-        target_seconds,
-        0.0,
-    )
-    .await
+    generate_segmented_vod_from(controller, ffprobe, source, output_dir, target_seconds, 0.0).await
 }
 
 /// Encode a bounded VOD from an explicit seek position. The source is
