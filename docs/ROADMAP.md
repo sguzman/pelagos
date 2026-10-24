@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 36%` across 163 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 37%` across 164 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -85,7 +85,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `█████░░░░░ 45%`
+## 🔌 M1 — Jellyfin protocol and API parity — `█████░░░░░ 46%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `█████░░░░░ 46%`
+### 👥 P4 — Authentication and user state — `█████░░░░░ 48%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -178,6 +178,10 @@
   - [x] Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links — src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto
   - [x] CI covers authenticated full-form request, unsupported DeviceProfile, cross-session denial, session metadata persistence and no fabricated remote-control support — GitHub Actions 40047568095 — full Rust formatting, Clippy, native HTTP/unit tests, roadmap ledger and pinned source/controller contract gates passed
   - [ ] DeviceProfile/URL metadata, complete upstream DTO validation, unmodified Jellyfin TV negotiation and actual remote-control/media functionality accepted
+- 🕒 **T139 — Observed Jellyfin session recency filtering and LastActivityDate projection** — `███████░░░ 67%`
+  - [x] Record authenticated request activity in a private cascading SQLite session table and expose last-activity UTC timestamps, custom device-name flags, and bounded GET /Sessions activeWithinSeconds filtering — src/auth.rs pelagos_session_activity/identify/list_sessions_with_activity; src/auth_api.rs sessions; pinned Jellyfin v12.3 SessionController.GetSessions and SessionInfoDto.LastActivityDate/HasCustomDeviceName
+  - [x] Rust HTTP CI verifies aged-session exclusion, authenticated refresh, scoped device lookup, UTC session timestamps, persisted restart state, custom label flags, denied unsupported remote-control filter, and cascade deletion after logout — GitHub Actions 40053871853 — formatting, Clippy, full Rust test targets, roadmap and pinned source matrices passed
+  - [ ] Upstream per-client heartbeat/activity semantics, remote-control filtering and unmodified Jellyfin clients accepted
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
@@ -644,17 +648,17 @@
   - [x] Full Rust CI verifies missing/foreign account, non-admin and unauthenticated denial, unknown field rejection, stable user identity and token, old/new login and administrator self-rename — GitHub Actions 40047064155 — format, Clippy, Rust unit and HTTP integrations, ledger and pinned contract matrices passed
   - [ ] Full upstream UserDto/Configuration and self-preference semantics, differential concurrency and real unmodified Jellyfin client acceptance
 - 📺 **T519 — Privileged persistent Jellyfin device directory and indexed info lookup** — `███████░░░ 67%`
-  - [x] Register authenticated client-supplied device IDs in Pelagos-only SQLite and implement elevated GET /Devices and /Devices/Info with optional user filter, credential-redacted DeviceInfoDto and live capability projection — src/auth.rs pelagos_devices/list_registered_devices/registered_device_info; src/device_api.rs; pinned Jellyfin v12.3 DevicesController.GetDevices/GetDeviceInfo
-  - [x] Native HTTP suite verifies admin/ordinary/anonymous boundaries, deduplication, stable lookup, user filter, missing/unregistered IDs, token redaction, restart persistence, and active capability projection — GitHub Actions 40051326692 and 40051766079 — complete formatting, Clippy, HTTP/unit tests and upstream/roadmap gates passed
+  - [x] Register persistent client-supplied device IDs and implement elevated GET /Devices and /Devices/Info with token-redacted DTOs, live capability projection and observed authenticated device activity timestamps — src/auth.rs pelagos_devices/identify/list_registered_devices/registered_device_info; src/device_api.rs; Jellyfin v12.3 DevicesController; synthetic CI 40053871853
+  - [x] Native HTTP suite verifies admin/ordinary/anonymous boundaries, deduplication, stable lookup, user filter, missing/unregistered IDs, token redaction, restart persistence, and active capability projection — GitHub Actions 40051326692, 40051766079, 40053871853 — Rust HTTP/unit suite, token redaction, stable lookup, activity time, restart and role boundaries verified
   - [ ] Full upstream device activity, numeric DTO IDs, metadata semantics and actual unmodified client compatibility accepted
 - 🚪 **T523 — Administrator bounded multi-device logout with atomic session revocation** — `███████░░░ 67%`
   - [x] Implement pinned DELETE /Devices with up to 16 unique validated percent-decoded device IDs; prevalidate every registration then transactionally revoke matching sessions without changing unrelated sessions or stored device registrations — src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device with RawQuery and form_urlencoded; pinned Jellyfin v12.3 DevicesController.DeleteDevice
   - [x] Native HTTP suite verifies anonymous/member denial, missing/unknown device IDs, invalid mixed-batch rollback, valid multi-device logout, percent-encoded IDs, surviving device records and new login after revocation — GitHub Actions 40052304486 and 40052337903 — full Rust unit/HTTP tests, formatting, Clippy, pinned source/controller matrices and roadmap gates passed
   - [ ] Unmodified Jellyfin admin and TV clients, concurrent device-session race cases and full upstream multi-device management acceptance
 - ✏️ **T524 — Durable administrator device display-name override** — `███████░░░ 67%`
-  - [x] Implement elevated GET /Devices/Options and name-only POST /Devices/Options with persistent custom labels and stable numeric DeviceOptionsDto IDs, never changing device identity, original name or active token grants — src/auth.rs registered_device_options/rename_registered_device, pelagos_device_option_ids and transactional lazy ID migration; src/device_api.rs; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions
-  - [x] Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable option numeric ID through repeat login/restart, lazy legacy mapping, no token disruption and inventory projection — GitHub Actions 40051766079 and 40052163479 — full Rust unit/HTTP, rustfmt, Clippy and pinned source/roadmap checks passed
-  - [ ] Full upstream DeviceOptionsDto option clearing semantics, multi-device administration and unmodified Jellyfin client acceptance
+  - [x] Implement elevated GET/POST /Devices/Options including nullable or empty-string clearing, independent persistent display labels and stable numeric DeviceOptionsDto IDs without changing original device identity or token rights — src/auth.rs rename_registered_device/registered_device_options and pelagos_device_option_ids; src/device_api.rs update_device_options; CI 40053535666
+  - [x] Native CI verifies role validation, unsupported body types, name update and clearing, stable numeric IDs, lazy mapping, repeated login, and persisted restart state — GitHub Actions 40051766079, 40052163479, 40053535666 — complete Rust formatting, Clippy, HTTP/unit, pinned matrices and roadmap checks passed
+  - [ ] Unmodified Jellyfin device-management client acceptance and complete upstream options/UI semantics
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 

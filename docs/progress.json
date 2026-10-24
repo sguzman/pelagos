@@ -858,6 +858,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T139",
+              "emoji": "🕒",
+              "name": "Observed Jellyfin session recency filtering and LastActivityDate projection",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Record authenticated request activity in a private cascading SQLite session table and expose last-activity UTC timestamps, custom device-name flags, and bounded GET /Sessions activeWithinSeconds filtering",
+                  "passed": true,
+                  "evidence": "src/auth.rs pelagos_session_activity/identify/list_sessions_with_activity; src/auth_api.rs sessions; pinned Jellyfin v12.3 SessionController.GetSessions and SessionInfoDto.LastActivityDate/HasCustomDeviceName"
+                },
+                {
+                  "title": "Rust HTTP CI verifies aged-session exclusion, authenticated refresh, scoped device lookup, UTC session timestamps, persisted restart state, custom label flags, denied unsupported remote-control filter, and cascade deletion after logout",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40053871853 — formatting, Clippy, full Rust test targets, roadmap and pinned source matrices passed"
+                },
+                {
+                  "title": "Upstream per-client heartbeat/activity semantics, remote-control filtering and unmodified Jellyfin clients accepted",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -3182,14 +3204,14 @@
               "name": "Privileged persistent Jellyfin device directory and indexed info lookup",
               "checks": [
                 {
-                  "title": "Register authenticated client-supplied device IDs in Pelagos-only SQLite and implement elevated GET /Devices and /Devices/Info with optional user filter, credential-redacted DeviceInfoDto and live capability projection",
+                  "title": "Register persistent client-supplied device IDs and implement elevated GET /Devices and /Devices/Info with token-redacted DTOs, live capability projection and observed authenticated device activity timestamps",
                   "passed": true,
-                  "evidence": "src/auth.rs pelagos_devices/list_registered_devices/registered_device_info; src/device_api.rs; pinned Jellyfin v12.3 DevicesController.GetDevices/GetDeviceInfo"
+                  "evidence": "src/auth.rs pelagos_devices/identify/list_registered_devices/registered_device_info; src/device_api.rs; Jellyfin v12.3 DevicesController; synthetic CI 40053871853"
                 },
                 {
                   "title": "Native HTTP suite verifies admin/ordinary/anonymous boundaries, deduplication, stable lookup, user filter, missing/unregistered IDs, token redaction, restart persistence, and active capability projection",
                   "passed": true,
-                  "evidence": "GitHub Actions 40051326692 and 40051766079 — complete formatting, Clippy, HTTP/unit tests and upstream/roadmap gates passed"
+                  "evidence": "GitHub Actions 40051326692, 40051766079, 40053871853 — Rust HTTP/unit suite, token redaction, stable lookup, activity time, restart and role boundaries verified"
                 },
                 {
                   "title": "Full upstream device activity, numeric DTO IDs, metadata semantics and actual unmodified client compatibility accepted",
@@ -3226,17 +3248,17 @@
               "name": "Durable administrator device display-name override",
               "checks": [
                 {
-                  "title": "Implement elevated GET /Devices/Options and name-only POST /Devices/Options with persistent custom labels and stable numeric DeviceOptionsDto IDs, never changing device identity, original name or active token grants",
+                  "title": "Implement elevated GET/POST /Devices/Options including nullable or empty-string clearing, independent persistent display labels and stable numeric DeviceOptionsDto IDs without changing original device identity or token rights",
                   "passed": true,
-                  "evidence": "src/auth.rs registered_device_options/rename_registered_device, pelagos_device_option_ids and transactional lazy ID migration; src/device_api.rs; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions"
+                  "evidence": "src/auth.rs rename_registered_device/registered_device_options and pelagos_device_option_ids; src/device_api.rs update_device_options; CI 40053535666"
                 },
                 {
-                  "title": "Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable option numeric ID through repeat login/restart, lazy legacy mapping, no token disruption and inventory projection",
+                  "title": "Native CI verifies role validation, unsupported body types, name update and clearing, stable numeric IDs, lazy mapping, repeated login, and persisted restart state",
                   "passed": true,
-                  "evidence": "GitHub Actions 40051766079 and 40052163479 — full Rust unit/HTTP, rustfmt, Clippy and pinned source/roadmap checks passed"
+                  "evidence": "GitHub Actions 40051766079, 40052163479, 40053535666 — complete Rust formatting, Clippy, HTTP/unit, pinned matrices and roadmap checks passed"
                 },
                 {
-                  "title": "Full upstream DeviceOptionsDto option clearing semantics, multi-device administration and unmodified Jellyfin client acceptance",
+                  "title": "Unmodified Jellyfin device-management client acceptance and complete upstream options/UI semantics",
                   "passed": false
                 }
               ],
