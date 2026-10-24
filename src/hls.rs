@@ -9,7 +9,7 @@ use std::{
 
 use tokio::{
     fs::{self, OpenOptions},
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
 };
 
 use crate::{
@@ -246,6 +246,143 @@ async fn generate_single_segment_vod_with_quality(
         duration_seconds,
         transport_bytes,
         resolution,
+    })
+}
+
+/// A bounded, independently encoded series of MPEG-TS VOD segments.
+/// The published playlist references only the generated relative filenames.
+/// Consumers own cleanup; there is no public HTTP HLS route in this subset.
+#[derive(Debug, Clone)]
+pub struct HlsSegmentedArtifact {
+    pub playlist_path: PathBuf,
+    pub segment_paths: Vec<PathBuf>,
+    pub segments: Vec<HlsSegment>,
+    pub transport_bytes: u64,
+    root: PathBuf,
+}
+
+impl HlsSegmentedArtifact {
+    pub fn remove(self) -> io::Result<()> {
+        std::fs::remove_dir_all(&self.root)
+    }
+}
+
+const MAX_ENCODED_SEGMENTS: usize = 64;
+const MAX_SEGMENTED_BYTES: u64 = 128 * 1024 * 1024;
+
+/// Produce short independently encoded TS segments from authenticated,
+/// caller-authorized local media. The input is probed first; offsets, segment
+/// count, total duration, bytes and process lifetimes are bounded. Each
+/// segment is re-encoded in a separate FFmpeg process so it starts at a fresh
+/// decoder boundary, then independently probed and checked as MPEG-TS.
+/// All partial files disappear after any error or cancelled Rust future.
+///
+/// This is a private VOD artifact, NOT a client-facing HLS scheduler/route.
+pub async fn generate_segmented_vod(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+) -> io::Result<HlsSegmentedArtifact> {
+    if !(1..=10).contains(&target_seconds) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment target"));
+    }
+    let inspected = probe::probe(source, ffprobe, PROBE_TIMEOUT).await?;
+    let source_seconds = inspected
+        .format
+        .as_ref()
+        .and_then(|format| format["duration"].as_str())
+        .and_then(|raw| raw.parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && (0.1..=600.0).contains(seconds))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unbounded source duration"))?;
+    if inspected.streams.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "source has no audio or video"));
+    }
+    let segment_count = (source_seconds / f64::from(target_seconds)).ceil() as usize;
+    if segment_count == 0 || segment_count > MAX_ENCODED_SEGMENTS {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "HLS window count exceeds limit"));
+    }
+    // The synchronous create + guard ensures cancellation cleans the entire
+    // private output tree, even while FFmpeg is still producing one window.
+    std::fs::create_dir(output_dir)?;
+    let mut partial = PartialBundle {
+        dir: output_dir.to_path_buf(),
+        committed: false,
+    };
+    let mut segments = Vec::with_capacity(segment_count);
+    let mut segment_paths = Vec::with_capacity(segment_count);
+    let mut total_bytes = 0_u64;
+    for index in 0..segment_count {
+        let start = index as f64 * f64::from(target_seconds);
+        let remaining = source_seconds - start;
+        if remaining <= 0.0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "empty HLS time window"));
+        }
+        let target = f64::from(target_seconds);
+        // Avoid sub-100ms tail jobs by adding short remainders to the
+        // preceding segment, still well under the 30s FFmpeg window cap.
+        let duration = if remaining > target && remaining - target < 0.1 {
+            remaining
+        } else {
+            remaining.min(target)
+        };
+        if duration < 0.1 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "short HLS tail window"));
+        }
+        let path = output_dir.join(format!("segment{index:05}.ts"));
+        let size = controller
+            .try_run_window(source, &path, start, duration)
+            .await?;
+        total_bytes = total_bytes.checked_add(size).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
+        })?;
+        if total_bytes > MAX_SEGMENTED_BYTES || size < 188 || size % 188 != 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid HLS output bytes"));
+        }
+        // Verify TS sync markers in constant memory, rather than trusting
+        // an extension or the FFmpeg exit code.
+        let mut packet_reader = fs::File::open(&path).await?;
+        let mut packet = [0_u8; 188];
+        for _ in 0..size / 188 {
+            packet_reader.read_exact(&mut packet).await?;
+            if packet[0] != 0x47 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid TS sync packet"));
+            }
+        }
+        let report = probe::probe(&path, ffprobe, PROBE_TIMEOUT).await?;
+        if report.streams.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "unprobeable HLS segment"));
+        }
+        let measured_seconds = report
+            .format
+            .as_ref()
+            .and_then(|format| format["duration"].as_str())
+            .and_then(|raw| raw.parse::<f64>().ok())
+            .filter(|seconds| seconds.is_finite() && (0.001..=30.0).contains(seconds))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid segment duration"))?;
+        segments.push(HlsSegment {
+            duration_seconds: measured_seconds,
+            transport_bytes: size,
+        });
+        segment_paths.push(path);
+    }
+    let manifest = render_vod_media_playlist(&segments)?;
+    let playlist_path = output_dir.join(PLAYLIST_NAME);
+    let mut out = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&playlist_path)
+        .await?;
+    out.write_all(manifest.as_bytes()).await?;
+    out.flush().await?;
+    partial.committed = true;
+    Ok(HlsSegmentedArtifact {
+        playlist_path,
+        segment_paths,
+        segments,
+        transport_bytes: total_bytes,
+        root: output_dir.to_path_buf(),
     })
 }
 
