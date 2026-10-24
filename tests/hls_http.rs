@@ -259,6 +259,19 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
             .status(),
         StatusCode::OK
     );
+    std::fs::write(&source, b"source replaced after HLS publication").unwrap();
+    assert_eq!(
+        request(&app, "GET", first_path, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        request(&app, "HEAD", &media_url, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     auth::revoke(&state_dir, &viewer).unwrap();
     assert_eq!(
         request(&app, "GET", first_path, Some(&viewer))
@@ -434,6 +447,13 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
             .await
             .status(),
         StatusCode::OK
+    );
+    std::fs::write(&source, b"modified audio media after publication").unwrap();
+    assert_eq!(
+        request(&app, "GET", &first, Some(&listener))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
     );
     auth::revoke(&state_dir, &listener).unwrap();
     assert_eq!(
