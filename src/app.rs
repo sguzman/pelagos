@@ -24,6 +24,7 @@ pub struct AppState {
     auth_dir: Option<PathBuf>,
     probe_executable: PathBuf,
     local_address: Option<String>,
+    hls_registry: crate::hls_http::HlsRegistry,
 }
 
 impl AppState {
@@ -33,6 +34,7 @@ impl AppState {
             auth_dir: None,
             probe_executable: PathBuf::from("ffprobe"),
             local_address: None,
+            hls_registry: crate::hls_http::HlsRegistry::new(PathBuf::from("ffmpeg")),
         }
     }
 
@@ -42,6 +44,7 @@ impl AppState {
             auth_dir: Some(auth_dir),
             probe_executable: PathBuf::from("ffprobe"),
             local_address: None,
+            hls_registry: crate::hls_http::HlsRegistry::new(PathBuf::from("ffmpeg")),
         }
     }
 
@@ -58,6 +61,16 @@ impl AppState {
     pub fn with_listen_addr(mut self, address: SocketAddr) -> Self {
         self.local_address = (!address.ip().is_unspecified()).then(|| format!("http://{address}"));
         self
+    }
+
+    /// Locally select FFmpeg without accepting HTTP-controlled executables.
+    pub fn with_ffmpeg_executable(mut self, executable: PathBuf) -> Self {
+        self.hls_registry = crate::hls_http::HlsRegistry::new(executable);
+        self
+    }
+
+    pub(crate) fn hls_registry(&self) -> &crate::hls_http::HlsRegistry {
+        &self.hls_registry
     }
 
     pub fn probe_executable(&self) -> &Path {
@@ -89,6 +102,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(latest::router())
         .merge(theme::router())
         .merge(streaming::router())
+        .merge(crate::hls_http::router())
         .merge(playback::router())
         .merge(search::router())
         .merge(shows::router())

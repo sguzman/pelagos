@@ -470,7 +470,7 @@ fn profile_allows_direct_file(
 }
 
 /// Lookup only authorized, indexed audio/video and resolve them within the root.
-async fn media_file(
+pub(crate) async fn media_file(
     state: &AppState,
     item_id: String,
     allowed: Option<HashSet<String>>,

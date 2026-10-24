@@ -51,7 +51,7 @@ impl Drop for PartialOutput {
 
 /// Semaphore admission bounds concurrent FFmpeg work independently of
 /// transport requests. Queued tasks spawn no child until granted a permit.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TranscodeController {
     executable: PathBuf,
     permits: Arc<Semaphore>,

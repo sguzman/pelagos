@@ -9,6 +9,7 @@ pub mod catalog_api;
 pub mod device_api;
 pub mod discovery;
 pub mod hls;
+pub mod hls_http;
 pub mod identity;
 pub mod latest;
 pub mod media;
