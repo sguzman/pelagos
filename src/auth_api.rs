@@ -33,7 +33,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/Password", post(change_password))
         .route("/Users/{user_id}/Password", post(admin_reset_password))
         .route("/Auth/Providers", get(auth_providers))
-        .route("/Auth/PasswordResetProviders", get(password_reset_providers))
+        .route(
+            "/Auth/PasswordResetProviders",
+            get(password_reset_providers),
+        )
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         .route("/Sessions/Capabilities", post(report_session_capabilities))
