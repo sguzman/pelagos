@@ -2656,21 +2656,21 @@
             {
               "id": "T340",
               "emoji": "📺",
-              "name": "Authenticated session-scoped HLS VOD HTTP manifest and transport delivery",
+              "name": "Authenticated audio/video single-rendition HLS master, media and segment transport",
               "progress": 67,
               "checks": [
                 {
-                  "title": "Implement pinned-shaped GET /Videos/{itemId}/main.m3u8 and GET/HEAD /Videos/{itemId}/hls1/{playlistId}/{segmentId}.ts with bounded FFmpeg VOD artifacts, private token-digested publication ownership, per-request library authorization, admission/cache limits and cleanup",
+                  "title": "Implement pinned-shaped GET /Videos and /Audio/{itemId}/main.m3u8 and /master.m3u8 plus protected hls1 playlist/segment GET/HEAD, private FFmpeg VOD publications, measured-bandwidth single-rendition masters, token and per-library ACL isolation, revision-aware cache reuse and bounded eviction",
                   "passed": true,
-                  "evidence": "src/hls_http.rs, src/app.rs, src/playback.rs, src/hls.rs and TranscodeController; Jellyfin v12.3 DynamicHlsController video main and hls1 segment routes; bounded segment builder and max-three private publication registry"
+                  "evidence": "src/hls_http.rs HlsRegistry/CacheLookup/generate_hls_playlist/serve_segment; src/app.rs, src/hls.rs, TranscodeController; pinned Jellyfin v12.3 DynamicHlsController route shapes; private max-three token-scoped publications"
                 },
                 {
-                  "title": "Native CI verifies real FFmpeg/FFprobe MPEG-TS HTTP response, playlist names, GET/HEAD byte lengths, anonymous/user/sibling token denial, library revocation, malformed requests, private output release on shutdown, cache eviction and final-reader deletion",
+                  "title": "Native CI verifies actual FFmpeg/FFprobe audio/video MPEG-TS, master-to-media-to-segment navigation, token separation, secure HTTP lengths, manifest reuse rather than repeated FFmpeg jobs, cache source/kind/target isolation, revision-based stale-media denial, revocation, cache eviction and cleanup",
                   "passed": true,
-                  "evidence": "GitHub Actions 40123205931 and 40123387022 — complete Rust unit/HTTP tests with real FFmpeg/FFprobe, rustfmt, Clippy, generated roadmap and pinned source/controller matrices passed"
+                  "evidence": "GitHub Actions 40123205931, 40123387022, 40124019769, 40124299608, 40124593538 and 40124892915 — full Rust unit/HTTP suite with real FFmpeg, rustfmt, Clippy, pinned source/controller matrices and roadmap checks passed"
                 },
                 {
-                  "title": "Full Jellyfin main/master HLS query handling, adaptive/long VOD scheduling, seamless stream timebase, real client token propagation and unmodified Smart TV/mobile acceptance",
+                  "title": "Full upstream HLS negotiation and codec options, multi-rendition HTTP ABR/DASH, multi-hour live/long VOD scheduler, consistent timeline, real-client token forwarding and unmodified Jellyfin TV/mobile playback acceptance",
                   "passed": false
                 }
               ]
