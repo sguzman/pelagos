@@ -200,6 +200,19 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert!(!master.contains(&viewer));
     let media_name = master.lines().find(|l| l.starts_with("hls1/")).unwrap();
     assert!(media_name.ends_with("/index.m3u8"));
+    // GET master after main must reuse the same completed publication.
+    let first_id = first_path.split('/').nth(4).unwrap();
+    assert_eq!(media_name.split('/').nth(1), Some(first_id));
+    let repeated_master = text_body(
+        request(&app, "GET", &master_route, Some(&viewer)).await,
+    )
+    .await;
+    assert_eq!(repeated_master, master);
+    let repeated_main = text_body(
+        request(&app, "GET", &route, Some(&viewer)).await,
+    )
+    .await;
+    assert_eq!(repeated_main, manifest);
     let media_url = format!("/Videos/{id}/{media_name}");
     assert_eq!(
         request(&app, "GET", &media_url, Some(&admin))
@@ -409,6 +422,10 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     assert_eq!(main.status(), StatusCode::OK);
     let main_text = text_body(main).await;
     assert!(main_text.lines().any(|line| line.starts_with("hls1/")));
+    // Audio main and master represent the same authenticated rendition.
+    assert!(main_text.contains(&format!("hls1/{}/0.ts", media_name.split('/').nth(1).unwrap())));
+    let repeated = text_body(request(&app, "GET", &master_route, Some(&listener)).await).await;
+    assert_eq!(repeated, master);
     auth::revoke_library(&state_dir, "listener", &library).unwrap();
     assert_eq!(
         request(&app, "GET", &first, Some(&listener)).await.status(),
