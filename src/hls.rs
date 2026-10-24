@@ -285,6 +285,25 @@ pub async fn generate_segmented_vod(
     output_dir: &Path,
     target_seconds: u32,
 ) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_with_quality(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        None,
+    )
+    .await
+}
+
+async fn generate_segmented_vod_with_quality(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    quality: Option<MpegTsQuality>,
+) -> io::Result<HlsSegmentedArtifact> {
     if !(1..=10).contains(&target_seconds) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -352,9 +371,16 @@ pub async fn generate_segmented_vod(
             ));
         }
         let path = output_dir.join(format!("segment{index:05}.ts"));
-        let size = controller
-            .try_run_window(source, &path, start, duration)
-            .await?;
+        let size = match quality {
+            Some(target) => {
+                controller
+                    .try_run_window_with_quality(source, &path, start, duration, target)
+                    .await?
+            }
+            None => controller
+                .try_run_window(source, &path, start, duration)
+                .await?,
+        };
         total_bytes = total_bytes.checked_add(size).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
         })?;
@@ -414,6 +440,120 @@ pub async fn generate_segmented_vod(
         segment_paths,
         segments,
         transport_bytes: total_bytes,
+        root: output_dir.to_path_buf(),
+    })
+}
+
+/// Completed adaptive multi-segment renditions with measured bandwidths.
+/// These are private artifacts, not yet authenticated Jellyfin HLS endpoints.
+#[derive(Debug, Clone)]
+pub struct HlsAdaptiveSegmentedArtifact {
+    pub master_path: PathBuf,
+    pub variants: Vec<HlsVariant>,
+    pub renditions: Vec<HlsSegmentedArtifact>,
+    root: PathBuf,
+}
+
+impl HlsAdaptiveSegmentedArtifact {
+    pub fn remove(self) -> io::Result<()> {
+        std::fs::remove_dir_all(&self.root)
+    }
+}
+
+/// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
+/// Publish the master only after all requested outputs are verified.
+/// Variant order follows measured transport bandwidth, not input targets.
+pub async fn generate_adaptive_segmented_vod(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    qualities: &[MpegTsQuality],
+) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    if !(2..=4).contains(&qualities.len()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid adaptive segmented rendition count",
+        ));
+    }
+    std::fs::create_dir(output_dir)?;
+    let mut partial = PartialBundle {
+        dir: output_dir.to_path_buf(),
+        committed: false,
+    };
+    let mut candidates = Vec::new();
+    for (index, quality) in qualities.iter().enumerate() {
+        let name = format!("candidate{index:02}");
+        let rendition = generate_segmented_vod_with_quality(
+            controller,
+            ffprobe,
+            source,
+            &output_dir.join(&name),
+            target_seconds,
+            Some(*quality),
+        )
+        .await?;
+        let duration: f64 = rendition
+            .segments
+            .iter()
+            .map(|segment| segment.duration_seconds)
+            .sum();
+        let bandwidth = (rendition.transport_bytes as f64 * 8.0 / duration).ceil() as u64;
+        if duration <= 0.0 || bandwidth == 0 || bandwidth > 1_000_000_000 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "measured segmented rendition bandwidth is invalid",
+            ));
+        }
+        candidates.push((bandwidth, name, rendition));
+    }
+    candidates.sort_by_key(|candidate| candidate.0);
+    let mut variants = Vec::new();
+    let mut renditions = Vec::new();
+    let mut previous = 0_u64;
+    for (bandwidth, original, rendition) in candidates {
+        let old_path = output_dir.join(&original);
+        if previous == bandwidth {
+            fs::remove_dir_all(old_path).await?;
+            continue;
+        }
+        let name = format!("variant{:02}", variants.len());
+        let dir = output_dir.join(&name);
+        fs::rename(&old_path, &dir).await?;
+        variants.push(HlsVariant {
+            playlist_name: format!("{name}/index.m3u8"),
+            bandwidth,
+            resolution: None,
+        });
+        renditions.push(HlsSegmentedArtifact {
+            playlist_path: dir.join(PLAYLIST_NAME),
+            segment_paths: rendition
+                .segment_paths
+                .iter()
+                .enumerate()
+                .map(|(index, _)| dir.join(format!("segment{index:05}.ts")))
+                .collect(),
+            segments: rendition.segments,
+            transport_bytes: rendition.transport_bytes,
+            root: dir,
+        });
+        previous = bandwidth;
+    }
+    let master = render_vod_master_playlist(&variants)?;
+    let master_path = output_dir.join("master.m3u8");
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&master_path)
+        .await?;
+    file.write_all(master.as_bytes()).await?;
+    file.flush().await?;
+    partial.committed = true;
+    Ok(HlsAdaptiveSegmentedArtifact {
+        master_path,
+        variants,
+        renditions,
         root: output_dir.to_path_buf(),
     })
 }
