@@ -22,7 +22,13 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      - name: FFmpeg and FFprobe prerequisites
+        run: |
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
       - name: Tests
+        env:
+          PELAGOS_REQUIRE_FFMPEG: "1"
         run: cargo test --all-targets
       - name: Evidence-backed roadmap
         run: cargo run --quiet --bin pelagos-roadmap -- --check
