@@ -804,6 +804,9 @@ mod tests {
         assert!(manifest.contains("#EXT-X-TARGETDURATION:2\n"));
         assert!(manifest.contains("#EXTINF:2.000,\nsegment00000.ts\n"));
         assert!(manifest.contains("#EXTINF:2.000,\nsegment00001.ts\n"));
+        assert!(manifest.contains(
+            "#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nsegment00001.ts\n"
+        ));
         assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
         assert_eq!(stdfs::read(&source).unwrap(), b"synthetic");
         bundle.remove().unwrap();
@@ -1290,6 +1293,13 @@ mod tests {
             .unwrap();
         assert_eq!(artifact.segment_paths.len(), 3);
         assert_eq!(artifact.segments.len(), 3);
+        assert_eq!(
+            stdfs::read_to_string(&artifact.playlist_path)
+                .unwrap()
+                .matches("#EXT-X-DISCONTINUITY")
+                .count(),
+            2
+        );
         let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
         for (i, path) in artifact.segment_paths.iter().enumerate() {
             assert!(path.exists());
