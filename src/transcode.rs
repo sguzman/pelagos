@@ -723,6 +723,26 @@ mod tests {
         assert!(args.contains("-ss|2.125|"));
         assert!(args.contains("-t|1.500|"));
         assert!(args.contains("-avoid_negative_ts|make_zero|"));
+        let capped = output.with_file_name("too-small.ts");
+        assert_eq!(
+            controller
+                .try_run_window_capped(&source, &capped, 0.0, 1.0, 3, None)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert!(!capped.exists());
+        assert_eq!(
+            controller
+                .try_run_window_capped(&source, &capped, 0.0, 1.0, 0, None)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!capped.exists());
+        assert_eq!(controller.active_jobs(), 0);
         assert_eq!(controller.active_jobs(), 0);
         assert_eq!(
             controller
