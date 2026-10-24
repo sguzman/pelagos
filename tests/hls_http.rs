@@ -764,3 +764,147 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
             .exists()
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    let library = fixture.path().join("Movies");
+    let state_dir = fixture.path().join("state");
+    std::fs::create_dir_all(&library).unwrap();
+    let source = library.join("Adaptive.avi");
+    let encoded = Command::new("ffmpeg")
+        .args([
+            "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=4.2",
+            "-c:v", "mpeg4", "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        encoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&encoded.stderr)
+    );
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "adaptive-hls-admin-password").unwrap();
+    auth::create_user(&state_dir, "viewer", "adaptive-hls-viewer-password").unwrap();
+    let admin = auth::authenticate(
+        &state_dir, "admin", "adaptive-hls-admin-password", "server",
+    ).unwrap().unwrap().access_token;
+    let owner = auth::authenticate(
+        &state_dir, "viewer", "adaptive-hls-viewer-password", "server",
+    ).unwrap().unwrap().access_token;
+    let sibling = auth::authenticate(
+        &state_dir, "viewer", "adaptive-hls-viewer-password", "server",
+    ).unwrap().unwrap().access_token;
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(), state_dir.clone(),
+    )));
+    let items = request(&app, "GET", "/Items", Some(&admin)).await;
+    let values: Value = serde_json::from_slice(
+        &to_bytes(items.into_body(), 65_536).await.unwrap()
+    ).unwrap();
+    let id = values["Items"][0]["Id"].as_str().unwrap();
+    let route = format!("/Videos/{id}/master.m3u8?segmentLength=2&renditions=2");
+    for (uri, expected) in [
+        (format!("/Videos/{id}/master.m3u8?renditions=0"), StatusCode::BAD_REQUEST),
+        (format!("/Videos/{id}/master.m3u8?renditions=5"), StatusCode::BAD_REQUEST),
+        (format!("/Videos/{id}/main.m3u8?renditions=2"), StatusCode::NOT_IMPLEMENTED),
+        (format!("/Audio/{id}/master.m3u8?renditions=2"), StatusCode::NOT_IMPLEMENTED),
+        (
+            format!("/Videos/{id}/master.m3u8?renditions=2&startTimeTicks=10000000"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+    ] {
+        assert_eq!(
+            request(&app, "GET", &uri, Some(&owner)).await.status(),
+            expected,
+            "{uri}"
+        );
+    }
+    assert_eq!(
+        request(&app, "GET", &route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let master_response = request(&app, "GET", &route, Some(&owner)).await;
+    assert_eq!(master_response.status(), StatusCode::OK);
+    let master = text_body(master_response).await;
+    assert_eq!(
+        master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
+        2
+    );
+    assert!(!master.contains(&owner));
+    assert!(master.contains("variant00/index.m3u8"));
+    assert!(master.contains("variant01/index.m3u8"));
+    let paths = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/"))
+        .collect::<Vec<_>>();
+    assert_eq!(paths.len(), 2);
+    let bandwidths = master
+        .lines()
+        .filter_map(|line| line.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
+        .map(|number| number.parse::<u64>().unwrap())
+        .collect::<Vec<_>>();
+    assert!(bandwidths[0] > 0 && bandwidths[0] < bandwidths[1]);
+    let playlist_id = paths[0].split('/').nth(1).unwrap().to_owned();
+    assert_eq!(text_body(request(&app, "GET", &route, Some(&owner)).await).await, master);
+    assert_playlist_head(&app, &route, &owner, master.len()).await;
+    for (index, relative) in paths.iter().enumerate() {
+        let media_route = format!("/Videos/{id}/{relative}");
+        let wrong_route = format!("/Videos/{id}/hls1/{playlist_id}/variant99/index.m3u8");
+        assert_eq!(
+            request(&app, "GET", &wrong_route, Some(&owner)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            request(&app, "GET", &media_route, Some(&sibling)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let media = request(&app, "GET", &media_route, Some(&owner)).await;
+        assert_eq!(media.status(), StatusCode::OK);
+        let manifest = text_body(media).await;
+        assert_playlist_head(&app, &media_route, &owner, manifest.len()).await;
+        assert!(manifest.contains("#EXT-X-ENDLIST"));
+        assert!(manifest.contains("\n0.ts\n"));
+        let segment_route = format!(
+            "/Videos/{id}/hls1/{playlist_id}/variant{index:02}/0.ts"
+        );
+        let bytes_response = request(&app, "GET", &segment_route, Some(&owner)).await;
+        assert_eq!(bytes_response.status(), StatusCode::OK);
+        assert_eq!(bytes_response.headers()[header::CONTENT_TYPE], "video/mp2t");
+        let bytes = to_bytes(bytes_response.into_body(), 8 * 1024 * 1024).await.unwrap();
+        assert!(bytes.len() >= 188 && bytes.len() % 188 == 0);
+        assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+        let range = request_range(
+            &app, "GET", &segment_route, &owner, "bytes=0-187",
+        ).await;
+        assert_eq!(range.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(range.headers()[header::CONTENT_LENGTH], "188");
+        assert_eq!(to_bytes(range.into_body(), 188).await.unwrap().len(), 188);
+    }
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    let first = format!("/Videos/{id}/{}", paths[0]);
+    assert_eq!(
+        request(&app, "GET", &first, Some(&owner)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        request(&app, "GET", &first, Some(&owner)).await.status(),
+        StatusCode::OK
+    );
+    auth::revoke(&state_dir, &owner).unwrap();
+    assert_eq!(
+        request(&app, "GET", &first, Some(&owner)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    drop(app);
+    assert!(!std::env::temp_dir().join(format!("pelagos-hls-{playlist_id}")).exists());
+}
