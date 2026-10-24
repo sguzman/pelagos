@@ -1306,7 +1306,12 @@ mod tests {
             let streams = probe::probe(path, Path::new("ffprobe"), PROBE_TIMEOUT)
                 .await
                 .unwrap();
-            assert!(streams.streams.iter().any(|s| s["codec_name"].as_str() == Some("h264")));
+            assert!(
+                streams
+                    .streams
+                    .iter()
+                    .any(|s| s["codec_name"].as_str() == Some("h264"))
+            );
             let decoded = tokio::process::Command::new("ffmpeg")
                 .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
                 .arg(path)
@@ -1314,14 +1319,23 @@ mod tests {
                 .output()
                 .await
                 .unwrap();
-            assert!(decoded.status.success(), "{}", String::from_utf8_lossy(&decoded.stderr));
+            assert!(
+                decoded.status.success(),
+                "{}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
         }
         let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
         assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY").count(), 2);
         let playlist = probe::probe(&artifact.playlist_path, Path::new("ffprobe"), PROBE_TIMEOUT)
             .await
             .unwrap();
-        assert!(playlist.streams.iter().any(|s| s["codec_name"].as_str() == Some("h264")));
+        assert!(
+            playlist
+                .streams
+                .iter()
+                .any(|s| s["codec_name"].as_str() == Some("h264"))
+        );
     }
 
     #[tokio::test]
