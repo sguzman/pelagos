@@ -1255,13 +1255,19 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
             "switch decode failed: {}",
             String::from_utf8_lossy(&decoded.stderr)
         );
-        let decoded_frames = String::from_utf8_lossy(&decoded.stdout)
+        let frame_timestamps = String::from_utf8_lossy(&decoded.stdout)
             .lines()
             .filter(|line| !line.starts_with('#') && !line.is_empty())
-            .count();
+            .map(|line| line.split(',').nth(2).unwrap().trim().parse::<i64>().unwrap())
+            .collect::<Vec<_>>();
         assert!(
-            decoded_frames >= 100,
-            "decoded only {decoded_frames} frames"
+            frame_timestamps.len() >= 100,
+            "decoded only {} frames",
+            frame_timestamps.len()
+        );
+        assert!(
+            frame_timestamps.windows(2).all(|pair| pair[0] < pair[1]),
+            "decoder presentation timestamps must increase across switches"
         );
     }
     assert_eq!(
@@ -1452,6 +1458,46 @@ async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switc
         text_body(request(&app, "GET", &route, Some(&listener)).await).await,
         master
     );
+    // Complete the bounded 2–4 audio ladder matrix with real FFmpeg
+    // transports, measured bitrate ordering and private HTTP access.
+    for count in [2_u8, 4] {
+        let variant_route =
+            format!("/Audio/{item}/master.m3u8?segmentLength=2&renditions={count}");
+        let response = request(&app, "GET", &variant_route, Some(&listener)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = text_body(response).await;
+        let values = body
+            .lines()
+            .filter_map(|line| line.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
+            .map(|value| value.parse::<u64>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(values.len(), usize::from(count));
+        assert!(values.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(!body.contains("RESOLUTION="));
+        let last = body
+            .lines()
+            .find(|line| line.contains(&format!("variant{:02}/index.m3u8", count - 1)))
+            .unwrap();
+        let media_route = format!("/Audio/{item}/{last}");
+        assert_eq!(
+            request(&app, "GET", &media_route, Some(&sibling))
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let response = request(&app, "GET", &media_route, Some(&listener)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist = text_body(response).await;
+        assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+        let segment_route = media_route.replace("index.m3u8", "0.ts");
+        let transport = request(&app, "GET", &segment_route, Some(&listener)).await;
+        assert_eq!(transport.status(), StatusCode::OK);
+        let transport_bytes = to_bytes(transport.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(!transport_bytes.is_empty());
+        assert!(transport_bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+    }
     auth::revoke_library(&state_dir, "listener", &library).unwrap();
     let first = format!("/Audio/{item}/{}", variants[0]);
     assert_eq!(
