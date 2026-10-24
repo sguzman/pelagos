@@ -613,7 +613,7 @@ pub fn set_session_capabilities(
     let Some(session_id) = session_id else {
         return Ok(SessionCapabilityUpdate::StaleSession);
     };
-    if requested_id.is_some_and(|id| id != session_id) {
+    if requested_id.is_some_and(|id| id != session_id.as_str()) {
         return Ok(SessionCapabilityUpdate::OtherSession);
     }
     tx.execute(
