@@ -890,10 +890,19 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     let seek_pub = seek_variants[0].split('/').nth(1).unwrap();
     for (index, variant) in seek_variants.iter().enumerate() {
         let media_route = format!("/Videos/{id}/{variant}");
+        assert_eq!(
+            request(&app, "GET", &media_route, Some(&sibling))
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
         let playlist_response = request(&app, "GET", &media_route, Some(&owner)).await;
         assert_eq!(playlist_response.status(), StatusCode::OK);
         let playlist = text_body(playlist_response).await;
         assert!(playlist.contains("#EXT-X-ENDLIST"));
+        // A one-second seek into a 4.2-second synthetic source leaves
+        // exactly two independently encoded, 2-second-target windows.
+        assert_eq!(playlist.matches("#EXTINF:").count(), 2);
         let transport_route = format!("/Videos/{id}/hls1/{seek_pub}/variant{index:02}/0.ts");
         let transport = request(&app, "GET", &transport_route, Some(&owner)).await;
         assert_eq!(transport.status(), StatusCode::OK);
@@ -971,6 +980,13 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         assert_eq!(to_bytes(range.into_body(), 188).await.unwrap().len(), 188);
     }
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    let seek_first = format!("/Videos/{id}/{}", seek_variants[0]);
+    assert_eq!(
+        request(&app, "GET", &seek_first, Some(&owner))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     let first = format!("/Videos/{id}/{}", paths[0]);
     assert_eq!(
         request(&app, "GET", &first, Some(&owner)).await.status(),
