@@ -67,10 +67,9 @@ async fn user_id_lookup_matches_me_without_leaking_other_accounts() {
         .status(),
         StatusCode::NOT_FOUND
     );
-    assert_eq!(
-        get(&router, &own, Some(&admin.access_token)).await.status(),
-        StatusCode::NOT_FOUND
-    );
+    let admin_view = json(get(&router, &own, Some(&admin.access_token)).await).await;
+    assert_eq!(admin_view, by_id);
+    assert!(admin_view.get("PasswordHash").is_none());
     assert_eq!(
         get(
             &router,
@@ -81,6 +80,22 @@ async fn user_id_lookup_matches_me_without_leaking_other_accounts() {
         .status(),
         StatusCode::NOT_FOUND
     );
+    assert_eq!(
+        get(
+            &router,
+            "/Users/00000000-0000-0000-0000-000000000000",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        auth::set_account_disabled(&state, &viewer.user.id, true).unwrap(),
+        auth::AccountDisabledUpdate::Updated
+    );
+    let disabled = json(get(&router, &own, Some(&admin.access_token)).await).await;
+    assert_eq!(disabled["Policy"]["IsDisabled"], true);
     auth::revoke(&state, &viewer.access_token).unwrap();
     assert_eq!(
         get(&router, &own, Some(&viewer.access_token))
