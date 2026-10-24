@@ -1,12 +1,7 @@
 //! Bounded, CPU-first FFmpeg MPEG-TS transcode job runner.
 //! This is not yet an HLS/DASH scheduler, Jellyfin PlaybackInfo transcode
 //! response, GPU accelerator, or complete Smart TV playback implementation.
-use std::{
-    io,
-    path::Path,
-    process::Stdio,
-    time::Duration,
-};
+use std::{io, path::Path, process::Stdio, time::Duration};
 
 use tokio::{
     fs::{self, OpenOptions},
@@ -165,15 +160,9 @@ mod tests {
     #[tokio::test]
     async fn bounded_success_streams_without_overwriting_source() {
         let (_temp, executable, source, output) = fixture("printf 'MPEGTS'");
-        let written = transcode_mpegts(
-            &executable,
-            &source,
-            &output,
-            Duration::from_secs(3),
-            64,
-        )
-        .await
-        .unwrap();
+        let written = transcode_mpegts(&executable, &source, &output, Duration::from_secs(3), 64)
+            .await
+            .unwrap();
         assert_eq!(written, 6);
         assert_eq!(stdfs::read(&output).unwrap(), b"MPEGTS");
         assert_eq!(stdfs::read(&source).unwrap(), b"synthetic source");
@@ -191,15 +180,9 @@ mod tests {
     async fn failed_process_and_partial_outputs_are_removed() {
         let (_temp, executable, source, output) =
             fixture("printf 'partial'; echo 'bad media' >&2; exit 7");
-        let err = transcode_mpegts(
-            &executable,
-            &source,
-            &output,
-            Duration::from_secs(3),
-            64,
-        )
-        .await
-        .unwrap_err();
+        let err = transcode_mpegts(&executable, &source, &output, Duration::from_secs(3), 64)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("bad media"));
         assert!(!output.exists());
     }
@@ -207,15 +190,9 @@ mod tests {
     #[tokio::test]
     async fn too_large_output_is_stopped_before_exceeding_limit() {
         let (_temp, executable, source, output) = fixture("head -c 1024 /dev/zero");
-        let err = transcode_mpegts(
-            &executable,
-            &source,
-            &output,
-            Duration::from_secs(3),
-            32,
-        )
-        .await
-        .unwrap_err();
+        let err = transcode_mpegts(&executable, &source, &output, Duration::from_secs(3), 32)
+            .await
+            .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
         assert!(!output.exists());
     }
@@ -223,15 +200,9 @@ mod tests {
     #[tokio::test]
     async fn hanging_transcode_is_killed_and_partial_file_removed() {
         let (_temp, executable, source, output) = fixture("exec sleep 2");
-        let err = transcode_mpegts(
-            &executable,
-            &source,
-            &output,
-            Duration::from_millis(40),
-            64,
-        )
-        .await
-        .unwrap_err();
+        let err = transcode_mpegts(&executable, &source, &output, Duration::from_millis(40), 64)
+            .await
+            .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
         assert!(!output.exists());
     }
