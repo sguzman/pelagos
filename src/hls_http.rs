@@ -51,6 +51,16 @@ impl Drop for Published {
     }
 }
 
+struct CacheLookup<'a> {
+    item: &'a str,
+    kind: &'a str,
+    token: &'a str,
+    source: &'a Path,
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+    target_seconds: u32,
+}
+
 /// Small private cache; a segment request holds its own Arc during eviction.
 #[derive(Debug)]
 pub struct HlsRegistry {
@@ -87,30 +97,21 @@ impl HlsRegistry {
 
     /// Reuse an already completed rendition, never one owned by a sibling
     /// session or built for different source bytes/segment settings.
-    fn cached(
-        &self,
-        item: &str,
-        kind: &str,
-        token: &str,
-        source: &Path,
-        source_size: u64,
-        source_modified: Option<std::time::SystemTime>,
-        target_seconds: u32,
-    ) -> Option<Arc<Published>> {
-        let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+    fn cached(&self, query: &CacheLookup<'_>) -> Option<Arc<Published>> {
+        let digest: [u8; 32] = Sha256::digest(query.token.as_bytes()).into();
         self.entries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .rev()
             .find(|entry| {
-                entry.item == item
-                    && entry.kind == kind
+                entry.item == query.item
+                    && entry.kind == query.kind
                     && entry.digest == digest
-                    && entry.source == source
-                    && entry.source_size == source_size
-                    && entry.source_modified == source_modified
-                    && entry.target_seconds == target_seconds
+                    && entry.source == query.source
+                    && entry.source_size == query.size
+                    && entry.source_modified == query.modified
+                    && entry.target_seconds == query.target_seconds
             })
             .cloned()
     }
@@ -240,15 +241,16 @@ async fn generate_hls_playlist(
     let source_size = metadata.len();
     let source_modified = metadata.modified().ok();
     let registry = state.hls_registry();
-    if let Some(existing) = registry.cached(
-        &item,
-        expected_kind,
-        &token,
-        &source,
-        source_size,
-        source_modified,
+    let cache_key = CacheLookup {
+        item: &item,
+        kind: expected_kind,
+        token: &token,
+        source: &source,
+        size: source_size,
+        modified: source_modified,
         target_seconds,
-    ) {
+    };
+    if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
             &existing.master_playlist
         } else {
@@ -262,15 +264,7 @@ async fn generate_hls_playlist(
         .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
-    if let Some(existing) = registry.cached(
-        &item,
-        expected_kind,
-        &token,
-        &source,
-        source_size,
-        source_modified,
-        target_seconds,
-    ) {
+    if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
             &existing.master_playlist
         } else {
