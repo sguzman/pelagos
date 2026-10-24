@@ -848,7 +848,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         ),
         (
             format!("/Audio/{id}/master.m3u8?renditions=2"),
-            StatusCode::NOT_IMPLEMENTED,
+            StatusCode::NOT_FOUND,
         ),
     ] {
         assert_eq!(
@@ -1271,5 +1271,188 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     assert_eq!(
         text_body(request(&app, "GET", &route, Some(&bob)).await).await,
         bob_master
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switch() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    let library = fixture.path().join("Music");
+    let state_dir = fixture.path().join("state");
+    std::fs::create_dir_all(&library).unwrap();
+    let source = library.join("Noise.wav");
+    // High-entropy audio gives independent AAC bitrate controls real work,
+    // avoiding a misleading duplicate-size ladder from a pure sine wave.
+    let encoded = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "anoisesrc=color=white:sample_rate=48000:duration=3.4",
+            "-ac",
+            "2",
+            "-c:a",
+            "pcm_s16le",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        encoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&encoded.stderr)
+    );
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "adaptive-audio-admin-password").unwrap();
+    auth::create_user(&state_dir, "listener", "adaptive-audio-listener-password").unwrap();
+    auth::grant_library(&state_dir, "listener", &library).unwrap();
+    let admin = auth::authenticate(&state_dir, "admin", "adaptive-audio-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let listener = auth::authenticate(
+        &state_dir,
+        "listener",
+        "adaptive-audio-listener-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let sibling = auth::authenticate(
+        &state_dir,
+        "listener",
+        "adaptive-audio-listener-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir.clone(),
+    )));
+    let items = request(&app, "GET", "/Items", Some(&admin)).await;
+    let listing: Value =
+        serde_json::from_slice(&to_bytes(items.into_body(), 65_536).await.unwrap()).unwrap();
+    let item = listing["Items"][0]["Id"].as_str().unwrap();
+    let route = format!("/Audio/{item}/master.m3u8?segmentLength=2&renditions=3");
+    assert_eq!(
+        request(&app, "GET", &route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("/Audio/{item}/main.m3u8?renditions=3"),
+            Some(&listener),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    let response = request(&app, "GET", &route, Some(&listener)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let master = text_body(response).await;
+    assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 3);
+    assert!(!master.contains("RESOLUTION="));
+    assert!(!master.contains(&listener));
+    let bandwidths = master
+        .lines()
+        .filter_map(|line| line.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
+        .map(|raw| raw.parse::<u64>().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(bandwidths.len(), 3);
+    assert!(bandwidths.windows(2).all(|pair| pair[0] < pair[1]));
+    let variants = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/"))
+        .collect::<Vec<_>>();
+    assert_eq!(variants.len(), 3);
+    let publication = variants[0].split('/').nth(1).unwrap();
+    let switch_dir = fixture.path().join("audio-switch");
+    std::fs::create_dir(&switch_dir).unwrap();
+    for (index, relative) in variants.iter().enumerate() {
+        let media_path = format!("/Audio/{item}/{relative}");
+        assert_eq!(
+            request(&app, "GET", &media_path, Some(&sibling))
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let media = request(&app, "GET", &media_path, Some(&listener)).await;
+        assert_eq!(media.status(), StatusCode::OK);
+        let playlist = text_body(media).await;
+        assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+        let segment = format!("/Audio/{item}/hls1/{publication}/variant{index:02}/0.ts");
+        assert_eq!(
+            request(&app, "GET", &segment, Some(&sibling))
+                .await
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        let response = request(&app, "GET", &segment, Some(&listener)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
+        assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+        if index == 0 {
+            std::fs::write(switch_dir.join("part0.ts"), &bytes).unwrap();
+        }
+        if index == 1 {
+            let second = format!("/Audio/{item}/hls1/{publication}/variant01/1.ts");
+            let response = request(&app, "GET", &second, Some(&listener)).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let tail = to_bytes(response.into_body(), 8 * 1024 * 1024)
+                .await
+                .unwrap();
+            std::fs::write(switch_dir.join("part1.ts"), &tail).unwrap();
+        }
+    }
+    let playlist = switch_dir.join("switch.m3u8");
+    std::fs::write(
+        &playlist,
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\npart0.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:1.400,\npart1.ts\n#EXT-X-ENDLIST\n",
+    )
+    .unwrap();
+    let decode = Command::new("ffmpeg")
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+        .arg(&playlist)
+        .args(["-map", "0:a:0", "-f", "framemd5", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        decode.status.success(),
+        "audio switch decode failed: {}",
+        String::from_utf8_lossy(&decode.stderr)
+    );
+    let audio_frames = String::from_utf8_lossy(&decode.stdout)
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .count();
+    assert!(audio_frames >= 20);
+    assert_eq!(
+        text_body(request(&app, "GET", &route, Some(&listener)).await).await,
+        master
+    );
+    auth::revoke_library(&state_dir, "listener", &library).unwrap();
+    let first = format!("/Audio/{item}/{}", variants[0]);
+    assert_eq!(
+        request(&app, "GET", &first, Some(&listener))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
     );
 }
