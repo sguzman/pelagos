@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 36%` across 160 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 36%` across 163 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -573,11 +573,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 40%`
+## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 43%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `█████░░░░░ 54%`
+### 🛠️ P15 — Admin and accounts — `██████░░░░ 56%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -643,6 +643,18 @@
   - [x] Implement modern pinned POST /Users optional userId subset with strict Name-only DTO and unified administrator-only rename handling — src/auth_api.rs update_user_name_modern/update_user_name_inner; src/auth.rs rename_user; pinned Jellyfin v12.3 UserController.UpdateUser
   - [x] Full Rust CI verifies missing/foreign account, non-admin and unauthenticated denial, unknown field rejection, stable user identity and token, old/new login and administrator self-rename — GitHub Actions 40047064155 — format, Clippy, Rust unit and HTTP integrations, ledger and pinned contract matrices passed
   - [ ] Full upstream UserDto/Configuration and self-preference semantics, differential concurrency and real unmodified Jellyfin client acceptance
+- 📺 **T519 — Privileged persistent Jellyfin device directory and indexed info lookup** — `███████░░░ 67%`
+  - [x] Register authenticated client-supplied device IDs in Pelagos-only SQLite and implement elevated GET /Devices and /Devices/Info with optional user filter, credential-redacted DeviceInfoDto and live capability projection — src/auth.rs pelagos_devices/list_registered_devices/registered_device_info; src/device_api.rs; pinned Jellyfin v12.3 DevicesController.GetDevices/GetDeviceInfo
+  - [x] Native HTTP suite verifies admin/ordinary/anonymous boundaries, deduplication, stable lookup, user filter, missing/unregistered IDs, token redaction, restart persistence, and active capability projection — GitHub Actions 40051326692 and 40051766079 — complete formatting, Clippy, HTTP/unit tests and upstream/roadmap gates passed
+  - [ ] Full upstream device activity, numeric DTO IDs, metadata semantics and actual unmodified client compatibility accepted
+- 🚪 **T520 — Administrator single-device logout with transactional session revocation** — `███████░░░ 67%`
+  - [x] Implement pinned DELETE /Devices strict one-id subset that revokes all sessions for a known registered device in one authentication DB transaction without erasing registration or unrelated tokens — src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device; pinned Jellyfin v12.3 DevicesController.DeleteDevice
+  - [x] Native HTTP CI verifies anonymous/member denial, missing and unknown IDs, sibling-session invalidation, other-device isolation, registration persistence and new login after revocation — GitHub Actions 40051766079 — complete Rust tests, formatting, Clippy, ledger and pinned upstream checks passed
+  - [ ] Upstream multi-device query arrays, concurrent session race testing and unmodified device-management client acceptance
+- ✏️ **T521 — Durable administrator device display-name override** — `███████░░░ 67%`
+  - [x] Implement elevated GET /Devices/Options and name-only POST /Devices/Options with a separate persistent custom label that never changes device ID, original device name or token grants — src/auth.rs registered_device_options/rename_registered_device; src/device_api.rs device_options/update_device_options; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions
+  - [x] Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable device ID, no token disruption, inventory projection and restart persistence — GitHub Actions 40051766079 — native HTTP, Rust unit, formatting, Clippy and pinned matrix checks passed
+  - [ ] Full upstream DeviceOptionsDto numeric Id, clearing custom names, multi-device administration and unmodified client acceptance
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 

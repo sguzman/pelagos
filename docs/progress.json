@@ -3175,6 +3175,72 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T519",
+              "emoji": "📺",
+              "name": "Privileged persistent Jellyfin device directory and indexed info lookup",
+              "checks": [
+                {
+                  "title": "Register authenticated client-supplied device IDs in Pelagos-only SQLite and implement elevated GET /Devices and /Devices/Info with optional user filter, credential-redacted DeviceInfoDto and live capability projection",
+                  "passed": true,
+                  "evidence": "src/auth.rs pelagos_devices/list_registered_devices/registered_device_info; src/device_api.rs; pinned Jellyfin v12.3 DevicesController.GetDevices/GetDeviceInfo"
+                },
+                {
+                  "title": "Native HTTP suite verifies admin/ordinary/anonymous boundaries, deduplication, stable lookup, user filter, missing/unregistered IDs, token redaction, restart persistence, and active capability projection",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051326692 and 40051766079 — complete formatting, Clippy, HTTP/unit tests and upstream/roadmap gates passed"
+                },
+                {
+                  "title": "Full upstream device activity, numeric DTO IDs, metadata semantics and actual unmodified client compatibility accepted",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T520",
+              "emoji": "🚪",
+              "name": "Administrator single-device logout with transactional session revocation",
+              "checks": [
+                {
+                  "title": "Implement pinned DELETE /Devices strict one-id subset that revokes all sessions for a known registered device in one authentication DB transaction without erasing registration or unrelated tokens",
+                  "passed": true,
+                  "evidence": "src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device; pinned Jellyfin v12.3 DevicesController.DeleteDevice"
+                },
+                {
+                  "title": "Native HTTP CI verifies anonymous/member denial, missing and unknown IDs, sibling-session invalidation, other-device isolation, registration persistence and new login after revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051766079 — complete Rust tests, formatting, Clippy, ledger and pinned upstream checks passed"
+                },
+                {
+                  "title": "Upstream multi-device query arrays, concurrent session race testing and unmodified device-management client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T521",
+              "emoji": "✏️",
+              "name": "Durable administrator device display-name override",
+              "checks": [
+                {
+                  "title": "Implement elevated GET /Devices/Options and name-only POST /Devices/Options with a separate persistent custom label that never changes device ID, original device name or token grants",
+                  "passed": true,
+                  "evidence": "src/auth.rs registered_device_options/rename_registered_device; src/device_api.rs device_options/update_device_options; pinned v12.3 DevicesController.GetDeviceOptions/UpdateDeviceOptions"
+                },
+                {
+                  "title": "Native CI verifies authorization, invalid/unsupported JSON, unknown devices, stable device ID, no token disruption, inventory projection and restart persistence",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40051766079 — native HTTP, Rust unit, formatting, Clippy and pinned matrix checks passed"
+                },
+                {
+                  "title": "Full upstream DeviceOptionsDto numeric Id, clearing custom names, multi-device administration and unmodified client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
