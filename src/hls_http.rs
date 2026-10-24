@@ -45,6 +45,7 @@ struct Published {
     source_size: u64,
     source_modified: Option<std::time::SystemTime>,
     target_seconds: u32,
+    start_time_ticks: u64,
     private_root: PathBuf,
     main_playlist: String,
     master_playlist: String,
@@ -65,6 +66,7 @@ struct CacheLookup<'a> {
     size: u64,
     modified: Option<std::time::SystemTime>,
     target_seconds: u32,
+    start_time_ticks: u64,
 }
 
 /// Small private cache; a segment request holds its own Arc during eviction.
@@ -118,6 +120,7 @@ impl HlsRegistry {
                     && entry.source_size == query.size
                     && entry.source_modified == query.modified
                     && entry.target_seconds == query.target_seconds
+                    && entry.start_time_ticks == query.start_time_ticks
             })
             .cloned()
     }
@@ -185,6 +188,7 @@ fn set_private_headers(response: &mut Response, mime: &'static str, size: usize)
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PlaylistQuery {
     segment_length: Option<u32>,
+    start_time_ticks: Option<i64>,
 }
 
 async fn video_main(
@@ -235,6 +239,11 @@ async fn generate_hls_playlist(
     if !(1..=10).contains(&target_seconds) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let start_time_ticks = query.start_time_ticks.unwrap_or(0);
+    if !(0..=6_000_000_000).contains(&start_time_ticks) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let start_time_ticks = start_time_ticks as u64;
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
     let (source, kind) = playback::media_file(&state, item.clone(), scope).await?;
@@ -255,6 +264,7 @@ async fn generate_hls_playlist(
         size: source_size,
         modified: source_modified,
         target_seconds,
+        start_time_ticks,
     };
     if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
@@ -284,12 +294,13 @@ async fn generate_hls_playlist(
         path: private_root.clone(),
         armed: true,
     };
-    let artifact = hls::generate_segmented_vod(
+    let artifact = hls::generate_segmented_vod_from(
         &registry.controller,
         state.probe_executable(),
         &source,
         &private_root.join("bundle"),
         target_seconds,
+        start_time_ticks as f64 / 10_000_000.0,
     )
     .await
     .map_err(|err| match err.kind() {
@@ -344,6 +355,7 @@ async fn generate_hls_playlist(
         source_size,
         source_modified,
         target_seconds,
+        start_time_ticks,
         private_root,
         main_playlist: playlist,
         master_playlist,
@@ -580,6 +592,7 @@ mod tests {
                 source_size: 1,
                 source_modified: None,
                 target_seconds: 2,
+                start_time_ticks: 0,
                 private_root: root,
                 main_playlist: String::new(),
                 master_playlist: String::new(),
@@ -611,6 +624,7 @@ mod tests {
             size: 1,
             modified: None,
             target_seconds: 2,
+            start_time_ticks: 0,
         };
         assert_eq!(registry.cached(&key).unwrap().id, "playlist-2");
         assert!(
@@ -676,6 +690,7 @@ mod tests {
             source_size: 1,
             source_modified: None,
             target_seconds: 2,
+            start_time_ticks: 0,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
