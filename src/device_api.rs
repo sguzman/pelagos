@@ -58,7 +58,11 @@ async fn devices(
     Query(query): Query<DeviceListQuery>,
 ) -> Result<Json<DeviceResults>, StatusCode> {
     let dir = administrator_state(state, headers).await?;
-    if query.user_id.as_deref().is_some_and(|id| id.is_empty() || id.len() > 128) {
+    if query
+        .user_id
+        .as_deref()
+        .is_some_and(|id| id.is_empty() || id.len() > 128)
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     let devices = tokio::task::spawn_blocking(move || {
