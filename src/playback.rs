@@ -365,10 +365,12 @@ fn profile_allows_direct_file(
             return Ok(false);
         }
     }
-    let rules = object
-        .get("DirectPlayProfiles")
-        .and_then(Value::as_array)
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let Some(raw_rules) = object.get("DirectPlayProfiles") else {
+        // Upstream DeviceProfile defaults this array to empty. A profile
+        // without any direct-play rules is valid but cannot use static files.
+        return Ok(false);
+    };
+    let rules = raw_rules.as_array().ok_or(StatusCode::BAD_REQUEST)?;
     if rules.len() > 64 {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -384,17 +386,30 @@ fn profile_allows_direct_file(
         {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let kind = properties
-            .get("Type")
-            .and_then(Value::as_str)
-            .ok_or(StatusCode::BAD_REQUEST)?;
+        // DlnaProfileType defaults to Audio (0). JSON enum values can be
+        // written as names or their pinned integer discriminants.
+        let kind = match properties.get("Type") {
+            None => "Audio",
+            Some(Value::String(s)) => s.as_str(),
+            Some(Value::Number(n)) => match n.as_i64() {
+                Some(0) => "Audio",
+                Some(1) => "Video",
+                Some(2) => "Photo",
+                Some(3) => "Subtitle",
+                Some(4) => "Lyric",
+                _ => return Err(StatusCode::BAD_REQUEST),
+            },
+            _ => return Err(StatusCode::BAD_REQUEST),
+        };
         if !matches!(kind, "Video" | "Audio" | "Photo" | "Subtitle" | "Lyric") {
             return Err(StatusCode::BAD_REQUEST);
         }
+        // DirectPlayProfile.Container is initialized to an empty wildcard.
         let container = properties
             .get("Container")
-            .and_then(Value::as_str)
-            .ok_or(StatusCode::BAD_REQUEST)?;
+            .map(|value| value.as_str().ok_or(StatusCode::BAD_REQUEST))
+            .transpose()?
+            .unwrap_or("");
         let audio = properties
             .get("AudioCodec")
             .filter(|v| !v.is_null())
