@@ -29,6 +29,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/New", post(create_account))
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id))
+        .route("/Users/{user_id}/Policy", post(update_user_policy))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         // Public account listing intentionally discloses no usernames yet.
@@ -71,6 +72,41 @@ async fn users(
         entries.retain(|user| user.policy.is_disabled == disabled);
     }
     Ok(Json(entries))
+}
+
+/// Deliberately strict subset of the pinned Jellyfin UserPolicy object.
+/// The full policy has many more fields and is not currently implemented.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct DisabledPolicyPatch {
+    is_disabled: bool,
+}
+
+async fn update_user_policy(
+    State(state): State<Arc<AppState>>,
+    RoutePath(user_id): RoutePath<String>,
+    headers: HeaderMap,
+    Json(patch): Json<DisabledPolicyPatch>,
+) -> Result<StatusCode, StatusCode> {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    if !current.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if user_id.len() > 128 || user_id.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state_dir(&state)?;
+    match tokio::task::spawn_blocking(move || {
+        auth::set_account_disabled(&dir, &user_id, patch.is_disabled)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        auth::AccountDisabledUpdate::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::AccountDisabledUpdate::NotFound => Err(StatusCode::NOT_FOUND),
+        auth::AccountDisabledUpdate::AdministratorProtected => Err(StatusCode::CONFLICT),
+    }
 }
 
 /// Pinned Jellyfin CreateUserByName subset. HTTP cannot bootstrap the first

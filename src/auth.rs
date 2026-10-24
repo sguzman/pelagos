@@ -180,6 +180,50 @@ pub fn list_users(state_dir: &Path, server_id: &str) -> Result<Vec<User>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+/// Restrict the first policy mutation to disabling/enabling ordinary accounts.
+/// Revoking all outstanding tokens in the same transaction makes disabling
+/// immediately effective, including for previously authenticated clients.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountDisabledUpdate {
+    Updated,
+    NotFound,
+    AdministratorProtected,
+}
+
+pub fn set_account_disabled(
+    state_dir: &Path,
+    user_id: &str,
+    disabled: bool,
+) -> Result<AccountDisabledUpdate> {
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let is_admin: Option<bool> = tx
+        .query_row(
+            "SELECT is_admin FROM pelagos_users WHERE id=?1",
+            params![user_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(is_admin) = is_admin else {
+        return Ok(AccountDisabledUpdate::NotFound);
+    };
+    if is_admin {
+        return Ok(AccountDisabledUpdate::AdministratorProtected);
+    }
+    tx.execute(
+        "UPDATE pelagos_users SET disabled=?1 WHERE id=?2",
+        params![disabled, user_id],
+    )?;
+    if disabled {
+        tx.execute(
+            "DELETE FROM pelagos_tokens WHERE user_id=?1",
+            params![user_id],
+        )?;
+    }
+    tx.commit()?;
+    Ok(AccountDisabledUpdate::Updated)
+}
+
 /// Bootstrap through the CLI; no anonymous HTTP route may create an administrator.
 pub fn create_user(state_dir: &Path, name: &str, password: &str) -> Result<User> {
     if !valid_username(name) {
