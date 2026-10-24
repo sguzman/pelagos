@@ -841,6 +841,66 @@ pub fn revoke_registered_device_sessions(
     Ok(DeviceSessionRevocation::Revoked)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeviceOptionsDto {
+    pub device_id: String,
+    pub custom_name: Option<String>,
+}
+
+/// Sparse pinned DeviceOptionsDto: the upstream numeric database Id is not
+/// exposed because a stable equivalent has not yet been migrated to Pelagos.
+pub fn registered_device_options(
+    state_dir: &Path,
+    device_id: &str,
+) -> Result<Option<DeviceOptionsDto>> {
+    let db = database(state_dir)?;
+    Ok(db
+        .query_row(
+            "SELECT custom_name FROM pelagos_devices WHERE id=?1",
+            params![device_id],
+            |row| {
+                Ok(DeviceOptionsDto {
+                    device_id: device_id.to_owned(),
+                    custom_name: row.get(0)?,
+                })
+            },
+        )
+        .optional()?)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceCustomNameUpdate {
+    Updated,
+    NotFound,
+}
+
+/// Administrator custom display labels are independent of the device ID,
+/// last observed device name, token state and client-provided app metadata.
+pub fn rename_registered_device(
+    state_dir: &Path,
+    device_id: &str,
+    custom_name: &str,
+) -> Result<DeviceCustomNameUpdate> {
+    if custom_name.is_empty()
+        || custom_name.len() > 128
+        || custom_name.trim() != custom_name
+        || custom_name.chars().any(char::is_control)
+    {
+        return Err("invalid custom device name".into());
+    }
+    let db = database(state_dir)?;
+    let changed = db.execute(
+        "UPDATE pelagos_devices SET custom_name=?1 WHERE id=?2",
+        params![custom_name, device_id],
+    )?;
+    Ok(if changed == 0 {
+        DeviceCustomNameUpdate::NotFound
+    } else {
+        DeviceCustomNameUpdate::Updated
+    })
+}
+
 /// Persist a separate download permission. A readable library alone never
 /// authorizes downloading; the administrator role always retains its implicit
 /// local download grant. Changes apply to already-issued tokens immediately.
