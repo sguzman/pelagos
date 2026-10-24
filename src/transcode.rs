@@ -642,6 +642,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bounded_window_jobs_validate_offsets_and_retain_stdout_guard() {
+        let (_temp, executable, source, output) = fixture(
+            "printf 'WIN:'; printf '%s|' \"$@\"",
+        );
+        let controller =
+            TranscodeController::new(executable, 1, Duration::from_secs(3), 2048).unwrap();
+        for (start, duration) in [
+            (f64::NAN, 2.0),
+            (0.0, 0.0),
+            (-1.0, 2.0),
+            (0.0, f64::INFINITY),
+            (0.0, 30.1),
+            (86_399.0, 2.0),
+        ] {
+            assert_eq!(
+                controller
+                    .try_run_window(&source, &output, start, duration)
+                    .await
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::InvalidInput
+            );
+            assert!(!output.exists());
+        }
+        let bytes = controller
+            .try_run_window(&source, &output, 2.125, 1.5)
+            .await
+            .unwrap();
+        let data = stdfs::read(&output).unwrap();
+        assert_eq!(bytes, data.len() as u64);
+        let args = String::from_utf8(data).unwrap();
+        assert!(args.contains("-ss|2.125|"));
+        assert!(args.contains("-t|1.500|"));
+        assert!(args.contains("-avoid_negative_ts|make_zero|"));
+        assert_eq!(controller.active_jobs(), 0);
+        assert_eq!(
+            controller
+                .try_run_window(&source, &output, 3.0, 1.0)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+    }
+
+    #[tokio::test]
     async fn encoder_targets_accept_only_bounded_numeric_bitrates() {
         let (_temp, executable, source, output) = fixture("printf 'MPEGTS'");
         for invalid in [
