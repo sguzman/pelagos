@@ -256,26 +256,21 @@ async fn audio_master(
 async fn reauthorize_publication(
     state: &Arc<AppState>,
     headers: &HeaderMap,
-    token: &str,
-    item: &str,
-    expected_kind: &str,
-    original_source: &Path,
-    original_size: u64,
-    original_modified: Option<std::time::SystemTime>,
+    query: &CacheLookup<'_>,
 ) -> Result<(), StatusCode> {
     let (_, current_token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
-    if current_token != token {
+    if current_token != query.token {
         return Err(StatusCode::UNAUTHORIZED);
     }
     let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
-    let (source, kind) = playback::media_file(state, item.to_owned(), scope).await?;
-    if kind != expected_kind || source != original_source {
+    let (source, kind) = playback::media_file(state, query.item.to_owned(), scope).await?;
+    if kind != query.kind || source != query.source {
         return Err(StatusCode::NOT_FOUND);
     }
     let metadata = tokio::fs::metadata(source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
-    if metadata.len() != original_size || metadata.modified().ok() != original_modified {
+    if metadata.len() != query.size || metadata.modified().ok() != query.modified {
         return Err(StatusCode::NOT_FOUND);
     }
     Ok(())
@@ -329,17 +324,7 @@ async fn generate_hls_playlist(
     }
     // Admission is reserved before touching any private output path.
     let _permit = registry.acquire_generation().await?;
-    reauthorize_publication(
-        &state,
-        &headers,
-        &token,
-        &item,
-        expected_kind,
-        &source,
-        source_size,
-        source_modified,
-    )
-    .await?;
+    reauthorize_publication(&state, &headers, &cache_key).await?;
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
     if let Some(existing) = registry.cached(&cache_key) {
@@ -374,17 +359,7 @@ async fn generate_hls_playlist(
     // FFmpeg and FFprobe may have run for most of the 120-second budget.
     // Recheck all session, library, and original media revision constraints
     // before publishing even a successfully verified transcode.
-    reauthorize_publication(
-        &state,
-        &headers,
-        &token,
-        &item,
-        expected_kind,
-        &source,
-        source_size,
-        source_modified,
-    )
-    .await?;
+    reauthorize_publication(&state, &headers, &cache_key).await?;
     let mut playlist = tokio::fs::read_to_string(&artifact.playlist_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -735,12 +710,16 @@ mod tests {
             reauthorize_publication(
                 &state,
                 &headers,
-                &token,
-                &id,
-                "video",
-                &original_source,
-                original.len(),
-                original.modified().ok(),
+                &CacheLookup {
+                    item: &id,
+                    kind: "video",
+                    token: &token,
+                    source: &original_source,
+                    size: original.len(),
+                    modified: original.modified().ok(),
+                    target_seconds: 2,
+                    start_time_ticks: 0,
+                },
             )
             .await,
             Ok(())
@@ -756,12 +735,16 @@ mod tests {
             reauthorize_publication(
                 &waiting_state,
                 &headers,
-                &token,
-                &id,
-                "video",
-                &original_source,
-                original.len(),
-                original.modified().ok(),
+                &CacheLookup {
+                    item: &id,
+                    kind: "video",
+                    token: &token,
+                    source: &original_source,
+                    size: original.len(),
+                    modified: original.modified().ok(),
+                    target_seconds: 2,
+                    start_time_ticks: 0,
+                },
             )
             .await
         });
@@ -799,12 +782,16 @@ mod tests {
             reauthorize_publication(
                 &state,
                 &fresh_headers,
-                &fresh.access_token,
-                &fresh_id,
-                "video",
-                &source,
-                expected.len(),
-                expected.modified().ok(),
+                &CacheLookup {
+                    item: &fresh_id,
+                    kind: "video",
+                    token: &fresh.access_token,
+                    source: &source,
+                    size: expected.len(),
+                    modified: expected.modified().ok(),
+                    target_seconds: 2,
+                    start_time_ticks: 0,
+                },
             )
             .await,
             Ok(())
@@ -814,12 +801,16 @@ mod tests {
             reauthorize_publication(
                 &state,
                 &fresh_headers,
-                &fresh.access_token,
-                &fresh_id,
-                "video",
-                &source,
-                expected.len(),
-                expected.modified().ok(),
+                &CacheLookup {
+                    item: &fresh_id,
+                    kind: "video",
+                    token: &fresh.access_token,
+                    source: &source,
+                    size: expected.len(),
+                    modified: expected.modified().ok(),
+                    target_seconds: 2,
+                    start_time_ticks: 0,
+                },
             )
             .await,
             Err(StatusCode::NOT_FOUND)
@@ -829,12 +820,16 @@ mod tests {
             reauthorize_publication(
                 &state,
                 &fresh_headers,
-                &fresh.access_token,
-                &fresh_id,
-                "video",
-                &source,
-                expected.len(),
-                expected.modified().ok(),
+                &CacheLookup {
+                    item: &fresh_id,
+                    kind: "video",
+                    token: &fresh.access_token,
+                    source: &source,
+                    size: expected.len(),
+                    modified: expected.modified().ok(),
+                    target_seconds: 2,
+                    start_time_ticks: 0,
+                },
             )
             .await,
             Err(StatusCode::UNAUTHORIZED)
