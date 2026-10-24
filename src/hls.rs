@@ -1179,15 +1179,16 @@ mod tests {
             "fake-ffprobe",
             r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_type":"audio","codec_name":"aac"}]}' ;; *) printf '%s' '{"format":{"duration":"4.0"},"streams":[{"codec_type":"audio","codec_name":"pcm_s16le"}]}' ;; esac"#,
         );
-        let controller = TranscodeController::new(
-            encoder,
-            1,
-            Duration::from_secs(4),
-            1024,
-        )
-        .unwrap();
-        let high = MpegTsQuality { video_kbps: 1200, audio_kbps: 128 };
-        let low = MpegTsQuality { video_kbps: 300, audio_kbps: 64 };
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(4), 1024).unwrap();
+        let high = MpegTsQuality {
+            video_kbps: 1200,
+            audio_kbps: 128,
+        };
+        let low = MpegTsQuality {
+            video_kbps: 300,
+            audio_kbps: 64,
+        };
         let dir = temp.path().join("adaptive");
         let result = generate_adaptive_segmented_vod(
             &controller,
@@ -1218,7 +1219,10 @@ mod tests {
         result.remove().unwrap();
         assert!(!dir.exists());
 
-        let bad_quality = MpegTsQuality { video_kbps: 200, audio_kbps: 96 };
+        let bad_quality = MpegTsQuality {
+            video_kbps: 200,
+            audio_kbps: 96,
+        };
         let rejected = temp.path().join("rejected");
         assert_eq!(
             generate_adaptive_segmented_vod(
