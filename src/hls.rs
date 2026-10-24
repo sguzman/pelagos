@@ -569,7 +569,7 @@ pub async fn generate_adaptive_segmented_vod_from(
         dir: output_dir.to_path_buf(),
         committed: false,
     };
-    let mut candidates = Vec::new();
+    let mut candidates: Vec<(u64, String, HlsSegmentedArtifact)> = Vec::new();
     for (index, quality) in qualities.iter().enumerate() {
         let name = format!("candidate{index:02}");
         let rendition = generate_segmented_vod_with_quality(
