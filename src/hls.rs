@@ -377,9 +377,11 @@ async fn generate_segmented_vod_with_quality(
                     .try_run_window_with_quality(source, &path, start, duration, target)
                     .await?
             }
-            None => controller
-                .try_run_window(source, &path, start, duration)
-                .await?,
+            None => {
+                controller
+                    .try_run_window(source, &path, start, duration)
+                    .await?
+            }
         };
         total_bytes = total_bytes.checked_add(size).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
