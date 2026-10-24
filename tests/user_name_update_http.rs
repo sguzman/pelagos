@@ -149,37 +149,34 @@ async fn administrator_account_rename_preserves_user_identity_sessions_and_permi
     assert_eq!(after["Name"], "Renamed Viewer");
     assert_eq!(after["Policy"]["IsAdministrator"], false);
     assert_eq!(after["Policy"]["IsDisabled"], false);
-    let seen_by_admin = json_body(
-        call(
-            &router,
-            "GET",
-            &route,
-            Some(&admin.access_token),
-            json!({}),
-        )
-        .await,
-    )
-    .await;
+    let seen_by_admin =
+        json_body(call(&router, "GET", &route, Some(&admin.access_token), json!({})).await).await;
     assert_eq!(after, seen_by_admin);
-    assert!(auth::visible_library_roots(
-        &state,
-        &auth::identify(&state, &viewer.access_token, "server")
-            .unwrap()
-            .unwrap(),
-    )
-    .unwrap()
-    .unwrap()
-    .contains(&std::fs::canonicalize(&root).unwrap().to_string_lossy().into_owned()));
+    let identified = auth::identify(&state, &viewer.access_token, "server")
+        .unwrap()
+        .unwrap();
+    let allowed = auth::visible_library_roots(&state, &identified)
+        .unwrap()
+        .unwrap();
+    let canonical = std::fs::canonicalize(&root)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert!(allowed.contains(&canonical));
 
     assert!(
         auth::authenticate(&state, "viewer", "rename-user-viewer-password", "server")
             .unwrap()
             .is_none()
     );
-    let new_login =
-        auth::authenticate(&state, "Renamed Viewer", "rename-user-viewer-password", "server")
-            .unwrap()
-            .unwrap();
+    let new_login = auth::authenticate(
+        &state,
+        "Renamed Viewer",
+        "rename-user-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(new_login.user.id, viewer.user.id);
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
