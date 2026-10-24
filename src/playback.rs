@@ -638,12 +638,16 @@ mod tests {
         let body: PlaybackRequest = serde_json::from_value(json!({
             "UserId": "u1", "EnableDirectPlay": false,
             "StartTimeTicks": 100,
-            "MediaSourceId": "source-a"
+            "MediaSourceId": "source-a",
+            "MaxAudioChannels": 1,
+            "MaxStreamingBitrate": 2_000_000
         }))
         .unwrap();
         let query: PlaybackQuery = serde_json::from_value(json!({
             "userId": "u2", "enableDirectPlay": true,
-            "startTimeTicks": 0
+            "startTimeTicks": 0,
+            "maxAudioChannels": 2,
+            "maxStreamingBitrate": 4_000_000
         }))
         .unwrap();
         let merged = query.apply(body);
@@ -651,6 +655,8 @@ mod tests {
         assert_eq!(merged.enable_direct_play, Some(true));
         assert_eq!(merged.start_time_ticks, Some(0));
         assert_eq!(merged.media_source_id.as_deref(), Some("source-a"));
+        assert_eq!(merged.max_audio_channels, Some(2));
+        assert_eq!(merged.max_streaming_bitrate, Some(4_000_000));
     }
 
     #[test]
