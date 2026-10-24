@@ -30,6 +30,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id).post(update_user_name))
         .route("/Users/{user_id}/Policy", post(update_user_policy))
+        .route("/Users/Password", post(change_password))
         .route("/Users/{user_id}/Password", post(admin_reset_password))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
@@ -113,6 +114,65 @@ async fn update_user_name(
         auth::UserNameUpdate::Updated => Ok(StatusCode::NO_CONTENT),
         auth::UserNameUpdate::NotFound => Err(StatusCode::NOT_FOUND),
         auth::UserNameUpdate::Conflict => Err(StatusCode::CONFLICT),
+    }
+}
+
+/// Pinned POST /Users/Password subset: a logged-in user may change
+/// their own password after supplying the current password. ResetPassword
+/// and changes to another account are not silently treated as self-updates.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SelfPasswordQuery {
+    user_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct SelfPasswordPatch {
+    current_pw: String,
+    new_pw: String,
+    #[serde(default)]
+    reset_password: bool,
+}
+
+async fn change_password(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<SelfPasswordQuery>,
+    Json(body): Json<SelfPasswordPatch>,
+) -> Result<StatusCode, StatusCode> {
+    let (user, token) = authenticated(state.clone(), headers).await?;
+    if query
+        .user_id
+        .as_deref()
+        .is_some_and(|id| id != user.id.as_str())
+    {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if body.reset_password {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    if !(12..=1024).contains(&body.new_pw.len()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state_dir(&state)?;
+    let user_id = user.id;
+    let outcome = tokio::task::spawn_blocking(move || {
+        auth::change_own_password(
+            &dir,
+            &user_id,
+            &token,
+            &body.current_pw,
+            &body.new_pw,
+        )
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match outcome {
+        auth::OwnPasswordChange::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::OwnPasswordChange::InvalidCurrentPassword => Err(StatusCode::FORBIDDEN),
+        auth::OwnPasswordChange::StaleSession => Err(StatusCode::UNAUTHORIZED),
     }
 }
 
