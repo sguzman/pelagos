@@ -836,6 +836,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T138",
+              "emoji": "📺",
+              "name": "Full-form Jellyfin client capabilities JSON subset",
+              "checks": [
+                {
+                  "title": "Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto"
+                },
+                {
+                  "title": "CI covers authenticated full-form request, unsupported DeviceProfile, cross-session denial, session metadata persistence and no fabricated remote-control support",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40047568095 — full Rust formatting, Clippy, native HTTP/unit tests, roadmap ledger and pinned source/controller contract gates passed"
+                },
+                {
+                  "title": "DeviceProfile/URL metadata, complete upstream DTO validation, unmodified Jellyfin TV negotiation and actual remote-control/media functionality accepted",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
