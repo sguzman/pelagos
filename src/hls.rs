@@ -28,6 +28,61 @@ impl Drop for PartialBundle {
     }
 }
 
+/// Metadata for a completed, independently decodable HLS rendition.
+/// Bandwidth must come from measured or safely bounded media output, not a
+/// guessed codec profile. This does not create or transcode the rendition.
+#[derive(Debug, Clone)]
+pub struct HlsVariant {
+    pub playlist_name: String,
+    pub bandwidth: u64,
+    pub resolution: Option<(u32, u32)>,
+}
+
+/// Render only trusted relative variant playlists and increasing, measured
+/// bandwidth values. No absolute URLs, path traversal or attacker-authored
+/// playlist paths can enter this HLS master playlist.
+pub fn render_vod_master_playlist(variants: &[HlsVariant]) -> io::Result<String> {
+    if variants.is_empty() || variants.len() > 8 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid variant count"));
+    }
+    let mut master = String::from("#EXTM3U\n#EXT-X-VERSION:3\n");
+    let mut previous_bandwidth = 0_u64;
+    for (index, variant) in variants.iter().enumerate() {
+        let expected = format!("variant{index:02}/index.m3u8");
+        if variant.playlist_name != expected
+            || variant.bandwidth == 0
+            || variant.bandwidth > 1_000_000_000
+            || variant.bandwidth <= previous_bandwidth
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid HLS rendition path or bandwidth order",
+            ));
+        }
+        if let Some((width, height)) = variant.resolution {
+            if !(16..=16_384).contains(&width) || !(16..=16_384).contains(&height) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "invalid HLS rendition resolution",
+                ));
+            }
+            master.push_str(&format!(
+                "#EXT-X-STREAM-INF:BANDWIDTH={},RESOLUTION={width}x{height}\n",
+                variant.bandwidth
+            ));
+        } else {
+            master.push_str(&format!(
+                "#EXT-X-STREAM-INF:BANDWIDTH={}\n",
+                variant.bandwidth
+            ));
+        }
+        master.push_str(&variant.playlist_name);
+        master.push('\n');
+        previous_bandwidth = variant.bandwidth;
+    }
+    Ok(master)
+}
+
 #[derive(Debug, Clone)]
 pub struct HlsVodArtifact {
     pub playlist_path: PathBuf,
@@ -242,6 +297,41 @@ mod tests {
         job.abort();
         assert!(job.await.is_err());
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn hls_master_validates_bitrate_order_and_fixed_relative_variant_uris() {
+        let variants = vec![
+            HlsVariant {
+                playlist_name: "variant00/index.m3u8".to_owned(),
+                bandwidth: 100_000,
+                resolution: None,
+            },
+            HlsVariant {
+                playlist_name: "variant01/index.m3u8".to_owned(),
+                bandwidth: 1_500_000,
+                resolution: Some((1280, 720)),
+            },
+        ];
+        let manifest = render_vod_master_playlist(&variants).unwrap();
+        assert_eq!(
+            manifest,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nvariant00/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720\nvariant01/index.m3u8\n"
+        );
+        for invalid in [
+            vec![],
+            vec![HlsVariant { playlist_name: "../index.m3u8".to_owned(), ..variants[0].clone() }],
+            vec![HlsVariant { bandwidth: 0, ..variants[0].clone() }],
+            vec![HlsVariant { bandwidth: 1_000_000_001, ..variants[0].clone() }],
+            vec![HlsVariant { resolution: Some((1, 720)), ..variants[0].clone() }],
+            vec![variants[1].clone(), variants[0].clone()],
+            vec![variants[0].clone(), variants[0].clone()],
+        ] {
+            assert_eq!(
+                render_vod_master_playlist(&invalid).unwrap_err().kind(),
+                io::ErrorKind::InvalidInput
+            );
+        }
     }
 
     #[tokio::test]
