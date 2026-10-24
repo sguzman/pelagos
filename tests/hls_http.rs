@@ -202,7 +202,9 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert!(media_name.ends_with("/index.m3u8"));
     let media_url = format!("/Videos/{id}/{media_name}");
     assert_eq!(
-        request(&app, "GET", &media_url, Some(&admin)).await.status(),
+        request(&app, "GET", &media_url, Some(&admin))
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
     let media_response = request(&app, "GET", &media_url, Some(&viewer)).await;
@@ -215,16 +217,27 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let parent = media_url.strip_suffix("index.m3u8").unwrap();
     let second_segment = format!("{parent}1.ts");
     assert_eq!(
-        request(&app, "GET", &second_segment, Some(&viewer)).await.status(),
+        request(&app, "GET", &second_segment, Some(&viewer))
+            .await
+            .status(),
         StatusCode::OK
     );
     let media_head = request(&app, "HEAD", &media_url, Some(&viewer)).await;
     assert_eq!(media_head.status(), StatusCode::OK);
     assert_eq!(
-        media_head.headers()[header::CONTENT_LENGTH].to_str().unwrap().parse::<usize>().unwrap(),
+        media_head.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap(),
         media_text.len()
     );
-    assert!(to_bytes(media_head.into_body(), 1_024).await.unwrap().is_empty());
+    assert!(
+        to_bytes(media_head.into_body(), 1_024)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         request(&app, "GET", first_path, Some(&viewer))
@@ -256,5 +269,9 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
         .unwrap();
     assert!(!Path::new(&std::env::temp_dir().join(format!("pelagos-hls-{playlist_id}"))).exists());
     let master_id = media_name.split('/').nth(1).unwrap();
-    assert!(!std::env::temp_dir().join(format!("pelagos-hls-{master_id}")).exists());
+    assert!(
+        !std::env::temp_dir()
+            .join(format!("pelagos-hls-{master_id}"))
+            .exists()
+    );
 }
