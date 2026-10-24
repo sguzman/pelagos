@@ -74,7 +74,9 @@ impl HlsRegistry {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
-            .find(|entry| entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest)
+            .find(|entry| {
+                entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest
+            })
             .cloned()
     }
 
@@ -415,14 +417,24 @@ mod tests {
                 segments: Vec::new(),
             }));
         }
-        assert!(registry.lookup("playlist-0", "media-1", "video", owner).is_some());
-        assert!(registry.lookup("playlist-0", "media-2", "video", owner).is_none());
+        assert!(
+            registry
+                .lookup("playlist-0", "media-1", "video", owner)
+                .is_some()
+        );
+        assert!(
+            registry
+                .lookup("playlist-0", "media-2", "video", owner)
+                .is_none()
+        );
         assert!(
             registry
                 .lookup("playlist-0", "media-1", "video", "other-token")
                 .is_none()
         );
-        let in_flight = registry.lookup("playlist-0", "media-1", "video", owner).unwrap();
+        let in_flight = registry
+            .lookup("playlist-0", "media-1", "video", owner)
+            .unwrap();
         let fourth_root = temp.path().join("session-3");
         fs::create_dir(&fourth_root).unwrap();
         registry.publish(Arc::new(Published {
@@ -435,11 +447,19 @@ mod tests {
             media_playlist: String::new(),
             segments: Vec::new(),
         }));
-        assert!(registry.lookup("playlist-0", "media-1", "video", owner).is_none());
+        assert!(
+            registry
+                .lookup("playlist-0", "media-1", "video", owner)
+                .is_none()
+        );
         assert!(first_root.exists());
         drop(in_flight);
         assert!(!first_root.exists());
-        assert!(registry.lookup("playlist-3", "media-1", "video", owner).is_some());
+        assert!(
+            registry
+                .lookup("playlist-3", "media-1", "video", owner)
+                .is_some()
+        );
         drop(registry);
         for index in 1..=3 {
             assert!(!temp.path().join(format!("session-{index}")).exists());
