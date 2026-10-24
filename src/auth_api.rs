@@ -28,7 +28,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users", get(users))
         .route("/Users/New", post(create_account))
         .route("/Users/Me", get(me))
-        .route("/Users/{user_id}", get(user_by_id))
+        .route("/Users/{user_id}", get(user_by_id).post(update_user_name))
         .route("/Users/{user_id}/Policy", post(update_user_policy))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
@@ -72,6 +72,49 @@ async fn users(
         entries.retain(|user| user.policy.is_disabled == disabled);
     }
     Ok(Json(entries))
+}
+
+/// A bounded implementation of legacy POST /Users/{userId}: only Name
+/// can be changed. Refuse all unimplemented UserDto fields rather than
+/// silently mutating only part of an upstream account update.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct UserNamePatch {
+    name: String,
+}
+
+async fn update_user_name(
+    State(state): State<Arc<AppState>>,
+    RoutePath(user_id): RoutePath<String>,
+    headers: HeaderMap,
+    Json(patch): Json<UserNamePatch>,
+) -> Result<StatusCode, StatusCode> {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    if !current.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if user_id.is_empty() || user_id.len() > 128 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if patch.name.is_empty()
+        || patch.name.len() > 128
+        || patch.name.trim() != patch.name
+        || patch.name.chars().any(char::is_control)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state_dir(&state)?;
+    match tokio::task::spawn_blocking(move || {
+        auth::rename_user(&dir, &user_id, &patch.name)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        auth::UserNameUpdate::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::UserNameUpdate::NotFound => Err(StatusCode::NOT_FOUND),
+        auth::UserNameUpdate::Conflict => Err(StatusCode::CONFLICT),
+    }
 }
 
 /// Deliberately strict subset of the pinned Jellyfin UserPolicy object.

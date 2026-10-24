@@ -180,6 +180,48 @@ pub fn list_users(state_dir: &Path, server_id: &str) -> Result<Vec<User>> {
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UserNameUpdate {
+    Updated,
+    NotFound,
+    Conflict,
+}
+
+/// Change an account's login name without changing its identity, grants,
+/// password hash or existing sessions. Normalize in the same transaction.
+pub fn rename_user(
+    state_dir: &Path,
+    user_id: &str,
+    new_name: &str,
+) -> Result<UserNameUpdate> {
+    if !valid_username(new_name) {
+        return Err("invalid username".into());
+    }
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pelagos_users WHERE id=?1)",
+        params![user_id],
+        |row| row.get(0),
+    )?;
+    if !exists {
+        return Ok(UserNameUpdate::NotFound);
+    }
+    let changed = tx.execute(
+        "UPDATE pelagos_users SET username=?1, username_key=?2
+         WHERE id=?3 AND NOT EXISTS(
+             SELECT 1 FROM pelagos_users
+             WHERE username_key=?2 AND id<>?3
+         )",
+        params![new_name, new_name.to_lowercase(), user_id],
+    )?;
+    if changed == 0 {
+        return Ok(UserNameUpdate::Conflict);
+    }
+    tx.commit()?;
+    Ok(UserNameUpdate::Updated)
+}
+
 /// Read one account without ever projecting password material.
 pub fn find_user(state_dir: &Path, user_id: &str, server_id: &str) -> Result<Option<User>> {
     let db = database(state_dir)?;
