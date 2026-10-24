@@ -200,3 +200,69 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
         .unwrap();
     assert_eq!(user.id, viewer.user.id);
 }
+
+#[tokio::test]
+async fn existing_device_without_numeric_options_mapping_is_lazily_migrated() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    auth::create_user(&state, "admin", "device-migration-admin-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "device-migration-admin-password", "server")
+        .unwrap()
+        .unwrap();
+    auth::authenticate_with_client(
+        &state,
+        "admin",
+        "device-migration-admin-password",
+        "server",
+        ClientMetadata {
+            client: Some("Jellyfin web".to_owned()),
+            device_id: Some("legacy-device".to_owned()),
+            device_name: Some("Old Browser".to_owned()),
+            application_version: Some("1.0".to_owned()),
+        },
+    )
+    .unwrap()
+    .unwrap();
+    let db = rusqlite::Connection::open(state.join("pelagos-auth.sqlite3")).unwrap();
+    db.execute(
+        "DELETE FROM pelagos_device_option_ids WHERE device_id=?1",
+        ["legacy-device"],
+    )
+    .unwrap();
+    drop(db);
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let endpoint = "/Devices/Options?id=legacy-device";
+    let first = response_json(
+        call(
+            &router,
+            "GET",
+            endpoint,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
+    )
+    .await;
+    let numeric_id = first["Id"].as_i64().unwrap();
+    assert!(numeric_id > 0);
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state,
+    )));
+    let second = response_json(
+        call(
+            &restarted,
+            "GET",
+            endpoint,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(second["Id"], numeric_id);
+    assert_eq!(second["DeviceId"], "legacy-device");
+}
