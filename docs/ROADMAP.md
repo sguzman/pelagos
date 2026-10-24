@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 34%` across 151 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 35%` across 154 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -565,11 +565,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `███░░░░░░░ 27%`
+## 🛡️ M5 — Administration, extensibility and migration — `███░░░░░░░ 34%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `█████░░░░░ 45%`
+### 🛠️ P15 — Admin and accounts — `█████░░░░░ 50%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -607,6 +607,18 @@
   - [x] Implement pinned POST VirtualFolders/Name subset with v4 SQLite migration and atomic uniqueness validation; project renamed labels to admin inventory, library MediaFolders and user views without changing source paths or existing grants — src/catalog.rs LibraryEntry, rename_by_name and schema v4; src/catalog_api.rs rename_virtual_folder and accessible_nodes; pinned Jellyfin v12.3 LibraryStructureController.RenameVirtualFolder
   - [x] Rust CI verifies administrator-only rename, name conflicts, invalid paths, persistence/restart, unchanged physical paths and item IDs, old/new deletion semantics, existing grants and v3-to-v4 migration — GitHub Actions 40042434026: Rust unit and HTTP integration suites, cargo fmt, Clippy, roadmap and pinned upstream checks passed
   - [ ] Upstream Jellyfin metadata/ID rename equivalence, concurrent mutations, full admin UI and unmodified Smart TV client acceptance
+- 👥 **T509 — Administrator-only Jellyfin users directory with disabled account filters** — `███████░░░ 67%`
+  - [x] Read bounded user DTOs from the private account registry with administrator-only Users inventory, hidden/disabled filtering and no credential material — src/auth.rs list_users; src/auth_api.rs users; pinned Jellyfin v12.3 GET /Users contract
+  - [x] Native HTTP regressions cover authenticated administrator directory access, ordinary-user denial, password/redacted DTO fields, disabled filter and restart — GitHub Actions 40044007701 and 40044882895: full Rust unit/HTTP tests, formatting, Clippy and pinned checks passed
+  - [ ] Full Jellyfin Users DTO/filter parity and real unmodified client acceptance
+- 🔐 **T513 — Administrator disabled-state user policy changes and immediate token revocation** — `███████░░░ 67%`
+  - [x] Implement strict disabled-state subset of pinned POST Users/{userId}/Policy that refuses unsupported policy fields, protects administrators, and removes user sessions transactionally on disable — src/auth.rs set_account_disabled; src/auth_api.rs update_user_policy; pinned Jellyfin v12.3 UserController.UpdateUserPolicy
+  - [x] Native HTTP suites verify anonymous/member denial, administrator protection, disabled login, immediate old-session revocation, re-enable without token resurrection and durable filters — GitHub Actions 40044766690 and 40044882895: formatting, Clippy, unit/HTTP suites and pinned gates passed
+  - [ ] Complete Jellyfin policy controls, upstream differential behavior and unmodified real-client acceptance
+- 🪪 **T514 — Administrator read-by-ID account lookup without exposing other accounts to ordinary users** — `███████░░░ 67%`
+  - [x] Expose a bounded credential-free User DTO for privileged GET Users/{userId} while preserving ordinary self-only lookup, 404 denial and disabled-state visibility for administrators — src/auth.rs find_user; src/auth_api.rs user_by_id; pinned Jellyfin v12.3 UserController.GetUserById
+  - [x] Native Rust HTTP checks verify self/current, privileged other-account lookup, unauthorized/missing requests, revocation, disabled account visibility, and no password material — GitHub Actions 40044882895: complete Rust unit/HTTP tests, Clippy, formatting, source matrix and evidence-backed checks passed
+  - [ ] Full Jellyfin UserDto fields, authorization differential tests and unmodified TV/admin client acceptance
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 

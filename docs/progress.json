@@ -2977,6 +2977,72 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T509",
+              "emoji": "👥",
+              "name": "Administrator-only Jellyfin users directory with disabled account filters",
+              "checks": [
+                {
+                  "title": "Read bounded user DTOs from the private account registry with administrator-only Users inventory, hidden/disabled filtering and no credential material",
+                  "passed": true,
+                  "evidence": "src/auth.rs list_users; src/auth_api.rs users; pinned Jellyfin v12.3 GET /Users contract"
+                },
+                {
+                  "title": "Native HTTP regressions cover authenticated administrator directory access, ordinary-user denial, password/redacted DTO fields, disabled filter and restart",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40044007701 and 40044882895: full Rust unit/HTTP tests, formatting, Clippy and pinned checks passed"
+                },
+                {
+                  "title": "Full Jellyfin Users DTO/filter parity and real unmodified client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T513",
+              "emoji": "🔐",
+              "name": "Administrator disabled-state user policy changes and immediate token revocation",
+              "checks": [
+                {
+                  "title": "Implement strict disabled-state subset of pinned POST Users/{userId}/Policy that refuses unsupported policy fields, protects administrators, and removes user sessions transactionally on disable",
+                  "passed": true,
+                  "evidence": "src/auth.rs set_account_disabled; src/auth_api.rs update_user_policy; pinned Jellyfin v12.3 UserController.UpdateUserPolicy"
+                },
+                {
+                  "title": "Native HTTP suites verify anonymous/member denial, administrator protection, disabled login, immediate old-session revocation, re-enable without token resurrection and durable filters",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40044766690 and 40044882895: formatting, Clippy, unit/HTTP suites and pinned gates passed"
+                },
+                {
+                  "title": "Complete Jellyfin policy controls, upstream differential behavior and unmodified real-client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
+            },
+            {
+              "id": "T514",
+              "emoji": "🪪",
+              "name": "Administrator read-by-ID account lookup without exposing other accounts to ordinary users",
+              "checks": [
+                {
+                  "title": "Expose a bounded credential-free User DTO for privileged GET Users/{userId} while preserving ordinary self-only lookup, 404 denial and disabled-state visibility for administrators",
+                  "passed": true,
+                  "evidence": "src/auth.rs find_user; src/auth_api.rs user_by_id; pinned Jellyfin v12.3 UserController.GetUserById"
+                },
+                {
+                  "title": "Native Rust HTTP checks verify self/current, privileged other-account lookup, unauthorized/missing requests, revocation, disabled account visibility, and no password material",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40044882895: complete Rust unit/HTTP tests, Clippy, formatting, source matrix and evidence-backed checks passed"
+                },
+                {
+                  "title": "Full Jellyfin UserDto fields, authorization differential tests and unmodified TV/admin client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
