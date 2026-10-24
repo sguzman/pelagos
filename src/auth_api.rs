@@ -25,6 +25,7 @@ struct PasswordLogin {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Users/AuthenticateByName", post(password_login))
+        .route("/Users/New", post(create_account))
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id))
         .route("/Sessions/Logout", post(logout))
@@ -35,6 +36,58 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/QuickConnect/Initiate", post(quick_connect_unavailable))
         .route("/QuickConnect/Connect", get(quick_connect_unavailable))
         .route("/QuickConnect/Authorize", post(quick_connect_authorize))
+}
+
+/// Pinned Jellyfin CreateUserByName subset. HTTP cannot bootstrap the first
+/// administrator; it requires a current administrator and a real password.
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct CreateUserRequest {
+    name: String,
+    password: Option<String>,
+}
+
+async fn create_account(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateUserRequest>,
+) -> Result<Json<User>, StatusCode> {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    if !current.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let password = payload.password.ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    if payload.name.is_empty()
+        || payload.name.len() > 128
+        || payload.name.trim() != payload.name
+        || payload.name.chars().any(char::is_control)
+        || !(12..=1024).contains(&password.len())
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state_dir(&state)?;
+    let server_id = state.server_id().to_owned();
+    let user = tokio::task::spawn_blocking(move || {
+        match auth::create_user(&dir, &payload.name, &password) {
+            Ok(mut user) => {
+                user.server_id = server_id;
+                Ok(user)
+            }
+            Err(error) => {
+                if let Some(rusqlite::Error::SqliteFailure(details, _)) =
+                    error.downcast_ref::<rusqlite::Error>()
+                {
+                    if details.code == rusqlite::ErrorCode::ConstraintViolation {
+                        return Err(StatusCode::CONFLICT);
+                    }
+                }
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    Ok(Json(user))
 }
 
 /// Pinned Jellyfin v12.3 Quick Connect is not enabled in this pre-alpha.
