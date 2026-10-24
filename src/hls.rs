@@ -992,6 +992,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancelling_segmented_job_removes_partial_private_manifest_and_transport() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.wav");
+        stdfs::write(&source, b"synthetic").unwrap();
+        let encoder = executable(temp.path(), "sleeping-ffmpeg", "exec sleep 2");
+        let inspector = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"4.0"},"streams":[{"codec_type":"audio"}]}'"#,
+        );
+        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024)
+            .unwrap();
+        let output = temp.path().join("cancelled");
+        let destination = output.clone();
+        let job = tokio::spawn(async move {
+            generate_segmented_vod(&controller, &inspector, &source, &destination, 2).await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !output.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        job.abort();
+        assert!(job.await.is_err());
+        assert!(!output.exists());
+        assert!(!output.join("index.m3u8").exists());
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_multisegment_playlist_demuxes_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
