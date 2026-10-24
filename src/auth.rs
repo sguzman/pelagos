@@ -62,6 +62,7 @@ pub struct SessionInfo {
     pub supports_remote_control: bool,
     pub playable_media_types: Vec<String>,
     pub supported_commands: Vec<String>,
+    pub capabilities: Option<DeviceCapabilitiesDto>,
 }
 
 #[derive(Debug, Serialize)]
@@ -597,6 +598,7 @@ pub fn authenticate_with_client(
         supports_remote_control: false,
         playable_media_types: Vec::new(),
         supported_commands: Vec::new(),
+        capabilities: None,
     };
     Ok(Some(Login {
         user,
@@ -790,13 +792,16 @@ pub fn list_sessions_with_activity(
                 COALESCE(c.supported_commands, ''),
                 strftime('%Y-%m-%dT%H:%M:%SZ',
                     COALESCE(a.last_seen_unix,t.created_unix),'unixepoch'),
-                (d.custom_name IS NOT NULL)
+                (d.custom_name IS NOT NULL),
+                COALESCE(c.supports_persistent_identifier,1),
+                e.device_profile_json,e.app_store_url,e.icon_url,c.session_id
          FROM pelagos_sessions s
          JOIN pelagos_tokens t ON t.digest=s.digest
          JOIN pelagos_users u ON u.id=t.user_id
          LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
          LEFT JOIN pelagos_session_activity a ON a.session_id=s.id
          LEFT JOIN pelagos_devices d ON d.id=s.device_id
+         LEFT JOIN pelagos_session_capability_extras e ON e.session_id=s.id
          WHERE u.disabled=0
            AND (?1=1 OR u.id=?2)
            AND (?3 IS NULL OR s.device_id=?3)
@@ -811,6 +816,18 @@ pub fn list_sessions_with_activity(
             active_within_seconds.map(i64::from),
         ],
         |row| {
+            let reported: Option<String> = row.get(16)?;
+            let profile: Option<String> = row.get(13)?;
+            let icon_url: Option<String> = row.get(15)?;
+            let capabilities = reported.map(|_| DeviceCapabilitiesDto {
+                playable_media_types: parse_session_items(row.get(8).unwrap_or_default()),
+                supported_commands: parse_session_items(row.get(9).unwrap_or_default()),
+                supports_media_control: row.get(7).unwrap_or(false),
+                supports_persistent_identifier: row.get(12).unwrap_or(true),
+                device_profile: profile.and_then(|text| serde_json::from_str(&text).ok()),
+                app_store_url: row.get(14).unwrap_or_default(),
+                icon_url,
+            });
             Ok(SessionInfo {
                 id: row.get(0)?,
                 user_id: row.get(1)?,
@@ -827,6 +844,7 @@ pub fn list_sessions_with_activity(
                 supports_remote_control: false,
                 playable_media_types: parse_session_items(row.get(8)?),
                 supported_commands: parse_session_items(row.get(9)?),
+                capabilities,
             })
         },
     )?;
