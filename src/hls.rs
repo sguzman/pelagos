@@ -596,7 +596,7 @@ fn adaptive_segments_aligned(reference: &[HlsSegment], next: &[HlsSegment]) -> b
 
 /// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
 /// Publish the master only after all requested outputs are verified. The
-/// authenticated video HTTP path can expose these as an opt-in, source- and
+/// authenticated audio/video HTTP paths can expose these as opt-in, source- and
 /// token-scoped short VOD ladder; long-running adaptive switching is untested.
 /// Variant order follows measured transport bandwidth, not input targets.
 pub async fn generate_adaptive_segmented_vod(

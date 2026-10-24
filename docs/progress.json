@@ -2687,9 +2687,9 @@
                   "evidence": "src/hls.rs generate_adaptive_segmented_vod_from/measured_peak_transport_bandwidth/HlsSegmentedArtifact.resolution; src/hls_http.rs generate_hls_playlist/start_time_ticks/PublishedVariant/video_variant_segment; source-pinned FFmpeg CPU targets and verified transport windows"
                 },
                 {
-                  "title": "Real FFmpeg/FFprobe CI verifies distinct 2-, 3-, and 4-rendition HTTP HLS masters, seeked 2-rendition transport, measured ascending peak bitrates and dimensions, MPEG-TS sync/ranges, cache reuse, sibling-token isolation and grant revocation",
+                  "title": "Native FFmpeg/FFprobe checks verify 2–4 audio/video HLS renditions, measured bandwidth, private transport, concurrent clients, switched decoding and bounded cache retention",
                   "passed": true,
-                  "evidence": "GitHub Actions 40130559026, 40131080470, 40131329127 and 40131838709 — complete Rust formatting, Clippy, HTTP/unit, real FFmpeg/FFprobe 2–4-variant transport fixtures and pinned source/roadmap checks passed"
+                  "evidence": "GitHub Actions 40130559026, 40131080470, 40131329127, 40131838709, 40133017277, 40133268918, 40133551127, 40133857414, 40134148833 and 40134521102 — full formatting, Clippy, Rust/HTTP and pinned baseline/roadmap checks passed; 2–4 video and AAC audio variant masters with measured transport, seeked video, source- and token-scoped GET/HEAD segments, two concurrent client sessions, bounded LRU eviction, cumulative drift rejection, three bitrate switches with monotonic decoded video PTS, and native cross-rendition FFmpeg audio decode"
                 },
                 {
                   "title": "Sustained adaptive timebase/clock switching on fluctuating networks, multiple active clients and multi-hour VOD, adaptive audio, full Jellyfin HLS/DASH and unmodified Smart TV acceptance",
