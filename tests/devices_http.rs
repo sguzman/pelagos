@@ -184,16 +184,26 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
         .status(),
         StatusCode::BAD_REQUEST
     );
-    let unknown = json_body(
+    let canonicalized = json_body(
         call(
             &router,
-            "/Devices?userId=00000000-0000-0000-0000-000000000000",
+            &format!("/Devices?userId={}", viewer.user.id.to_uppercase()),
             Some(&admin.access_token),
         )
         .await,
     )
     .await;
-    assert_eq!(unknown["Items"], json!([]));
+    assert_eq!(canonicalized["TotalRecordCount"], 2);
+    assert_eq!(
+        call(
+            &router,
+            "/Devices?userId=00000000-0000-0000-0000-000000000000",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         call(
             &router,
