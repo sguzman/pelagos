@@ -707,6 +707,18 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     )));
     let repeated = text_body(request(&app, "GET", &master_route, Some(&listener)).await).await;
     assert_eq!(repeated, master);
+    let audio_seek_route =
+        format!("/Audio/{id}/main.m3u8?segmentLength=2&startTimeTicks=10000000");
+    let audio_seek =
+        text_body(request(&app, "GET", &audio_seek_route, Some(&listener)).await).await;
+    assert_eq!(
+        audio_seek
+            .lines()
+            .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+            .count(),
+        1
+    );
+    assert_ne!(audio_seek, main_text);
     auth::revoke_library(&state_dir, "listener", &library).unwrap();
     assert_eq!(
         request(&app, "GET", &first, Some(&listener)).await.status(),
