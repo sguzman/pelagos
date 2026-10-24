@@ -110,14 +110,18 @@ async fn privileged_single_device_logout_revokes_only_matching_device_sessions()
         StatusCode::NO_CONTENT
     );
     for token in [&first.access_token, &second.access_token] {
-        assert!(
-            auth::identify(&state, token, "server")
-                .unwrap()
-                .is_none()
-        );
+        assert!(auth::identify(&state, token, "server").unwrap().is_none());
     }
-    assert!(auth::identify(&state, &other.access_token, "server").unwrap().is_some());
-    assert!(auth::identify(&state, &admin.access_token, "server").unwrap().is_some());
+    assert!(
+        auth::identify(&state, &other.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        auth::identify(&state, &admin.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
     let device = json_body(
         call(
             &router,
@@ -139,20 +143,19 @@ async fn privileged_single_device_logout_revokes_only_matching_device_sessions()
     )
     .unwrap()
     .unwrap();
-    assert!(auth::identify(&state, &fresh.access_token, "server").unwrap().is_some());
+    assert!(
+        auth::identify(&state, &fresh.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state,
     )));
     assert_eq!(
-        call(
-            &restarted,
-            "GET",
-            "/Devices",
-            Some(&admin.access_token),
-        )
-        .await
-        .status(),
+        call(&restarted, "GET", "/Devices", Some(&admin.access_token),)
+            .await
+            .status(),
         StatusCode::OK
     );
 }
