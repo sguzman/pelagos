@@ -605,9 +605,14 @@ mod tests {
         let waiting = tokio::spawn(async move {
             let _permit = waiting_registry.acquire_generation().await.unwrap();
         });
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while registry.waiters.available_permits() != 3 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
         assert!(!waiting.is_finished());
-        assert_eq!(registry.waiters.available_permits(), 3);
         waiting.abort();
         assert!(waiting.await.is_err());
         assert_eq!(registry.waiters.available_permits(), 4);
@@ -616,7 +621,13 @@ mod tests {
         let pending = tokio::spawn(async move {
             let _permit = next_registry.acquire_generation().await.unwrap();
         });
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while registry.waiters.available_permits() != 3 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
         assert!(!pending.is_finished());
         drop(active);
         tokio::time::timeout(Duration::from_secs(2), pending)
