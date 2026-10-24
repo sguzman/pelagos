@@ -171,32 +171,19 @@ async fn privileged_single_device_logout_revokes_only_matching_device_sessions()
     );
     let duplicates = format!(
         "/Devices?{}",
-        (0..33)
-            .map(|_| "id=tv-1")
-            .collect::<Vec<_>>()
-            .join("&")
+        (0..33).map(|_| "id=tv-1").collect::<Vec<_>>().join("&")
     );
     assert_eq!(
-        call(
-            &router,
-            "DELETE",
-            &duplicates,
-            Some(&admin.access_token),
-        )
-        .await
-        .status(),
+        call(&router, "DELETE", &duplicates, Some(&admin.access_token),)
+            .await
+            .status(),
         StatusCode::BAD_REQUEST
     );
     let oversized = format!("/Devices?id={}", "x".repeat(4100));
     assert_eq!(
-        call(
-            &router,
-            "DELETE",
-            &oversized,
-            Some(&admin.access_token),
-        )
-        .await
-        .status(),
+        call(&router, "DELETE", &oversized, Some(&admin.access_token),)
+            .await
+            .status(),
         StatusCode::BAD_REQUEST
     );
     assert!(
