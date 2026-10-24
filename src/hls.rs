@@ -1021,15 +1021,9 @@ mod tests {
         )
         .unwrap();
         let dir = temp.path().join("multisegment");
-        let artifact = generate_segmented_vod(
-            &controller,
-            Path::new("ffprobe"),
-            &input,
-            &dir,
-            2,
-        )
-        .await
-        .unwrap();
+        let artifact = generate_segmented_vod(&controller, Path::new("ffprobe"), &input, &dir, 2)
+            .await
+            .unwrap();
         assert_eq!(artifact.segment_paths.len(), 3);
         assert_eq!(artifact.segments.len(), 3);
         let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
@@ -1050,7 +1044,12 @@ mod tests {
         let assembled = probe::probe(&artifact.playlist_path, Path::new("ffprobe"), PROBE_TIMEOUT)
             .await
             .unwrap();
-        assert!(assembled.streams.iter().any(|s| s["codec_name"].as_str() == Some("aac")));
+        assert!(
+            assembled
+                .streams
+                .iter()
+                .any(|s| s["codec_name"].as_str() == Some("aac"))
+        );
         assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
         artifact.remove().unwrap();
         assert!(!dir.exists());
