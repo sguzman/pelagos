@@ -293,3 +293,52 @@ pub fn router() -> Router<Arc<AppState>> {
             get(video_segment).head(head_segment),
         )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn published_bundles_are_token_scoped_bounded_and_cleaned_after_last_reader() {
+        let temp = tempfile::tempdir().unwrap();
+        let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
+        let owner = "synthetic-private-token";
+        let digest: [u8; 32] = Sha256::digest(owner.as_bytes()).into();
+        let first_root = temp.path().join("session-0");
+        for index in 0..3 {
+            let root = temp.path().join(format!("session-{index}"));
+            fs::create_dir(&root).unwrap();
+            registry.publish(Arc::new(Published {
+                id: format!("playlist-{index}"),
+                item: "media-1".to_owned(),
+                digest,
+                source: PathBuf::from("/private/media-1"),
+                private_root: root,
+                segments: Vec::new(),
+            }));
+        }
+        assert!(registry.lookup("playlist-0", "media-1", owner).is_some());
+        assert!(registry.lookup("playlist-0", "media-2", owner).is_none());
+        assert!(registry.lookup("playlist-0", "media-1", "other-token").is_none());
+        let in_flight = registry.lookup("playlist-0", "media-1", owner).unwrap();
+        let fourth_root = temp.path().join("session-3");
+        fs::create_dir(&fourth_root).unwrap();
+        registry.publish(Arc::new(Published {
+            id: "playlist-3".to_owned(),
+            item: "media-1".to_owned(),
+            digest,
+            source: PathBuf::from("/private/media-1"),
+            private_root: fourth_root.clone(),
+            segments: Vec::new(),
+        }));
+        assert!(registry.lookup("playlist-0", "media-1", owner).is_none());
+        assert!(first_root.exists());
+        drop(in_flight);
+        assert!(!first_root.exists());
+        assert!(registry.lookup("playlist-3", "media-1", owner).is_some());
+        drop(registry);
+        for index in 1..=3 {
+            assert!(!temp.path().join(format!("session-{index}")).exists());
+        }
+    }
+}
