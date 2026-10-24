@@ -804,9 +804,7 @@ mod tests {
         assert!(manifest.contains("#EXT-X-TARGETDURATION:2\n"));
         assert!(manifest.contains("#EXTINF:2.000,\nsegment00000.ts\n"));
         assert!(manifest.contains("#EXTINF:2.000,\nsegment00001.ts\n"));
-        assert!(manifest.contains(
-            "#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nsegment00001.ts\n"
-        ));
+        assert!(manifest.contains("#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nsegment00001.ts\n"));
         assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
         assert_eq!(stdfs::read(&source).unwrap(), b"synthetic");
         bundle.remove().unwrap();
