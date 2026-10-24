@@ -290,10 +290,17 @@ fn profile_allows_direct_file(
     }
     let object = profile.as_object().ok_or(StatusCode::BAD_REQUEST)?;
     const ROOT_KEYS: &[&str] = &[
-        "Name", "Id", "MaxStreamingBitrate", "MaxStaticBitrate",
-        "MusicStreamingTranscodingBitrate", "MaxStaticMusicBitrate",
-        "DirectPlayProfiles", "TranscodingProfiles", "ContainerProfiles",
-        "CodecProfiles", "SubtitleProfiles",
+        "Name",
+        "Id",
+        "MaxStreamingBitrate",
+        "MaxStaticBitrate",
+        "MusicStreamingTranscodingBitrate",
+        "MaxStaticMusicBitrate",
+        "DirectPlayProfiles",
+        "TranscodingProfiles",
+        "ContainerProfiles",
+        "CodecProfiles",
+        "SubtitleProfiles",
     ];
     if object.keys().any(|key| !ROOT_KEYS.contains(&key.as_str())) {
         return Err(StatusCode::BAD_REQUEST);
@@ -314,7 +321,10 @@ fn profile_allows_direct_file(
             }
             if field == "SubtitleProfiles"
                 && !profiles.is_empty()
-                && source.media_streams.iter().any(|stream| stream.stream_type == "Subtitle")
+                && source
+                    .media_streams
+                    .iter()
+                    .any(|stream| stream.stream_type == "Subtitle")
             {
                 return Err(StatusCode::NOT_IMPLEMENTED);
             }
@@ -322,13 +332,19 @@ fn profile_allows_direct_file(
     }
     // A static direct file must fit an explicitly supplied static bitrate
     // ceiling. With no reliable measured bitrate, decline to claim support.
-    let limit_field = if source.media_streams.iter().any(|s| s.stream_type == "Video") {
+    let limit_field = if source
+        .media_streams
+        .iter()
+        .any(|s| s.stream_type == "Video")
+    {
         "MaxStaticBitrate"
     } else {
         "MaxStaticMusicBitrate"
     };
     if let Some(limit) = object.get(limit_field).filter(|value| !value.is_null()) {
-        let limit = limit.as_i64().filter(|value| *value > 0)
+        let limit = limit
+            .as_i64()
+            .filter(|value| *value > 0)
             .ok_or(StatusCode::BAD_REQUEST)?;
         let measured = report
             .format
@@ -356,26 +372,38 @@ fn profile_allows_direct_file(
     if rules.len() > 64 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let has_video = source.media_streams.iter().any(|s| s.stream_type == "Video");
+    let has_video = source
+        .media_streams
+        .iter()
+        .any(|s| s.stream_type == "Video");
     for rule in rules {
         let properties = rule.as_object().ok_or(StatusCode::BAD_REQUEST)?;
-        if properties.keys().any(|key| {
-            !["Type", "Container", "AudioCodec", "VideoCodec"].contains(&key.as_str())
-        }) {
+        if properties
+            .keys()
+            .any(|key| !["Type", "Container", "AudioCodec", "VideoCodec"].contains(&key.as_str()))
+        {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let kind = properties.get("Type").and_then(Value::as_str)
+        let kind = properties
+            .get("Type")
+            .and_then(Value::as_str)
             .ok_or(StatusCode::BAD_REQUEST)?;
         if !matches!(kind, "Video" | "Audio" | "Photo" | "Subtitle" | "Lyric") {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let container = properties.get("Container").and_then(Value::as_str)
+        let container = properties
+            .get("Container")
+            .and_then(Value::as_str)
             .ok_or(StatusCode::BAD_REQUEST)?;
-        let audio = properties.get("AudioCodec").filter(|v| !v.is_null())
-             .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
+        let audio = properties
+            .get("AudioCodec")
+            .filter(|v| !v.is_null())
+            .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
             .transpose()?;
-        let video = properties.get("VideoCodec").filter(|v| !v.is_null())
-             .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
+        let video = properties
+            .get("VideoCodec")
+            .filter(|v| !v.is_null())
+            .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
             .transpose()?;
         if [container, audio.unwrap_or(""), video.unwrap_or("")]
             .iter()
@@ -398,7 +426,10 @@ fn profile_allows_direct_file(
                 } else {
                     audio.unwrap_or("")
                 };
-                stream.codec.as_deref().is_some_and(|codec| profile_contains(matcher, codec))
+                stream
+                    .codec
+                    .as_deref()
+                    .is_some_and(|codec| profile_contains(matcher, codec))
             });
         if compatible {
             return Ok(true);
