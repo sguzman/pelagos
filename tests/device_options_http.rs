@@ -69,21 +69,23 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
     )));
     let path = "/Devices/Options?id=smart-tv";
     assert_eq!(
-        call(&router, "GET", path, None, json!({}))
-            .await
-            .status(),
+        call(&router, "GET", path, None, json!({})).await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        call(&router, "POST", path, Some(&viewer.access_token), json!({"CustomName":"Den"}))
-            .await
-            .status(),
+        call(
+            &router,
+            "POST",
+            path,
+            Some(&viewer.access_token),
+            json!({"CustomName":"Den"})
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
-    let initial = response_json(
-        call(&router, "GET", path, Some(&admin.access_token), json!({})).await,
-    )
-    .await;
+    let initial =
+        response_json(call(&router, "GET", path, Some(&admin.access_token), json!({})).await).await;
     assert_eq!(initial["DeviceId"], "smart-tv");
     assert_eq!(initial["CustomName"], Value::Null);
     assert_eq!(
@@ -123,12 +125,22 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        call(&router, "POST", path, Some(&admin.access_token), json!({"CustomName":"Den"}))
-            .await
-            .status(),
+        call(
+            &router,
+            "POST",
+            path,
+            Some(&admin.access_token),
+            json!({"CustomName":"Den"})
+        )
+        .await
+        .status(),
         StatusCode::NO_CONTENT
     );
-    assert!(auth::identify(&state, &viewer.access_token, "server").unwrap().is_some());
+    assert!(
+        auth::identify(&state, &viewer.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
     let after = response_json(
         call(
             &router,
@@ -148,12 +160,21 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
         state.clone(),
     )));
     let options = response_json(
-        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+        call(
+            &restarted,
+            "GET",
+            path,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
     )
     .await;
     assert_eq!(options["CustomName"], "Den");
     assert_eq!(options["DeviceId"], "smart-tv");
     assert_eq!(options["Id"], Value::Null);
-    let user = auth::identify(&state, &viewer.access_token, "server").unwrap().unwrap();
+    let user = auth::identify(&state, &viewer.access_token, "server")
+        .unwrap()
+        .unwrap();
     assert_eq!(user.id, viewer.user.id);
 }
