@@ -167,6 +167,41 @@ impl TranscodeController {
         .await
     }
 
+    /// Encode an independent bounded segment using a validated CPU quality
+    /// target. Uses the same worker limit, timeout, byte cap and file guard.
+    pub async fn try_run_window_with_quality(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        quality: MpegTsQuality,
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        if !quality.valid() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid MPEG-TS encoder target bitrates",
+            ));
+        }
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_inner(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes,
+            Some(quality),
+            Some(window),
+        )
+        .await
+    }
+
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
