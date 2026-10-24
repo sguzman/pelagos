@@ -190,7 +190,14 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
     .unwrap()
     .unwrap();
     let relogged_options = response_json(
-        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+        call(
+            &restarted,
+            "GET",
+            path,
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
     )
     .await;
     assert_eq!(relogged_options["Id"], numeric_id);
