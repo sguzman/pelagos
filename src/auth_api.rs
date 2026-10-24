@@ -731,7 +731,7 @@ async fn sessions(
     let device = query.device_id;
     let active_within = query.active_within_seconds;
     let found = tokio::task::spawn_blocking(move || {
-        auth::list_sessions(&dir, &user, &server_id, device.as_deref(), active_within)
+        auth::list_sessions_with_activity(&dir, &user, &server_id, device.as_deref(), active_within)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?

@@ -729,6 +729,17 @@ pub fn list_sessions(
     requester: &User,
     server_id: &str,
     device_id: Option<&str>,
+) -> Result<Vec<SessionInfo>> {
+    list_sessions_with_activity(state_dir, requester, server_id, device_id, None)
+}
+
+/// Apply an optional recency window to observed authenticated activity,
+/// without modifying existing callers of the unfiltered session index.
+pub fn list_sessions_with_activity(
+    state_dir: &Path,
+    requester: &User,
+    server_id: &str,
+    device_id: Option<&str>,
     active_within_seconds: Option<u32>,
 ) -> Result<Vec<SessionInfo>> {
     let db = database(state_dir)?;
