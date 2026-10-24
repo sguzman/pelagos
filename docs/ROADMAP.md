@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 37%` across 164 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 37%` across 165 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `█████░░░░░ 48%`
+### 👥 P4 — Authentication and user state — `█████░░░░░ 49%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -175,13 +175,17 @@
   - [x] Native HTTP CI validates unauthenticated/other-session denial, malformed media/command inputs, client metadata visibility, untouched sibling sessions, restart and token revocation — GitHub Actions 40047277534 — complete Rust unit and integration tests, formatting, Clippy, pinned controller/source and roadmap checks passed
   - [ ] Full ClientCapabilitiesDto/DeviceProfile support, real client capability negotiation, remote-control actions and unmodified TV acceptance
 - 📺 **T138 — Full-form Jellyfin client capabilities JSON subset** — `███████░░░ 67%`
-  - [x] Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links — src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto
+  - [x] Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links — src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto; full DTO profile transport extended separately in T140
   - [x] CI covers authenticated full-form request, unsupported DeviceProfile, cross-session denial, session metadata persistence and no fabricated remote-control support — GitHub Actions 40047568095 — full Rust formatting, Clippy, native HTTP/unit tests, roadmap ledger and pinned source/controller contract gates passed
   - [ ] DeviceProfile/URL metadata, complete upstream DTO validation, unmodified Jellyfin TV negotiation and actual remote-control/media functionality accepted
 - 🕒 **T139 — Observed Jellyfin session recency filtering and LastActivityDate projection** — `███████░░░ 67%`
   - [x] Record authenticated request activity in a private cascading SQLite session table and expose last-activity UTC timestamps, custom device-name flags, and bounded GET /Sessions activeWithinSeconds filtering — src/auth.rs pelagos_session_activity/identify/list_sessions_with_activity; src/auth_api.rs sessions; pinned Jellyfin v12.3 SessionController.GetSessions and SessionInfoDto.LastActivityDate/HasCustomDeviceName
   - [x] Rust HTTP CI verifies aged-session exclusion, authenticated refresh, scoped device lookup, UTC session timestamps, persisted restart state, custom label flags, denied unsupported remote-control filter, and cascade deletion after logout — GitHub Actions 40053871853 — formatting, Clippy, full Rust test targets, roadmap and pinned source matrices passed
   - [ ] Upstream per-client heartbeat/activity semantics, remote-control filtering and unmodified Jellyfin clients accepted
+- 📡 **T140 — Bounded full client device-profile capability transport and session/device projection** — `███████░░░ 67%`
+  - [x] Ingest up to 64 KiB, depth-limited DeviceProfile JSON with bounded HTTP(S) app-store/icon URLs into private FK-cascading session capability storage; project it through elevated DeviceInfoDto and scoped nested SessionInfoDto.Capabilities — src/auth.rs pelagos_session_capability_extras/set_session_capabilities/list_sessions_with_activity/list_registered_devices; src/auth_api.rs bounded_device_profile/report_session_capabilities_full; pinned Jellyfin v12.3 ClientCapabilitiesDto/DeviceProfile/SessionInfoDto
+  - [x] Native HTTP regressions verify malformed profile/URL rejection, own-session isolation, restart persistence, token-free device DTO projection, nested session capability projection, replacement by basic capability reports and token-revocation cascade — GitHub Actions 40054083071 — complete Rust HTTP/unit tests, formatting, Clippy, roadmap and pinned source/API matrices passed
+  - [ ] Typed codec and direct-play profile interpretation, real streaming negotiation, and unmodified Jellyfin Smart TV clients accepted
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 

@@ -845,7 +845,7 @@
                 {
                   "title": "Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links",
                   "passed": true,
-                  "evidence": "src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto"
+                  "evidence": "src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto; full DTO profile transport extended separately in T140"
                 },
                 {
                   "title": "CI covers authenticated full-form request, unsupported DeviceProfile, cross-session denial, session metadata persistence and no fabricated remote-control support",
@@ -877,6 +877,28 @@
                 },
                 {
                   "title": "Upstream per-client heartbeat/activity semantics, remote-control filtering and unmodified Jellyfin clients accepted",
+                  "passed": false
+                }
+              ]
+            },
+            {
+              "id": "T140",
+              "emoji": "📡",
+              "name": "Bounded full client device-profile capability transport and session/device projection",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Ingest up to 64 KiB, depth-limited DeviceProfile JSON with bounded HTTP(S) app-store/icon URLs into private FK-cascading session capability storage; project it through elevated DeviceInfoDto and scoped nested SessionInfoDto.Capabilities",
+                  "passed": true,
+                  "evidence": "src/auth.rs pelagos_session_capability_extras/set_session_capabilities/list_sessions_with_activity/list_registered_devices; src/auth_api.rs bounded_device_profile/report_session_capabilities_full; pinned Jellyfin v12.3 ClientCapabilitiesDto/DeviceProfile/SessionInfoDto"
+                },
+                {
+                  "title": "Native HTTP regressions verify malformed profile/URL rejection, own-session isolation, restart persistence, token-free device DTO projection, nested session capability projection, replacement by basic capability reports and token-revocation cascade",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054083071 — complete Rust HTTP/unit tests, formatting, Clippy, roadmap and pinned source/API matrices passed"
+                },
+                {
+                  "title": "Typed codec and direct-play profile interpretation, real streaming negotiation, and unmodified Jellyfin Smart TV clients accepted",
                   "passed": false
                 }
               ]
