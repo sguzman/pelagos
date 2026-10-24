@@ -35,6 +35,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         .route("/Sessions/Capabilities", post(report_session_capabilities))
+        .route("/Sessions/Capabilities/Full", post(report_session_capabilities_full))
         // Public account listing intentionally discloses no usernames yet.
         .route("/Users/Public", get(public_users))
         .route("/QuickConnect/Enabled", get(quick_connect_enabled))
@@ -605,23 +606,89 @@ async fn report_session_capabilities(
     headers: HeaderMap,
     Query(query): Query<SessionCapabilitiesQuery>,
 ) -> Result<StatusCode, StatusCode> {
-    let (_, token) = authenticated(state.clone(), headers).await?;
-    if query
-        .id
-        .as_deref()
-        .is_some_and(|id| id.is_empty() || id.len() > 64)
-    {
-        return Err(StatusCode::BAD_REQUEST);
-    }
     let report = auth::SessionCapabilitiesReport {
         playable_media_types: parse_reported_capabilities(query.playable_media_types, 16)?,
         supported_commands: parse_reported_capabilities(query.supported_commands, 64)?,
         supports_media_control: query.supports_media_control.unwrap_or(false),
         supports_persistent_identifier: query.supports_persistent_identifier.unwrap_or(true),
     };
+    save_session_capabilities(state, headers, query.id, report).await
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum CapabilitySequence {
+    CommaDelimited(String),
+    Entries(Vec<String>),
+}
+
+fn from_capability_sequence(
+    field: Option<CapabilitySequence>,
+    max_entries: usize,
+) -> Result<Vec<String>, StatusCode> {
+    let text = match field {
+        None => String::new(),
+        Some(CapabilitySequence::CommaDelimited(text)) => text,
+        Some(CapabilitySequence::Entries(entries)) => {
+            if entries.iter().any(|entry| entry.contains(',')) {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            entries.join(",")
+        }
+    };
+    parse_reported_capabilities(Some(text), max_entries)
+}
+
+/// ClientCapabilitiesDto has additional complex fields (notably DeviceProfile)
+/// which must not be silently accepted before they have meaningful support.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct FullSessionCapabilities {
+    playable_media_types: Option<CapabilitySequence>,
+    supported_commands: Option<CapabilitySequence>,
+    supports_media_control: Option<bool>,
+    supports_persistent_identifier: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FullSessionCapabilitiesQuery {
+    id: Option<String>,
+}
+
+/// Pinned POST /Sessions/Capabilities/Full accepts a bounded JSON subset.
+/// Both upstream comma-delimited JSON strings and string arrays are parsed.
+async fn report_session_capabilities_full(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<FullSessionCapabilitiesQuery>,
+    Json(body): Json<FullSessionCapabilities>,
+) -> Result<StatusCode, StatusCode> {
+    let report = auth::SessionCapabilitiesReport {
+        playable_media_types: from_capability_sequence(body.playable_media_types, 16)?,
+        supported_commands: from_capability_sequence(body.supported_commands, 64)?,
+        supports_media_control: body.supports_media_control.unwrap_or(false),
+        supports_persistent_identifier: body.supports_persistent_identifier.unwrap_or(false),
+    };
+    save_session_capabilities(state, headers, query.id, report).await
+}
+
+async fn save_session_capabilities(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    requested_id: Option<String>,
+    report: auth::SessionCapabilitiesReport,
+) -> Result<StatusCode, StatusCode> {
+    let (_, token) = authenticated(state.clone(), headers).await?;
+    if requested_id
+        .as_deref()
+        .is_some_and(|id| id.is_empty() || id.len() > 64)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let dir = state_dir(&state)?;
     let result = tokio::task::spawn_blocking(move || {
-        auth::set_session_capabilities(&dir, &token, query.id.as_deref(), &report)
+        auth::set_session_capabilities(&dir, &token, requested_id.as_deref(), &report)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
