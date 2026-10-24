@@ -1256,6 +1256,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn real_ffmpeg_video_windows_start_with_decodable_h264_when_ci_requires_it() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("video.avi");
+        let created = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=160x90:rate=15:duration=5",
+                "-c:v",
+                "mpeg4",
+                "-y",
+            ])
+            .arg(&input)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        let runner = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(30),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        let artifact = generate_segmented_vod(
+            &runner,
+            Path::new("ffprobe"),
+            &input,
+            &temp.path().join("video-hls"),
+            2,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 3);
+        for path in &artifact.segment_paths {
+            let streams = probe::probe(path, Path::new("ffprobe"), PROBE_TIMEOUT)
+                .await
+                .unwrap();
+            assert!(streams.streams.iter().any(|s| s["codec_name"].as_str() == Some("h264")));
+            let decoded = tokio::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(path)
+                .args(["-frames:v", "1", "-f", "null", "-"])
+                .output()
+                .await
+                .unwrap();
+            assert!(decoded.status.success(), "{}", String::from_utf8_lossy(&decoded.stderr));
+        }
+        let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY").count(), 2);
+        let playlist = probe::probe(&artifact.playlist_path, Path::new("ffprobe"), PROBE_TIMEOUT)
+            .await
+            .unwrap();
+        assert!(playlist.streams.iter().any(|s| s["codec_name"].as_str() == Some("h264")));
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_multisegment_playlist_demuxes_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
