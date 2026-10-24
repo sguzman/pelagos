@@ -581,8 +581,27 @@ async fn serve_segment(
         return Err(StatusCode::NOT_FOUND);
     }
 
+    let (name, media_playlist, segments, etag_variant) =
+        if let Some((variant_name, leaf_name)) = name.split_once('/') {
+            let variant = publication
+                .variants
+                .iter()
+                .find(|variant| variant.name == variant_name)
+                .ok_or(StatusCode::NOT_FOUND)?;
+            (leaf_name, &variant.media_playlist, &variant.segments, variant_name)
+        } else {
+            if !publication.variants.is_empty() {
+                return Err(StatusCode::NOT_FOUND);
+            }
+            (
+                name.as_str(),
+                &publication.media_playlist,
+                &publication.segments,
+                "",
+            )
+        };
     if name == "index.m3u8" {
-        let text = &publication.media_playlist;
+        let text = media_playlist;
         let mut response = Response::new(if head_only {
             Body::empty()
         } else {
@@ -601,10 +620,7 @@ async fn serve_segment(
     let index = segment_number
         .parse::<usize>()
         .map_err(|_| StatusCode::NOT_FOUND)?;
-    let (path, size) = publication
-        .segments
-        .get(index)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let (path, size) = segments.get(index).ok_or(StatusCode::NOT_FOUND)?;
     if *size == 0 || *size > MAX_SEGMENT_BYTES {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -623,7 +639,7 @@ async fn serve_segment(
     // A publication UUID plus its bounded segment index and fixed byte
     // count uniquely identifies this immutable, token-scoped MPEG-TS part.
     // A client may resume only when its If-Range strong validator matches.
-    let etag = format!("\"hls-{playlist_id}-{index}-{size}\"");
+    let etag = format!("\"hls-{playlist_id}-{etag_variant}-{index}-{size}\"");
     let apply_range = headers.get(IF_RANGE).is_none_or(|candidate| {
         candidate
             .to_str()
@@ -714,6 +730,28 @@ async fn head_video_segment(
     serve_segment(state, item, playlist, name, headers, "video", true).await
 }
 
+async fn video_variant_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, variant, name)): RoutePath<(String, String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(
+        state, item, playlist, format!("{variant}/{name}"), headers, "video", false,
+    )
+    .await
+}
+
+async fn head_video_variant_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, variant, name)): RoutePath<(String, String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(
+        state, item, playlist, format!("{variant}/{name}"), headers, "video", true,
+    )
+    .await
+}
+
 async fn audio_segment(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
@@ -739,6 +777,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
             get(video_segment).head(head_video_segment),
+        )
+        .route(
+            "/Videos/{item_id}/hls1/{playlist_id}/{variant_id}/{segment_name}",
+            get(video_variant_segment).head(head_video_variant_segment),
         )
         .route(
             "/Audio/{item_id}/hls1/{playlist_id}/{segment_name}",
