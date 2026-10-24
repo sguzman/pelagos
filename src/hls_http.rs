@@ -8,7 +8,8 @@ use axum::{
     http::{
         HeaderMap, HeaderValue, StatusCode,
         header::{
-            ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
+            ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG,
+            IF_RANGE, RANGE,
         },
     },
     response::Response,
@@ -424,7 +425,22 @@ async fn serve_segment(
     {
         return Err(StatusCode::NOT_FOUND);
     }
-    let byte_range = if let Some(value) = headers.get(RANGE) {
+    // A publication UUID plus its bounded segment index and fixed byte
+    // count uniquely identifies this immutable, token-scoped MPEG-TS part.
+    // A client may resume only when its If-Range strong validator matches.
+    let etag = format!("\"hls-{playlist_id}-{index}-{size}\"");
+    let apply_range = headers.get(IF_RANGE).is_none_or(|candidate| {
+        candidate
+            .to_str()
+            .ok()
+            .is_some_and(|candidate| candidate == etag)
+    });
+    let byte_range = if apply_range {
+        headers.get(RANGE)
+    } else {
+        None
+    };
+    let byte_range = if let Some(value) = byte_range {
         match value
             .to_str()
             .ok()
@@ -435,6 +451,11 @@ async fn serve_segment(
                 let mut response = Response::new(Body::empty());
                 *response.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
                 set_private_headers(&mut response, "video/mp2t", 0);
+                response.headers_mut().insert(
+                    ETAG,
+                    HeaderValue::from_str(&etag)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+                );
                 response
                     .headers_mut()
                     .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
@@ -465,6 +486,10 @@ async fn serve_segment(
     let mut response = Response::new(body);
     let response_length = usize::try_from(length).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     set_private_headers(&mut response, "video/mp2t", response_length);
+    response.headers_mut().insert(
+        ETAG,
+        HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
     response
         .headers_mut()
         .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
