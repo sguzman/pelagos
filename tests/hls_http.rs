@@ -1115,7 +1115,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
             "-f",
             "lavfi",
             "-i",
-            "testsrc2=size=640x360:rate=30:duration=2.7",
+            "testsrc2=size=640x360:rate=30:duration=6.7",
             "-c:v",
             "mpeg4",
             "-y",
@@ -1202,7 +1202,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
         // FFmpeg's HLS demuxer and video decoder.
         let switch_dir = fixture.path().join(format!("switch-{client_index}"));
         std::fs::create_dir(&switch_dir).unwrap();
-        for (variant_index, segment_index) in [(0, 0), (1, 1), (0, 1), (1, 0)] {
+        for (variant_index, segment_index) in [(0, 0), (1, 1), (0, 2), (1, 3), (0, 3), (1, 2)] {
             let media_path = format!("/Videos/{item}/{}", variants[variant_index]);
             assert_eq!(
                 request(&app, "GET", &media_path, Some(other))
@@ -1213,7 +1213,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
             let media = request(&app, "GET", &media_path, Some(owner)).await;
             assert_eq!(media.status(), StatusCode::OK);
             let playlist = text_body(media).await;
-            assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+            assert_eq!(playlist.matches("#EXTINF:").count(), 4);
             let segment_path = format!(
                 "/Videos/{item}/hls1/{publication_id}/variant{variant_index:02}/{segment_index}.ts"
             );
@@ -1230,18 +1230,18 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
                 .unwrap();
             assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
             assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
-            if variant_index == segment_index {
+            if variant_index == segment_index % 2 {
                 std::fs::write(switch_dir.join(format!("window{segment_index}.ts")), &bytes)
                     .unwrap();
             }
         }
-        // These windows came from different encoded bitrates. FFmpeg must
+        // The four windows alternate between encoded bitrates three times. FFmpeg must
         // decode meaningful video frames through an explicit HLS timestamp
         // discontinuity, not merely recognize their MPEG-TS packet headers.
         let switch_playlist = switch_dir.join("switch.m3u8");
         std::fs::write(
             &switch_playlist,
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\nwindow0.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:0.700,\nwindow1.ts\n#EXT-X-ENDLIST\n",
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\nwindow0.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nwindow1.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nwindow2.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:0.700,\nwindow3.ts\n#EXT-X-ENDLIST\n",
         )
         .unwrap();
         let decoded = Command::new("ffmpeg")
@@ -1259,7 +1259,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
             .lines()
             .filter(|line| !line.starts_with('#') && !line.is_empty())
             .count();
-        assert!(decoded_frames >= 20, "decoded only {decoded_frames} frames");
+        assert!(decoded_frames >= 100, "decoded only {decoded_frames} frames");
     }
     assert_eq!(
         text_body(request(&app, "GET", &route, Some(&alice)).await).await,
