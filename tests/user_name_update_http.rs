@@ -211,3 +211,111 @@ async fn administrator_account_rename_preserves_user_identity_sessions_and_permi
         "Renamed Viewer"
     );
 }
+
+#[tokio::test]
+async fn modern_user_update_alias_is_admin_scoped_and_retains_account_identity() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    auth::create_user(&state, "admin", "alias-admin-original-password").unwrap();
+    auth::create_user(&state, "member", "alias-member-original-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "alias-admin-original-password", "server")
+        .unwrap()
+        .unwrap();
+    let member = auth::authenticate(&state, "member", "alias-member-original-password", "server")
+        .unwrap()
+        .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let route = format!("/Users?userId={}", member.user.id);
+    let patch = json!({"Name":"Renamed Member"});
+    assert_eq!(
+        call(&router, "POST", &route, None, patch.clone()).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&router, "POST", &route, Some(&member.access_token), patch.clone())
+            .await
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/Users?userId=missing",
+            Some(&admin.access_token),
+            patch.clone(),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    let unknown = call(
+        &router,
+        "POST",
+        &route,
+        Some(&admin.access_token),
+        json!({"Name":"Renamed Member","Policy":{"IsAdministrator":true}}),
+    )
+    .await;
+    assert!(
+        unknown.status() == StatusCode::UNPROCESSABLE_ENTITY
+            || unknown.status() == StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        call(&router, "POST", &route, Some(&admin.access_token), patch)
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    let changed = json_body(
+        call(
+            &router,
+            "GET",
+            &format!("/Users/{}", member.user.id),
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(changed["Id"], member.user.id);
+    assert_eq!(changed["Name"], "Renamed Member");
+    assert_eq!(
+        auth::identify(&state, &member.access_token, "server")
+            .unwrap()
+            .unwrap()
+            .name,
+        "Renamed Member"
+    );
+    assert!(auth::authenticate(&state, "member", "alias-member-original-password", "server")
+        .unwrap()
+        .is_none());
+    assert!(
+        auth::authenticate(&state, "Renamed Member", "alias-member-original-password", "server")
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/Users",
+            Some(&admin.access_token),
+            json!({"Name":"Renamed Admin"}),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        json_body(
+            call(&router, "GET", "/Users/Me", Some(&admin.access_token), json!({}))
+                .await,
+        )
+        .await["Name"],
+        "Renamed Admin"
+    );
+}
