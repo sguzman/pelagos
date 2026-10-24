@@ -1259,7 +1259,10 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
             .lines()
             .filter(|line| !line.starts_with('#') && !line.is_empty())
             .count();
-        assert!(decoded_frames >= 100, "decoded only {decoded_frames} frames");
+        assert!(
+            decoded_frames >= 100,
+            "decoded only {decoded_frames} frames"
+        );
     }
     assert_eq!(
         text_body(request(&app, "GET", &route, Some(&alice)).await).await,
