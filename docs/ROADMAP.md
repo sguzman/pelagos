@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 35%` across 154 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 35%` across 155 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -565,11 +565,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `███░░░░░░░ 34%`
+## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 35%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `█████░░░░░ 50%`
+### 🛠️ P15 — Admin and accounts — `█████░░░░░ 52%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -619,6 +619,10 @@
   - [x] Expose a bounded credential-free User DTO for privileged GET Users/{userId} while preserving ordinary self-only lookup, 404 denial and disabled-state visibility for administrators — src/auth.rs find_user; src/auth_api.rs user_by_id; pinned Jellyfin v12.3 UserController.GetUserById
   - [x] Native Rust HTTP checks verify self/current, privileged other-account lookup, unauthorized/missing requests, revocation, disabled account visibility, and no password material — GitHub Actions 40044882895: complete Rust unit/HTTP tests, Clippy, formatting, source matrix and evidence-backed checks passed
   - [ ] Full Jellyfin UserDto fields, authorization differential tests and unmodified TV/admin client acceptance
+- ✏️ **T515 — Privileged account login-name editing without revoking identity or permissions** — `███████░░░ 67%`
+  - [x] Implement bounded administrator-only POST Users/{userId} Name change with case-insensitive uniqueness, stable identity, retained password/session/grants, and rejection of unimplemented DTO fields — src/auth.rs rename_user; src/auth_api.rs update_user_name; pinned Jellyfin v12.3 UserController.UpdateUserLegacy
+  - [x] Rust CI tests missing and duplicate account names, anonymous/member denial, unknown field rejection, existing-token consistency, new-name login, old-name denial, retained library grants, and restart — GitHub Actions 40045301553: complete Rust test suite, Clippy, formatting, pinned source and roadmap checks passed
+  - [ ] Full upstream UserDto update semantics, concurrent administration and unmodified client acceptance
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 

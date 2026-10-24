@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`████░░░░░░ 35%` across 154 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`████░░░░░░ 35%` across 155 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40044882895](https://github.com/sguzman/pelagos/actions/runs/40044882895) — administrator user directory and ID lookup, protected disabled-account policy with live token revocation, full Rust tests, Clippy and pinned gates.
+**Latest passing CI:** [run 40045301553](https://github.com/sguzman/pelagos/actions/runs/40045301553) — administrator-only account login-name updates, stable IDs/sessions/grants, new-name login, Rust suites, Clippy and pinned contracts.
 
 ## 🚀 Current starter
 
@@ -100,6 +100,8 @@ Pelagos supports a restricted administrator-only `POST /Library/Refresh`. It syn
 A pinned **administrator-only** `POST /Users/New` subset now creates password-backed ordinary Pelagos accounts using the existing Argon2 credential store. It requires the CLI-bootstrap administrator, strictly accepts `Name` and `Password`, rejects privilege-control fields, and never returns the password. The response is a **limited Pelagos User DTO**, not Jellyfin's full `UserDto`; passwordless accounts, user updates/deletion and real-client acceptance remain open ([CI 40043498922](https://github.com/sguzman/pelagos/actions/runs/40043498922)).
 
 The administrator account API now includes protected `GET /Users` listing and disabled filtering, limited `GET /Users/{userId}` inspection, and a strict `POST /Users/{userId}/Policy` subset accepting only `IsDisabled`. Disabling an ordinary account revokes outstanding tokens immediately; disabling any administrator is refused. Unsupported policy fields are rejected. Account listing, policy changes, and ID lookup passed native CI ([run 40044882895](https://github.com/sguzman/pelagos/actions/runs/40044882895)). Full Jellyfin user policy and real-client parity remain open.
+
+A strict `POST /Users/{userId}` subset now permits an administrator to update **only** the account's `Name`; the account ID, current sessions, password hash, and per-library permissions remain unchanged. Existing tokens immediately report the new username, while the old username no longer authenticates. Unimplemented UserDto fields are rejected, not silently ignored ([CI 40045301553](https://github.com/sguzman/pelagos/actions/runs/40045301553)).
 
 ## 🦀 Architecture and independence
 

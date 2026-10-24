@@ -3043,6 +3043,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T515",
+              "emoji": "✏️",
+              "name": "Privileged account login-name editing without revoking identity or permissions",
+              "checks": [
+                {
+                  "title": "Implement bounded administrator-only POST Users/{userId} Name change with case-insensitive uniqueness, stable identity, retained password/session/grants, and rejection of unimplemented DTO fields",
+                  "passed": true,
+                  "evidence": "src/auth.rs rename_user; src/auth_api.rs update_user_name; pinned Jellyfin v12.3 UserController.UpdateUserLegacy"
+                },
+                {
+                  "title": "Rust CI tests missing and duplicate account names, anonymous/member denial, unknown field rejection, existing-token consistency, new-name login, old-name denial, retained library grants, and restart",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40045301553: complete Rust test suite, Clippy, formatting, pinned source and roadmap checks passed"
+                },
+                {
+                  "title": "Full upstream UserDto update semantics, concurrent administration and unmodified client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
