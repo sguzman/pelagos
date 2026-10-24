@@ -197,6 +197,15 @@ pub struct HlsAdaptiveArtifact {
     pub master_path: PathBuf,
     pub variants: Vec<HlsVariant>,
     pub renditions: Vec<HlsVodArtifact>,
+    root: PathBuf,
+}
+
+impl HlsAdaptiveArtifact {
+    /// Release a finished private transcode bundle when a future session or
+    /// cache stops using it. The deletion root cannot be replaced by callers.
+    pub fn remove(self) -> io::Result<()> {
+        std::fs::remove_dir_all(&self.root)
+    }
 }
 
 /// Generate 2–4 independent CPU bitrate-target renditions and a master
@@ -282,6 +291,7 @@ pub async fn generate_adaptive_vod(
         master_path,
         variants,
         renditions,
+        root: output_dir.to_path_buf(),
     })
 }
 
@@ -553,6 +563,8 @@ mod tests {
             .kind(),
             io::ErrorKind::InvalidInput
         );
+        result.remove().unwrap();
+        assert!(!dir.exists());
     }
 
     #[tokio::test]
