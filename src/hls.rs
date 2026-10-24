@@ -302,12 +302,35 @@ pub async fn generate_segmented_vod(
     output_dir: &Path,
     target_seconds: u32,
 ) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_from(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        0.0,
+    )
+    .await
+}
+
+/// Encode a bounded VOD from an explicit seek position. The source is
+/// probed before admitting work; an invalid/end-of-file offset cannot
+/// publish an empty playlist or spawn a per-segment FFmpeg job.
+pub async fn generate_segmented_vod_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
+) -> io::Result<HlsSegmentedArtifact> {
     generate_segmented_vod_with_quality(
         controller,
         ffprobe,
         source,
         output_dir,
         target_seconds,
+        start_seconds,
         None,
     )
     .await
@@ -319,6 +342,7 @@ async fn generate_segmented_vod_with_quality(
     source: &Path,
     output_dir: &Path,
     target_seconds: u32,
+    start_seconds: f64,
     quality: Option<MpegTsQuality>,
 ) -> io::Result<HlsSegmentedArtifact> {
     if !(1..=10).contains(&target_seconds) {
@@ -341,10 +365,21 @@ async fn generate_segmented_vod_with_quality(
             "source has no audio or video",
         ));
     }
-    let mut segment_count = (source_seconds / f64::from(target_seconds)).ceil() as usize;
+    if !start_seconds.is_finite()
+        || start_seconds < 0.0
+        || start_seconds >= source_seconds
+        || start_seconds > 600.0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid HLS seek position",
+        ));
+    }
+    let remaining_seconds = source_seconds - start_seconds;
+    let mut segment_count = (remaining_seconds / f64::from(target_seconds)).ceil() as usize;
     // A tiny final remainder belongs to the preceding full window.
     let final_remainder =
-        source_seconds - (segment_count.saturating_sub(1) as f64 * f64::from(target_seconds));
+        remaining_seconds - (segment_count.saturating_sub(1) as f64 * f64::from(target_seconds));
     if segment_count > 1 && final_remainder < 0.1 {
         segment_count -= 1;
     }
@@ -365,7 +400,7 @@ async fn generate_segmented_vod_with_quality(
     let mut segment_paths = Vec::with_capacity(segment_count);
     let mut total_bytes = 0_u64;
     for index in 0..segment_count {
-        let start = index as f64 * f64::from(target_seconds);
+        let start = start_seconds + index as f64 * f64::from(target_seconds);
         let remaining = source_seconds - start;
         if remaining <= 0.0 {
             return Err(io::Error::new(
@@ -512,6 +547,7 @@ pub async fn generate_adaptive_segmented_vod(
             source,
             &output_dir.join(&name),
             target_seconds,
+            0.0,
             Some(*quality),
         )
         .await?;
