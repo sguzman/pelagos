@@ -680,6 +680,34 @@ pub struct SessionCapabilitiesReport {
     pub icon_url: Option<String>,
 }
 
+/// Read only the current, enabled owner's session-reported device profile.
+/// Revoking the token or disabling the account immediately hides the profile.
+pub fn session_device_profile(
+    state_dir: &Path,
+    token: &str,
+) -> Result<Option<serde_json::Value>> {
+    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Ok(None);
+    }
+    let db = database(state_dir)?;
+    let digest = digest_token(token);
+    let stored: Option<String> = db
+        .query_row(
+            "SELECT e.device_profile_json FROM pelagos_session_capability_extras e
+             JOIN pelagos_sessions s ON s.id=e.session_id
+             JOIN pelagos_tokens t ON t.digest=s.digest
+             JOIN pelagos_users u ON u.id=t.user_id
+             WHERE t.digest=?1 AND u.disabled=0",
+            params![digest.as_slice()],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    stored
+        .map(|raw| serde_json::from_str(&raw).map_err(Into::into))
+        .transpose()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionCapabilityUpdate {
     Updated,
