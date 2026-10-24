@@ -23,6 +23,27 @@ async fn request(app: &Router, method: &str, path: &str, token: Option<&str>) ->
         .unwrap()
 }
 
+async fn request_range(
+    app: &Router,
+    method: &str,
+    path: &str,
+    token: &str,
+    range: &str,
+) -> Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(path)
+                .header("X-Emby-Token", token)
+                .header(header::RANGE, range)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 async fn text_body(response: Response) -> String {
     let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
@@ -165,6 +186,34 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert!(bytes.len() >= 188 && bytes.len() % 188 == 0);
     for packet in bytes.chunks_exact(188) {
         assert_eq!(packet[0], 0x47);
+    }
+    let partial = request_range(&app, "GET", first_path, &viewer, "bytes=0-187").await;
+    assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(partial.headers()[header::CONTENT_LENGTH], "188");
+    assert_eq!(
+        partial.headers()[header::CONTENT_RANGE],
+        format!("bytes 0-187/{}", bytes.len())
+    );
+    assert_eq!(partial.headers()[header::ACCEPT_RANGES], "bytes");
+    let first_packet = to_bytes(partial.into_body(), 188).await.unwrap();
+    assert_eq!(first_packet.len(), 188);
+    assert_eq!(first_packet[0], 0x47);
+    let suffix = request_range(&app, "GET", first_path, &viewer, "bytes=-188").await;
+    assert_eq!(suffix.status(), StatusCode::PARTIAL_CONTENT);
+    let last_packet = to_bytes(suffix.into_body(), 188).await.unwrap();
+    assert_eq!(last_packet.len(), 188);
+    assert_eq!(last_packet[0], 0x47);
+    let partial_head = request_range(&app, "HEAD", first_path, &viewer, "bytes=188-375").await;
+    assert_eq!(partial_head.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(partial_head.headers()[header::CONTENT_LENGTH], "188");
+    assert!(to_bytes(partial_head.into_body(), 4096).await.unwrap().is_empty());
+    for invalid in ["bytes=0-1,3-4", "bytes=999999999-", "bytes=-0"] {
+        let response = request_range(&app, "GET", first_path, &viewer, invalid).await;
+        assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(
+            response.headers()[header::CONTENT_RANGE],
+            format!("bytes */{}", bytes.len())
+        );
     }
     let head = request(&app, "HEAD", first_path, Some(&viewer)).await;
     assert_eq!(head.status(), StatusCode::OK);
@@ -430,6 +479,10 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
         .unwrap();
     assert!(bytes.len() > 188 && bytes.len() % 188 == 0);
     assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+    let partial = request_range(&app, "GET", &first, &listener, "bytes=0-187").await;
+    assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(partial.headers()[header::CONTENT_LENGTH], "188");
+    assert_eq!(to_bytes(partial.into_body(), 188).await.unwrap().len(), 188);
     assert_eq!(
         request(
             &app,
