@@ -219,6 +219,7 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
         format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=-1"),
         format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=6000000001"),
         format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=invalid"),
+        format!("/Videos/{id}/main.m3u8?segmentLength=2&startTimeTicks=30000000"),
     ] {
         assert_eq!(
             request(&app, "GET", &invalid, Some(&viewer)).await.status(),
