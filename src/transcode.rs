@@ -148,27 +148,14 @@ impl TranscodeController {
         start_seconds: f64,
         duration_seconds: f64,
     ) -> io::Result<u64> {
-        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
-        let _permit = self.permits.try_acquire().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::WouldBlock,
-                "FFmpeg worker capacity exhausted",
-            )
-        })?;
-        transcode_mpegts_inner(
-            &self.executable,
-            source,
-            output,
-            self.deadline,
-            self.max_bytes,
-            None,
-            Some(window),
+        self.try_run_window_capped(
+            source, output, start_seconds, duration_seconds, self.max_bytes, None,
         )
         .await
     }
 
-    /// Encode an independent bounded segment using a validated CPU quality
-    /// target. Uses the same worker limit, timeout, byte cap and file guard.
+    /// Encode a window with a validated CPU target while keeping the usual
+    /// controller limits and no-clobber output semantics.
     pub async fn try_run_window_with_quality(
         &self,
         source: &Path,
@@ -177,8 +164,33 @@ impl TranscodeController {
         duration_seconds: f64,
         quality: MpegTsQuality,
     ) -> io::Result<u64> {
+        self.try_run_window_capped(
+            source, output, start_seconds, duration_seconds, self.max_bytes, Some(quality),
+        )
+        .await
+    }
+
+    /// Enforce an additional caller-wide byte budget before each stdout
+    /// write, instead of only checking a multi-job aggregate after success.
+    /// The effective bound is always the smaller of the requested remainder
+    /// and the controller's existing per-job limit.
+    pub async fn try_run_window_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        quality: Option<MpegTsQuality>,
+    ) -> io::Result<u64> {
         let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
-        if !quality.valid() {
+        if remaining_bytes == 0 || remaining_bytes > MAX_TRANSCODE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid remaining FFmpeg output byte budget",
+            ));
+        }
+        if quality.is_some_and(|target| !target.valid()) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid MPEG-TS encoder target bitrates",
@@ -195,8 +207,8 @@ impl TranscodeController {
             source,
             output,
             self.deadline,
-            self.max_bytes,
-            Some(quality),
+            self.max_bytes.min(remaining_bytes),
+            quality,
             Some(window),
         )
         .await
