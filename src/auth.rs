@@ -793,7 +793,7 @@ fn query_registered_devices(
              JOIN pelagos_tokens t2 ON t2.digest=s2.digest
              JOIN pelagos_users u2 ON u2.id=t2.user_id
              WHERE s2.device_id=d.id AND u2.disabled=0
-             ORDER BY t2.created_unix DESC,s2.id DESC LIMIT 1
+             ORDER BY t2.created_unix DESC,s2.rowid DESC LIMIT 1
          )
          LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
          WHERE (?1 IS NULL OR d.last_user_id=?1)
