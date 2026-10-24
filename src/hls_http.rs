@@ -36,7 +36,12 @@ struct Published {
     kind: &'static str,
     digest: [u8; 32],
     source: PathBuf,
+    source_size: u64,
+    source_modified: Option<std::time::SystemTime>,
+    target_seconds: u32,
     private_root: PathBuf,
+    main_playlist: String,
+    master_playlist: String,
     media_playlist: String,
     segments: Vec<(PathBuf, u64)>,
 }
@@ -80,6 +85,36 @@ impl HlsRegistry {
             .cloned()
     }
 
+    /// Reuse an already completed rendition, never one owned by a sibling
+    /// session or built for different source bytes/segment settings.
+    fn cached(
+        &self,
+        item: &str,
+        kind: &str,
+        token: &str,
+        source: &Path,
+        source_size: u64,
+        source_modified: Option<std::time::SystemTime>,
+        target_seconds: u32,
+    ) -> Option<Arc<Published>> {
+        let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+        self.entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .rev()
+            .find(|entry| {
+                entry.item == item
+                    && entry.kind == kind
+                    && entry.digest == digest
+                    && entry.source == source
+                    && entry.source_size == source_size
+                    && entry.source_modified == source_modified
+                    && entry.target_seconds == target_seconds
+            })
+            .cloned()
+    }
+
     fn publish(&self, entry: Arc<Published>) {
         let removed = {
             let mut entries = self
@@ -114,6 +149,12 @@ fn create_private_directory(path: &Path) -> io::Result<()> {
 #[cfg(not(unix))]
 fn create_private_directory(path: &Path) -> io::Result<()> {
     fs::create_dir(path)
+}
+
+fn playlist_response(playlist: &str) -> Response {
+    let mut response = Response::new(Body::from(playlist.to_owned()));
+    set_private_headers(&mut response, "application/vnd.apple.mpegurl", playlist.len());
+    response
 }
 
 fn set_private_headers(response: &mut Response, mime: &'static str, size: usize) {
@@ -189,12 +230,37 @@ async fn generate_hls_playlist(
     if kind != expected_kind {
         return Err(StatusCode::NOT_FOUND);
     }
-    // Admission is reserved before touching any private output path.
+    let metadata = tokio::fs::metadata(&source)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let source_size = metadata.len();
+    let source_modified = metadata.modified().ok();
     let registry = state.hls_registry();
+    if let Some(existing) = registry.cached(
+        &item, expected_kind, &token, &source, source_size, source_modified, target_seconds,
+    ) {
+        return Ok(playlist_response(if master {
+            &existing.master_playlist
+        } else {
+            &existing.main_playlist
+        }));
+    }
+    // Admission is reserved before touching any private output path.
     let _permit = registry
         .jobs
         .try_acquire()
         .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    // Recheck after reserving the slot: the previous request may have
+    // just published this rendition and no second encode is necessary.
+    if let Some(existing) = registry.cached(
+        &item, expected_kind, &token, &source, source_size, source_modified, target_seconds,
+    ) {
+        return Ok(playlist_response(if master {
+            &existing.master_playlist
+        } else {
+            &existing.main_playlist
+        }));
+    }
     let id = Uuid::new_v4().simple().to_string();
     let private_root = std::env::temp_dir().join(format!("pelagos-hls-{id}"));
     create_private_directory(&private_root).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
@@ -249,27 +315,27 @@ async fn generate_hls_playlist(
             (path.clone(), artifact.segments[index].transport_bytes)
         })
         .collect();
-    let reply = if master {
-        format!(
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\nhls1/{id}/index.m3u8\n"
-        )
-    } else {
-        playlist
-    };
+    let master_playlist = format!(
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\nhls1/{id}/index.m3u8\n"
+    );
+    let response = playlist_response(if master { &master_playlist } else { &playlist });
     let publication = Arc::new(Published {
         id,
         item,
         kind: expected_kind,
         digest: Sha256::digest(token.as_bytes()).into(),
         source,
+        source_size,
+        source_modified,
+        target_seconds,
         private_root,
+        main_playlist: playlist,
+        master_playlist,
         media_playlist,
         segments,
     });
     cleanup.armed = false;
     registry.publish(publication);
-    let mut response = Response::new(Body::from(reply.clone()));
-    set_private_headers(&mut response, "application/vnd.apple.mpegurl", reply.len());
     Ok(response)
 }
 
@@ -412,7 +478,12 @@ mod tests {
                 kind: "video",
                 digest,
                 source: PathBuf::from("/private/media-1"),
+                source_size: 1,
+                source_modified: None,
+                target_seconds: 2,
                 private_root: root,
+                main_playlist: String::new(),
+                master_playlist: String::new(),
                 media_playlist: String::new(),
                 segments: Vec::new(),
             }));
@@ -443,7 +514,12 @@ mod tests {
             kind: "video",
             digest,
             source: PathBuf::from("/private/media-1"),
+            source_size: 1,
+            source_modified: None,
+            target_seconds: 2,
             private_root: fourth_root.clone(),
+            main_playlist: String::new(),
+            master_playlist: String::new(),
             media_playlist: String::new(),
             segments: Vec::new(),
         }));
