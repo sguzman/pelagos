@@ -631,7 +631,10 @@ mod tests {
                 {"Type":"Video","Container":"mp4,webm","VideoCodec":"h264,hevc","AudioCodec":"aac"}
             ]
         });
-        assert_eq!(profile_allows_direct_file(&valid, &source, &probe), Ok(true));
+        assert_eq!(
+            profile_allows_direct_file(&valid, &source, &probe),
+            Ok(true)
+        );
         for unsupported in [
             json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mkv"}]}),
             json!({"DirectPlayProfiles":[{"Type":"Audio","Container":"mp4"}]}),
@@ -648,16 +651,25 @@ mod tests {
         let allowed_negative = json!({
             "DirectPlayProfiles":[{"Type":"Video","Container":"-mkv","VideoCodec":"-hevc"}]
         });
-        assert_eq!(profile_allows_direct_file(&allowed_negative, &source, &probe), Ok(true));
+        assert_eq!(
+            profile_allows_direct_file(&allowed_negative, &source, &probe),
+            Ok(true)
+        );
         let rejected_negative = json!({
             "DirectPlayProfiles":[{"Type":"Video","Container":"-mp4"}]
         });
-        assert_eq!(profile_allows_direct_file(&rejected_negative, &source, &probe), Ok(false));
+        assert_eq!(
+            profile_allows_direct_file(&rejected_negative, &source, &probe),
+            Ok(false)
+        );
         let static_limit = json!({
             "DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],
             "MaxStaticBitrate":4_000_000
         });
-        assert_eq!(profile_allows_direct_file(&static_limit, &source, &probe), Ok(true));
+        assert_eq!(
+            profile_allows_direct_file(&static_limit, &source, &probe),
+            Ok(true)
+        );
         for invalid in [
             json!({"DirectPlayProfiles":{} }),
             json!({"DirectPlayProfiles":[{"Type":"Unknown","Container":"mp4"}]}),
