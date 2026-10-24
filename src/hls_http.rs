@@ -313,7 +313,7 @@ async fn generate_hls_playlist(
     if !(1..=4).contains(&rendition_count) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if rendition_count > 1 && (!master || expected_kind != "video" || start_time_ticks != 0) {
+    if rendition_count > 1 && (!master || expected_kind != "video") {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
@@ -387,12 +387,13 @@ async fn generate_hls_playlist(
                 audio_kbps: 192,
             },
         ];
-        let adaptive = hls::generate_adaptive_segmented_vod(
+        let adaptive = hls::generate_adaptive_segmented_vod_from(
             &registry.controller,
             state.probe_executable(),
             &source,
             &private_root.join("bundle"),
             target_seconds,
+            start_time_ticks as f64 / 10_000_000.0,
             &PROFILES[..usize::from(rendition_count)],
         )
         .await
