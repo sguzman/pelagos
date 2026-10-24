@@ -278,9 +278,18 @@ async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomic
     )
     .await;
     assert_eq!(sessions[0]["Capabilities"]["DeviceProfile"], profile);
-    assert_eq!(sessions[0]["Capabilities"]["AppStoreUrl"], "https://example.org/app");
-    assert_eq!(info["Capabilities"]["AppStoreUrl"], "https://example.org/app");
-    assert_eq!(info["Capabilities"]["IconUrl"], "https://example.org/icon.png");
+    assert_eq!(
+        sessions[0]["Capabilities"]["AppStoreUrl"],
+        "https://example.org/app"
+    );
+    assert_eq!(
+        info["Capabilities"]["AppStoreUrl"],
+        "https://example.org/app"
+    );
+    assert_eq!(
+        info["Capabilities"]["IconUrl"],
+        "https://example.org/icon.png"
+    );
     assert_eq!(info["IconUrl"], "https://example.org/icon.png");
     assert_eq!(info["AccessToken"], Value::Null);
     assert!(!info.to_string().contains(&viewer.access_token));
@@ -349,7 +358,10 @@ async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomic
     assert_eq!(basic["Capabilities"]["DeviceProfile"], Value::Null);
     assert_eq!(basic["Capabilities"]["AppStoreUrl"], Value::Null);
     assert_eq!(basic["Capabilities"]["IconUrl"], Value::Null);
-    assert_eq!(basic["Capabilities"]["PlayableMediaTypes"], serde_json::json!(["Audio"]));
+    assert_eq!(
+        basic["Capabilities"]["PlayableMediaTypes"],
+        serde_json::json!(["Audio"])
+    );
     auth::revoke(&state, &viewer.access_token).unwrap();
     let after_revoke = body(
         call(
