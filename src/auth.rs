@@ -56,6 +56,8 @@ pub struct SessionInfo {
     pub application_version: Option<String>,
     pub server_id: String,
     pub is_active: bool,
+    pub last_activity_date: Option<String>,
+    pub has_custom_device_name: bool,
     pub supports_media_control: bool,
     pub supports_remote_control: bool,
     pub playable_media_types: Vec<String>,
@@ -121,6 +123,10 @@ fn database(state_dir: &Path) -> Result<Connection> {
              supported_commands TEXT NOT NULL DEFAULT '',
              supports_media_control INTEGER NOT NULL DEFAULT 0 CHECK(supports_media_control IN (0,1)),
              supports_persistent_identifier INTEGER NOT NULL DEFAULT 1 CHECK(supports_persistent_identifier IN (0,1))
+         );
+         CREATE TABLE IF NOT EXISTS pelagos_session_activity(
+             session_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_sessions(id) ON DELETE CASCADE,
+             last_seen_unix INTEGER NOT NULL DEFAULT (unixepoch())
          );
          CREATE TABLE IF NOT EXISTS pelagos_devices(
              id TEXT PRIMARY KEY NOT NULL,
@@ -551,6 +557,23 @@ pub fn authenticate_with_client(
             params![device_id],
         )?;
     }
+    tx.execute(
+        "INSERT INTO pelagos_session_activity(session_id) VALUES(?1)",
+        params![session_id],
+    )?;
+    let last_activity_date: String = tx.query_row(
+        "SELECT strftime('%Y-%m-%dT%H:%M:%SZ', last_seen_unix, 'unixepoch')
+         FROM pelagos_session_activity WHERE session_id=?1",
+        params![session_id],
+        |row| row.get(0),
+    )?;
+    let has_custom_device_name: bool = tx.query_row(
+        "SELECT EXISTS(
+             SELECT 1 FROM pelagos_devices WHERE id=?1 AND custom_name IS NOT NULL
+         )",
+        params![metadata.device_id.as_deref()],
+        |row| row.get(0),
+    )?;
     tx.commit()?;
     let session_info = SessionInfo {
         id: session_id,
@@ -562,6 +585,8 @@ pub fn authenticate_with_client(
         application_version: metadata.application_version,
         server_id: server_id.to_owned(),
         is_active: true,
+        last_activity_date: Some(last_activity_date),
+        has_custom_device_name,
         supports_media_control: false,
         supports_remote_control: false,
         playable_media_types: Vec::new(),
@@ -594,6 +619,20 @@ pub fn identify(state_dir: &Path, token: &str, server_id: &str) -> Result<Option
             |row| user_from_row(row, server_id),
         )
         .optional()?;
+    if user.is_some() {
+        // Only a still-valid token can advance its own observed activity.
+        // Revoked/disabled tokens cannot resurrect a removed session.
+        db.execute(
+            "INSERT INTO pelagos_session_activity(session_id, last_seen_unix)
+             SELECT s.id,unixepoch() FROM pelagos_sessions s
+             JOIN pelagos_tokens t ON t.digest=s.digest
+             JOIN pelagos_users u ON u.id=t.user_id
+             WHERE t.digest=?1 AND u.disabled=0
+             ON CONFLICT(session_id) DO UPDATE SET
+                 last_seen_unix=excluded.last_seen_unix",
+            params![digest.as_slice()],
+        )?;
+    }
     Ok(user)
 }
 
@@ -690,6 +729,7 @@ pub fn list_sessions(
     requester: &User,
     server_id: &str,
     device_id: Option<&str>,
+    active_within_seconds: Option<u32>,
 ) -> Result<Vec<SessionInfo>> {
     let db = database(state_dir)?;
     let mut statement = db.prepare(
@@ -697,18 +737,29 @@ pub fn list_sessions(
                 s.application_version,
                 COALESCE(c.supports_media_control, 0),
                 COALESCE(c.playable_media_types, ''),
-                COALESCE(c.supported_commands, '')
+                COALESCE(c.supported_commands, ''),
+                strftime('%Y-%m-%dT%H:%M:%SZ',
+                    COALESCE(a.last_seen_unix,t.created_unix),'unixepoch'),
+                (d.custom_name IS NOT NULL)
          FROM pelagos_sessions s
          JOIN pelagos_tokens t ON t.digest=s.digest
          JOIN pelagos_users u ON u.id=t.user_id
          LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
+         LEFT JOIN pelagos_session_activity a ON a.session_id=s.id
+         LEFT JOIN pelagos_devices d ON d.id=s.device_id
          WHERE u.disabled=0
            AND (?1=1 OR u.id=?2)
            AND (?3 IS NULL OR s.device_id=?3)
+           AND (?4 IS NULL OR COALESCE(a.last_seen_unix,t.created_unix)>=unixepoch()-?4)
          ORDER BY s.id",
     )?;
     let rows = statement.query_map(
-        params![requester.policy.is_administrator, requester.id, device_id],
+        params![
+            requester.policy.is_administrator,
+            requester.id,
+            device_id,
+            active_within_seconds.map(i64::from),
+        ],
         |row| {
             Ok(SessionInfo {
                 id: row.get(0)?,
@@ -720,6 +771,8 @@ pub fn list_sessions(
                 application_version: row.get(6)?,
                 server_id: server_id.to_owned(),
                 is_active: true,
+                last_activity_date: row.get(10)?,
+                has_custom_device_name: row.get(11)?,
                 supports_media_control: row.get(7)?,
                 supports_remote_control: false,
                 playable_media_types: parse_session_items(row.get(8)?),
