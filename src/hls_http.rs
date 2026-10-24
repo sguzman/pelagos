@@ -319,7 +319,11 @@ mod tests {
         }
         assert!(registry.lookup("playlist-0", "media-1", owner).is_some());
         assert!(registry.lookup("playlist-0", "media-2", owner).is_none());
-        assert!(registry.lookup("playlist-0", "media-1", "other-token").is_none());
+        assert!(
+            registry
+                .lookup("playlist-0", "media-1", "other-token")
+                .is_none()
+        );
         let in_flight = registry.lookup("playlist-0", "media-1", owner).unwrap();
         let fourth_root = temp.path().join("session-3");
         fs::create_dir(&fourth_root).unwrap();
