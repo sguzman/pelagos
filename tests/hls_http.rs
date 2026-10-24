@@ -179,7 +179,15 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
         StatusCode::BAD_REQUEST
     );
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
-    let result = request(&app, "GET", &route, Some(&viewer)).await;
+    // Players can request main and master concurrently. Join the bounded
+    // publication queue instead of returning 429 for the second request.
+    let concurrent_master = format!("/Videos/{id}/master.m3u8?segmentLength=2");
+    let (result, paired) = tokio::join!(
+        request(&app, "GET", &route, Some(&viewer)),
+        request(&app, "GET", &concurrent_master, Some(&viewer))
+    );
+    assert_eq!(paired.status(), StatusCode::OK);
+    let paired_manifest = text_body(paired).await;
     assert_eq!(result.status(), StatusCode::OK);
     assert_eq!(
         result.headers()[header::CONTENT_TYPE],
@@ -263,6 +271,14 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
 
     assert!(!manifest.contains(&viewer));
     assert!(!manifest.contains("segment00000.ts"));
+    let first_segment_id = manifest
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .split('/')
+        .nth(1)
+        .unwrap();
+    assert!(paired_manifest.contains(&format!("hls1/{first_segment_id}/index.m3u8")));
     let segment_paths = manifest
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
