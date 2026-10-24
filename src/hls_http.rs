@@ -83,7 +83,7 @@ struct CacheLookup<'a> {
     rendition_count: u8,
 }
 
-/// Small private cache; a segment request holds its own Arc during eviction.
+/// Small private LRU cache; segment access promotes active publications and\n/// an in-flight request holds its own Arc during eviction.
 #[derive(Debug)]
 pub struct HlsRegistry {
     jobs: Semaphore,
@@ -129,37 +129,40 @@ impl HlsRegistry {
 
     fn lookup(&self, id: &str, item: &str, kind: &str, token: &str) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        self.entries
+        let mut entries = self
+            .entries
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .find(|entry| {
-                entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest
-            })
-            .cloned()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let index = entries.iter().position(|entry| {
+            entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest
+        })?;
+        let entry = entries.remove(index)?;
+        entries.push_back(entry.clone());
+        Some(entry)
     }
 
     /// Reuse an already completed rendition, never one owned by a sibling
     /// session or built for different source bytes/segment settings.
     fn cached(&self, query: &CacheLookup<'_>) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(query.token.as_bytes()).into();
-        self.entries
+        let mut entries = self
+            .entries
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .rev()
-            .find(|entry| {
-                entry.item == query.item
-                    && entry.kind == query.kind
-                    && entry.digest == digest
-                    && entry.source == query.source
-                    && entry.source_size == query.size
-                    && entry.source_modified == query.modified
-                    && entry.target_seconds == query.target_seconds
-                    && entry.start_time_ticks == query.start_time_ticks
-                    && entry.rendition_count == query.rendition_count
-            })
-            .cloned()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let index = entries.iter().rposition(|entry| {
+            entry.item == query.item
+                && entry.kind == query.kind
+                && entry.digest == digest
+                && entry.source == query.source
+                && entry.source_size == query.size
+                && entry.source_modified == query.modified
+                && entry.target_seconds == query.target_seconds
+                && entry.start_time_ticks == query.start_time_ticks
+                && entry.rendition_count == query.rendition_count
+        })?;
+        let entry = entries.remove(index)?;
+        entries.push_back(entry.clone());
+        Some(entry)
     }
 
     fn publish(&self, entry: Arc<Published>) {
@@ -1174,21 +1177,24 @@ mod tests {
             segments: Vec::new(),
             variants: Vec::new(),
         }));
+        // Cached media and segment access make these publications recently
+        // used. Evict the cold session-1 rather than active session-0.
         assert!(
             registry
                 .lookup("playlist-0", "media-1", "video", owner)
-                .is_none()
+                .is_some()
         );
+        assert!(!temp.path().join("session-1").exists());
         assert!(first_root.exists());
         drop(in_flight);
-        assert!(!first_root.exists());
+        assert!(first_root.exists());
         assert!(
             registry
                 .lookup("playlist-3", "media-1", "video", owner)
                 .is_some()
         );
         drop(registry);
-        for index in 1..=3 {
+        for index in [0, 2, 3] {
             assert!(!temp.path().join(format!("session-{index}")).exists());
         }
     }
