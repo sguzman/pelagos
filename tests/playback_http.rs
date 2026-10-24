@@ -261,6 +261,63 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         .await;
         assert_eq!(response.status(), expected);
     }
+    // Session-declared capabilities are used even without a profile repeated
+    // in the playback body; explicit per-request profiles take precedence.
+    let allowed_profile = serde_json::json!({
+        "DirectPlayProfiles":[
+            {"Type":"Video","Container":"mp4","VideoCodec":"h264","AudioCodec":"aac"}
+        ]
+    });
+    let denied_profile = serde_json::json!({
+        "DirectPlayProfiles":[{"Type":"Video","Container":"mkv"}]
+    });
+    assert_eq!(
+        request(
+            &router, "POST", "/Sessions/Capabilities/Full",
+            Some(&token),
+            &serde_json::json!({"DeviceProfile":allowed_profile}).to_string(),
+        ).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&router, "GET", &route, Some(&token), "").await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &router, "POST", "/Sessions/Capabilities/Full",
+            Some(&token),
+            &serde_json::json!({"DeviceProfile":denied_profile}).to_string(),
+        ).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(
+            &router, "POST", &route, Some(&token),
+            &serde_json::json!({"DeviceProfile":allowed_profile}).to_string(),
+        ).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(
+            &router, "POST", "/Sessions/Capabilities/Full",
+            Some(&token), "{}"
+        ).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&token), "{}").await.status(),
+        StatusCode::OK
+    );
+
     let accepted_user = format!("{route}?userId={current_user}");
     assert_eq!(
         request(&router, "GET", &accepted_user, Some(&token), "")
