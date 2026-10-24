@@ -231,7 +231,7 @@ async fn generate_video_playlist(
         .collect();
     let reply = if master {
         format!(
-            "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\\nhls1/{id}/index.m3u8\\n"
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\nhls1/{id}/index.m3u8\n"
         )
     } else {
         playlist
