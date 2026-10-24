@@ -713,7 +713,6 @@ struct SessionQuery {
 
 /// Last-activity filtering uses timestamps of successful authenticated
 /// requests, not playback heartbeat or client remote-control capabilities.
-
 async fn sessions(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
