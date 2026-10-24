@@ -122,6 +122,15 @@ fn database(state_dir: &Path) -> Result<Connection> {
              supports_media_control INTEGER NOT NULL DEFAULT 0 CHECK(supports_media_control IN (0,1)),
              supports_persistent_identifier INTEGER NOT NULL DEFAULT 1 CHECK(supports_persistent_identifier IN (0,1))
          );
+         CREATE TABLE IF NOT EXISTS pelagos_devices(
+             id TEXT PRIMARY KEY NOT NULL,
+             name TEXT,
+             custom_name TEXT,
+             app_name TEXT,
+             app_version TEXT,
+             last_user_id TEXT REFERENCES pelagos_users(id) ON DELETE SET NULL,
+             last_authenticated_unix INTEGER NOT NULL DEFAULT (unixepoch())
+         );
          CREATE TABLE IF NOT EXISTS pelagos_library_access(
              user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
              root TEXT NOT NULL,
@@ -513,6 +522,27 @@ pub fn authenticate_with_client(
             metadata.application_version,
         ],
     )?;
+    // Device IDs are supplied by authenticated clients, not inferred from
+    // IP addresses or generated for clients which never supplied one.
+    if let Some(device_id) = metadata.device_id.as_deref().filter(|id| !id.is_empty()) {
+        tx.execute(
+            "INSERT INTO pelagos_devices(id, name, app_name, app_version, last_user_id)
+             VALUES(?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(id) DO UPDATE SET
+                 name=excluded.name,
+                 app_name=excluded.app_name,
+                 app_version=excluded.app_version,
+                 last_user_id=excluded.last_user_id,
+                 last_authenticated_unix=unixepoch()",
+            params![
+                device_id,
+                metadata.device_name.as_deref(),
+                metadata.client.as_deref(),
+                metadata.application_version.as_deref(),
+                user.id,
+            ],
+        )?;
+    }
     tx.commit()?;
     let session_info = SessionInfo {
         id: session_id,
@@ -689,6 +719,92 @@ pub fn list_sessions(
             })
         },
     )?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Subset of pinned ClientCapabilitiesDto without invented DeviceProfile or URLs.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeviceCapabilitiesDto {
+    pub playable_media_types: Vec<String>,
+    pub supported_commands: Vec<String>,
+    pub supports_media_control: bool,
+    pub supports_persistent_identifier: bool,
+    pub device_profile: Option<String>,
+    pub app_store_url: Option<String>,
+    pub icon_url: Option<String>,
+}
+
+/// Stable authenticated device registration; credential fields are never populated.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DeviceInfoDto {
+    pub name: Option<String>,
+    pub custom_name: Option<String>,
+    pub access_token: Option<String>,
+    pub id: String,
+    pub last_user_name: Option<String>,
+    pub app_name: Option<String>,
+    pub app_version: Option<String>,
+    pub last_user_id: Option<String>,
+    // Login timestamps are not Jellyfin's general "last activity".
+    pub date_last_activity: Option<String>,
+    pub capabilities: DeviceCapabilitiesDto,
+    pub icon_url: Option<String>,
+}
+
+/// Administrator inventory only. A device is registered on successful
+/// authentication with a real client-supplied device ID. Revoking a token
+/// does not delete the device's registration; returned capabilities are
+/// limited to the latest currently valid session for the device.
+pub fn list_registered_devices(
+    state_dir: &Path,
+    user_filter: Option<&str>,
+) -> Result<Vec<DeviceInfoDto>> {
+    let db = database(state_dir)?;
+    let mut query = db.prepare(
+        "SELECT d.id,d.name,d.custom_name,d.app_name,d.app_version,
+                d.last_user_id,u.username,
+                COALESCE(c.playable_media_types,''),
+                COALESCE(c.supported_commands,''),
+                COALESCE(c.supports_media_control,0),
+                COALESCE(c.supports_persistent_identifier,1)
+         FROM pelagos_devices d
+         LEFT JOIN pelagos_users u ON u.id=d.last_user_id
+         LEFT JOIN pelagos_sessions s ON s.id=(
+             SELECT s2.id FROM pelagos_sessions s2
+             JOIN pelagos_tokens t2 ON t2.digest=s2.digest
+             JOIN pelagos_users u2 ON u2.id=t2.user_id
+             WHERE s2.device_id=d.id AND u2.disabled=0
+             ORDER BY t2.created_unix DESC,s2.id DESC LIMIT 1
+         )
+         LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
+         WHERE (?1 IS NULL OR d.last_user_id=?1)
+         ORDER BY d.id",
+    )?;
+    let rows = query.query_map(params![user_filter], |row| {
+        Ok(DeviceInfoDto {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            custom_name: row.get(2)?,
+            access_token: None,
+            app_name: row.get(3)?,
+            app_version: row.get(4)?,
+            last_user_id: row.get(5)?,
+            last_user_name: row.get(6)?,
+            date_last_activity: None,
+            capabilities: DeviceCapabilitiesDto {
+                playable_media_types: parse_session_items(row.get(7)?),
+                supported_commands: parse_session_items(row.get(8)?),
+                supports_media_control: row.get(9)?,
+                supports_persistent_identifier: row.get(10)?,
+                device_profile: None,
+                app_store_url: None,
+                icon_url: None,
+            },
+            icon_url: None,
+        })
+    })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
