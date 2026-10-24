@@ -115,6 +115,13 @@ fn database(state_dir: &Path) -> Result<Connection> {
              device_name TEXT,
              application_version TEXT
          );
+         CREATE TABLE IF NOT EXISTS pelagos_session_capabilities(
+             session_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_sessions(id) ON DELETE CASCADE,
+             playable_media_types TEXT NOT NULL DEFAULT '',
+             supported_commands TEXT NOT NULL DEFAULT '',
+             supports_media_control INTEGER NOT NULL DEFAULT 0 CHECK(supports_media_control IN (0,1)),
+             supports_persistent_identifier INTEGER NOT NULL DEFAULT 1 CHECK(supports_persistent_identifier IN (0,1))
+         );
          CREATE TABLE IF NOT EXISTS pelagos_library_access(
              user_id TEXT NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE,
              root TEXT NOT NULL,
@@ -564,6 +571,81 @@ pub fn revoke(state_dir: &Path, token: &str) -> Result<bool> {
     )? != 0)
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct SessionCapabilitiesReport {
+    pub playable_media_types: Vec<String>,
+    pub supported_commands: Vec<String>,
+    pub supports_media_control: bool,
+    pub supports_persistent_identifier: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionCapabilityUpdate {
+    Updated,
+    StaleSession,
+    OtherSession,
+}
+
+/// Persist client-reported capabilities for the token's own session only.
+/// A report describes the client, not Pelagos remote-control implementation.
+pub fn set_session_capabilities(
+    state_dir: &Path,
+    token: &str,
+    requested_id: Option<&str>,
+    report: &SessionCapabilitiesReport,
+) -> Result<SessionCapabilityUpdate> {
+    if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Ok(SessionCapabilityUpdate::StaleSession);
+    }
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let digest = digest_token(token);
+    let session_id = tx
+        .query_row(
+            "SELECT s.id FROM pelagos_sessions s
+             JOIN pelagos_tokens t ON t.digest=s.digest
+             JOIN pelagos_users u ON u.id=t.user_id
+             WHERE t.digest=?1 AND u.disabled=0",
+            params![digest.as_slice()],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(session_id) = session_id else {
+        return Ok(SessionCapabilityUpdate::StaleSession);
+    };
+    if requested_id.is_some_and(|id| id != session_id) {
+        return Ok(SessionCapabilityUpdate::OtherSession);
+    }
+    tx.execute(
+        "INSERT INTO pelagos_session_capabilities(
+            session_id, playable_media_types, supported_commands,
+            supports_media_control, supports_persistent_identifier
+         ) VALUES(?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(session_id) DO UPDATE SET
+            playable_media_types=excluded.playable_media_types,
+            supported_commands=excluded.supported_commands,
+            supports_media_control=excluded.supports_media_control,
+            supports_persistent_identifier=excluded.supports_persistent_identifier",
+        params![
+            session_id,
+            report.playable_media_types.join(","),
+            report.supported_commands.join(","),
+            report.supports_media_control,
+            report.supports_persistent_identifier,
+        ],
+    )?;
+    tx.commit()?;
+    Ok(SessionCapabilityUpdate::Updated)
+}
+
+fn parse_session_items(value: String) -> Vec<String> {
+    if value.is_empty() {
+        Vec::new()
+    } else {
+        value.split(',').map(str::to_owned).collect()
+    }
+}
+
 /// Return currently valid session metadata, scoped to the requesting user.
 pub fn list_sessions(
     state_dir: &Path,
@@ -574,10 +656,14 @@ pub fn list_sessions(
     let db = database(state_dir)?;
     let mut statement = db.prepare(
         "SELECT s.id, u.id, u.username, s.client, s.device_id, s.device_name,
-                s.application_version
+                s.application_version,
+                COALESCE(c.supports_media_control, 0),
+                COALESCE(c.playable_media_types, ''),
+                COALESCE(c.supported_commands, '')
          FROM pelagos_sessions s
          JOIN pelagos_tokens t ON t.digest=s.digest
          JOIN pelagos_users u ON u.id=t.user_id
+         LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
          WHERE u.disabled=0
            AND (?1=1 OR u.id=?2)
            AND (?3 IS NULL OR s.device_id=?3)
@@ -596,10 +682,10 @@ pub fn list_sessions(
                 application_version: row.get(6)?,
                 server_id: server_id.to_owned(),
                 is_active: true,
-                supports_media_control: false,
+                supports_media_control: row.get(7)?,
                 supports_remote_control: false,
-                playable_media_types: Vec::new(),
-                supported_commands: Vec::new(),
+                playable_media_types: parse_session_items(row.get(8)?),
+                supported_commands: parse_session_items(row.get(9)?),
             })
         },
     )?;
