@@ -266,8 +266,8 @@ async fn generate_single_segment_vod_with_quality(
 
 /// A bounded, independently encoded series of MPEG-TS VOD segments.
 /// The published playlist references only the generated relative filenames.
-/// The caller owns cleanup. A separate authenticated video HTTP subset may
-/// publish this artifact without claiming full Jellyfin dynamic HLS parity.
+/// The caller owns cleanup. The authenticated video/audio HTTP subset
+/// publishes these verified short VOD artifacts without full Jellyfin parity.
 #[derive(Debug, Clone)]
 pub struct HlsSegmentedArtifact {
     pub playlist_path: PathBuf,
@@ -494,7 +494,8 @@ async fn generate_segmented_vod_with_quality(
 }
 
 /// Completed adaptive multi-segment renditions with measured bandwidths.
-/// These are private artifacts, not yet authenticated Jellyfin HLS endpoints.
+/// These private artifacts also back a bounded opt-in authenticated video
+/// HLS master/variant HTTP subset, not a full Jellyfin adaptive scheduler.
 #[derive(Debug, Clone)]
 pub struct HlsAdaptiveSegmentedArtifact {
     pub master_path: PathBuf,
@@ -510,7 +511,9 @@ impl HlsAdaptiveSegmentedArtifact {
 }
 
 /// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
-/// Publish the master only after all requested outputs are verified.
+/// Publish the master only after all requested outputs are verified. The
+/// authenticated video HTTP path can expose these as an opt-in, source- and
+/// token-scoped short VOD ladder; long-running adaptive switching is untested.
 /// Variant order follows measured transport bandwidth, not input targets.
 pub async fn generate_adaptive_segmented_vod(
     controller: &TranscodeController,
