@@ -453,8 +453,7 @@ async fn serve_segment(
                 set_private_headers(&mut response, "video/mp2t", 0);
                 response.headers_mut().insert(
                     ETAG,
-                    HeaderValue::from_str(&etag)
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+                    HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
                 );
                 response
                     .headers_mut()
