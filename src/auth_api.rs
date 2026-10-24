@@ -158,13 +158,7 @@ async fn change_password(
     let dir = state_dir(&state)?;
     let user_id = user.id;
     let outcome = tokio::task::spawn_blocking(move || {
-        auth::change_own_password(
-            &dir,
-            &user_id,
-            &token,
-            &body.current_pw,
-            &body.new_pw,
-        )
+        auth::change_own_password(&dir, &user_id, &token, &body.current_pw, &body.new_pw)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
