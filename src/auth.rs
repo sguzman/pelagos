@@ -128,6 +128,12 @@ fn database(state_dir: &Path) -> Result<Connection> {
              session_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_sessions(id) ON DELETE CASCADE,
              last_seen_unix INTEGER NOT NULL DEFAULT (unixepoch())
          );
+         CREATE TABLE IF NOT EXISTS pelagos_session_capability_extras(
+             session_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_sessions(id) ON DELETE CASCADE,
+             device_profile_json TEXT,
+             app_store_url TEXT,
+             icon_url TEXT
+         );
          CREATE TABLE IF NOT EXISTS pelagos_devices(
              id TEXT PRIMARY KEY NOT NULL,
              name TEXT,
@@ -664,6 +670,9 @@ pub struct SessionCapabilitiesReport {
     pub supported_commands: Vec<String>,
     pub supports_media_control: bool,
     pub supports_persistent_identifier: bool,
+    pub device_profile: Option<serde_json::Value>,
+    pub app_store_url: Option<String>,
+    pub icon_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -719,6 +728,26 @@ pub fn set_session_capabilities(
             report.supported_commands.join(","),
             report.supports_media_control,
             report.supports_persistent_identifier,
+        ],
+    )?;
+    let profile_json = report
+        .device_profile
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
+    tx.execute(
+        "INSERT INTO pelagos_session_capability_extras(
+            session_id, device_profile_json, app_store_url, icon_url
+         ) VALUES(?1, ?2, ?3, ?4)
+         ON CONFLICT(session_id) DO UPDATE SET
+            device_profile_json=excluded.device_profile_json,
+            app_store_url=excluded.app_store_url,
+            icon_url=excluded.icon_url",
+        params![
+            session_id,
+            profile_json,
+            report.app_store_url.as_deref(),
+            report.icon_url.as_deref(),
         ],
     )?;
     tx.commit()?;
@@ -812,7 +841,7 @@ pub struct DeviceCapabilitiesDto {
     pub supported_commands: Vec<String>,
     pub supports_media_control: bool,
     pub supports_persistent_identifier: bool,
-    pub device_profile: Option<String>,
+    pub device_profile: Option<serde_json::Value>,
     pub app_store_url: Option<String>,
     pub icon_url: Option<String>,
 }
@@ -866,7 +895,8 @@ fn query_registered_devices(
                 COALESCE(c.supported_commands,''),
                 COALESCE(c.supports_media_control,0),
                 COALESCE(c.supports_persistent_identifier,1),
-                strftime('%Y-%m-%dT%H:%M:%SZ',d.last_authenticated_unix,'unixepoch')
+                strftime('%Y-%m-%dT%H:%M:%SZ',d.last_authenticated_unix,'unixepoch'),
+                e.device_profile_json,e.app_store_url,e.icon_url
          FROM pelagos_devices d
          LEFT JOIN pelagos_users u ON u.id=d.last_user_id
          LEFT JOIN pelagos_sessions s ON s.id=(
@@ -877,11 +907,14 @@ fn query_registered_devices(
              ORDER BY t2.created_unix DESC,s2.rowid DESC LIMIT 1
          )
          LEFT JOIN pelagos_session_capabilities c ON c.session_id=s.id
+         LEFT JOIN pelagos_session_capability_extras e ON e.session_id=s.id
          WHERE (?1 IS NULL OR d.last_user_id=?1)
            AND (?2 IS NULL OR d.id=?2)
          ORDER BY d.id",
     )?;
     let rows = query.query_map(params![user_filter, device_filter], |row| {
+        let profile: Option<String> = row.get(12)?;
+        let icon_url: Option<String> = row.get(14)?;
         Ok(DeviceInfoDto {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -897,11 +930,11 @@ fn query_registered_devices(
                 supported_commands: parse_session_items(row.get(8)?),
                 supports_media_control: row.get(9)?,
                 supports_persistent_identifier: row.get(10)?,
-                device_profile: None,
-                app_store_url: None,
-                icon_url: None,
+                device_profile: profile.and_then(|raw| serde_json::from_str(&raw).ok()),
+                app_store_url: row.get(13)?,
+                icon_url: icon_url.clone(),
             },
-            icon_url: None,
+            icon_url,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)

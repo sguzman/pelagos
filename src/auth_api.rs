@@ -614,6 +614,9 @@ async fn report_session_capabilities(
         supported_commands: parse_reported_capabilities(query.supported_commands, 64)?,
         supports_media_control: query.supports_media_control.unwrap_or(false),
         supports_persistent_identifier: query.supports_persistent_identifier.unwrap_or(true),
+        device_profile: None,
+        app_store_url: None,
+        icon_url: None,
     };
     save_session_capabilities(state, headers, query.id, report).await
 }
@@ -651,6 +654,9 @@ struct FullSessionCapabilities {
     supported_commands: Option<CapabilitySequence>,
     supports_media_control: Option<bool>,
     supports_persistent_identifier: Option<bool>,
+    device_profile: Option<serde_json::Value>,
+    app_store_url: Option<String>,
+    icon_url: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -667,13 +673,65 @@ async fn report_session_capabilities_full(
     Query(query): Query<FullSessionCapabilitiesQuery>,
     Json(body): Json<FullSessionCapabilities>,
 ) -> Result<StatusCode, StatusCode> {
+    if let Some(profile) = body.device_profile.as_ref() {
+        if !profile.is_object()
+            || serde_json::to_vec(profile)
+                .map_err(|_| StatusCode::BAD_REQUEST)?
+                .len()
+                > 65_536
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let mut visited = 0;
+        if !bounded_device_profile(profile, 0, &mut visited) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+    for url in [&body.app_store_url, &body.icon_url].into_iter().flatten() {
+        if url.len() > 2048
+            || url.chars().any(char::is_control)
+            || !(url.starts_with("https://") || url.starts_with("http://"))
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
     let report = auth::SessionCapabilitiesReport {
         playable_media_types: from_capability_sequence(body.playable_media_types, 16)?,
         supported_commands: from_capability_sequence(body.supported_commands, 64)?,
         supports_media_control: body.supports_media_control.unwrap_or(false),
         supports_persistent_identifier: body.supports_persistent_identifier.unwrap_or(false),
+        device_profile: body.device_profile,
+        app_store_url: body.app_store_url,
+        icon_url: body.icon_url,
     };
     save_session_capabilities(state, headers, query.id, report).await
+}
+
+/// Bound the untrusted nested device profile structure. This only stores a
+/// negotiation offer; transcoding/direct-play decisions do not use it yet.
+fn bounded_device_profile(value: &serde_json::Value, depth: usize, count: &mut usize) -> bool {
+    *count += 1;
+    if depth > 16 || *count > 4096 {
+        return false;
+    }
+    match value {
+        serde_json::Value::String(s) => s.len() <= 4096 && !s.chars().any(char::is_control),
+        serde_json::Value::Array(items) => {
+            items.len() <= 512
+                && items
+                    .iter()
+                    .all(|item| bounded_device_profile(item, depth + 1, count))
+        }
+        serde_json::Value::Object(entries) => {
+            entries.len() <= 256
+                && entries.iter().all(|(key, value)| {
+                    key.len() <= 128
+                        && !key.chars().any(char::is_control)
+                        && bounded_device_profile(value, depth + 1, count)
+                })
+        }
+        _ => true,
+    }
 }
 
 async fn save_session_capabilities(
