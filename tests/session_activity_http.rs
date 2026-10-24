@@ -119,6 +119,7 @@ async fn last_activity_filter_is_based_on_valid_authenticated_requests() {
     auth::rename_registered_device(&state, "tv-session-activity", Some("Den")).unwrap();
     let renamed = json_body(request(&router, path, &admin.access_token).await).await;
     assert_eq!(renamed[0]["HasCustomDeviceName"], true);
+    assert_eq!(renamed[0]["DeviceName"], "Den");
 
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
@@ -127,6 +128,11 @@ async fn last_activity_filter_is_based_on_valid_authenticated_requests() {
     let persisted = json_body(request(&restarted, path, &admin.access_token).await).await;
     assert_eq!(persisted.as_array().unwrap().len(), 1);
     assert_eq!(persisted[0]["HasCustomDeviceName"], true);
+    assert_eq!(persisted[0]["DeviceName"], "Den");
+    auth::rename_registered_device(&state, "tv-session-activity", None).unwrap();
+    let restored = json_body(request(&restarted, path, &admin.access_token).await).await;
+    assert_eq!(restored[0]["DeviceName"], "Living Room");
+    assert_eq!(restored[0]["HasCustomDeviceName"], false);
 
     assert_eq!(
         request(
