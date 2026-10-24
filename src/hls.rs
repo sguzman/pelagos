@@ -8,7 +8,7 @@ use std::{
 };
 
 use tokio::{
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     io::AsyncWriteExt,
 };
 
@@ -52,7 +52,9 @@ pub async fn generate_single_segment_vod(
     source: &Path,
     output_dir: &Path,
 ) -> io::Result<HlsVodArtifact> {
-    fs::create_dir(output_dir).await?;
+    // Create the directory synchronously before the first suspension point,
+    // ensuring the drop guard exists whenever cancellation is possible.
+    std::fs::create_dir(output_dir)?;
     let mut partial = PartialBundle {
         dir: output_dir.to_path_buf(),
         committed: false,
