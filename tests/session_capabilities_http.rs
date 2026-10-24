@@ -78,12 +78,24 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
     let rows = body(call(&router, "GET", "/Sessions", Some(&first.access_token)).await).await;
     let sessions = rows.as_array().unwrap();
     assert_eq!(sessions.len(), 2);
-    let reported = sessions.iter().find(|row| row["Id"] == first.session_info.id).unwrap();
-    let untouched = sessions.iter().find(|row| row["Id"] == second.session_info.id).unwrap();
+    let reported = sessions
+        .iter()
+        .find(|row| row["Id"] == first.session_info.id)
+        .unwrap();
+    let untouched = sessions
+        .iter()
+        .find(|row| row["Id"] == second.session_info.id)
+        .unwrap();
     assert_eq!(reported["SupportsMediaControl"], true);
     assert_eq!(reported["SupportsRemoteControl"], false);
-    assert_eq!(reported["PlayableMediaTypes"], serde_json::json!(["Audio", "Video"]));
-    assert_eq!(reported["SupportedCommands"], serde_json::json!(["Play", "Pause"]));
+    assert_eq!(
+        reported["PlayableMediaTypes"],
+        serde_json::json!(["Audio", "Video"])
+    );
+    assert_eq!(
+        reported["SupportedCommands"],
+        serde_json::json!(["Play", "Pause"])
+    );
     assert_eq!(untouched["SupportsMediaControl"], false);
     assert_eq!(untouched["PlayableMediaTypes"], serde_json::json!([]));
 
@@ -92,11 +104,14 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
         state.clone(),
     )));
     let after = body(call(&restarted, "GET", "/Sessions", Some(&first.access_token)).await).await;
-    assert!(after.as_array().unwrap().iter().any(|row| {
-        row["Id"] == first.session_info.id && row["SupportsMediaControl"] == true
-    }));
+    assert!(
+        after.as_array().unwrap().iter().any(|row| {
+            row["Id"] == first.session_info.id && row["SupportsMediaControl"] == true
+        })
+    );
     auth::revoke(&state, &first.access_token).unwrap();
-    let after_logout = body(call(&restarted, "GET", "/Sessions", Some(&second.access_token)).await).await;
+    let after_logout =
+        body(call(&restarted, "GET", "/Sessions", Some(&second.access_token)).await).await;
     assert_eq!(after_logout.as_array().unwrap().len(), 1);
     assert_eq!(after_logout[0]["Id"], second.session_info.id);
 }
