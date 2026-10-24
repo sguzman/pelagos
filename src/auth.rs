@@ -465,6 +465,20 @@ pub fn authenticate_with_client(
     let token: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
     let digest = digest_token(&token);
     let tx = db.transaction()?;
+    // Argon2 verification above can overlap an administrator reset, disable,
+    // deletion or rename. Revalidate the same credential snapshot in the
+    // token-issuance transaction so superseded passwords cannot mint sessions.
+    let still_valid: bool = tx.query_row(
+        "SELECT EXISTS(
+             SELECT 1 FROM pelagos_users
+             WHERE id=?1 AND username_key=?2 AND password_hash=?3 AND disabled=0
+         )",
+        params![id, name.to_lowercase(), stored_hash],
+        |row| row.get(0),
+    )?;
+    if !still_valid {
+        return Ok(None);
+    }
     tx.execute(
         "INSERT INTO pelagos_tokens(digest, user_id) VALUES(?1, ?2)",
         params![digest.as_slice(), id],
