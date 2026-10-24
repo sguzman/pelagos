@@ -1036,9 +1036,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     assert_eq!(four_response.status(), StatusCode::OK);
     let four_master = text_body(four_response).await;
     assert_eq!(
-        four_master
-            .matches("#EXT-X-STREAM-INF:BANDWIDTH=")
-            .count(),
+        four_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
         4
     );
     assert_eq!(four_master.matches(",RESOLUTION=640x360").count(), 4);
@@ -1068,21 +1066,22 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         .unwrap();
     assert!(!fourth_bytes.is_empty());
     assert_eq!(fourth_bytes.len() % 188, 0);
-    assert!(fourth_bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+    assert!(
+        fourth_bytes
+            .chunks_exact(188)
+            .all(|packet| packet[0] == 0x47)
+    );
     let four_bandwidths = four_master
         .lines()
         .filter_map(|line| line.strip_prefix("#EXT-X-STREAM-INF:BANDWIDTH="))
-        .map(|attrs| {
-            attrs
-                .split(',')
-                .next()
-                .unwrap()
-                .parse::<u64>()
-                .unwrap()
-        })
+        .map(|attrs| attrs.split(',').next().unwrap().parse::<u64>().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(four_bandwidths.len(), 4);
-    assert!(four_bandwidths.windows(2).all(|window| window[0] < window[1]));
+    assert!(
+        four_bandwidths
+            .windows(2)
+            .all(|window| window[0] < window[1])
+    );
 
     auth::revoke(&state_dir, &owner).unwrap();
     assert_eq!(
