@@ -136,6 +136,34 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     assert!(!listing.to_string().contains(&viewer.access_token));
     assert!(!listing.to_string().contains(&duplicate.access_token));
 
+    // The upstream inventory orders by descending recorded activity.
+    // Set deterministic ages rather than depending on CI clock timing.
+    let db = rusqlite::Connection::open(state.join("pelagos-auth.sqlite3")).unwrap();
+    db.execute(
+        "UPDATE pelagos_devices SET last_authenticated_unix=unixepoch()-3600
+         WHERE id='living-room-tv'",
+        [],
+    )
+    .unwrap();
+    db.execute(
+        "UPDATE pelagos_devices SET last_authenticated_unix=unixepoch()-1200
+         WHERE id='roku-1'",
+        [],
+    )
+    .unwrap();
+    drop(db);
+    let ordered = json_body(call(&router, "/Devices", Some(&admin.access_token)).await).await;
+    assert_eq!(ordered["Items"][0]["Id"], "roku-1");
+    assert_eq!(
+        call(&router, "/Users/Me", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let refreshed_order =
+        json_body(call(&router, "/Devices", Some(&admin.access_token)).await).await;
+    assert_eq!(refreshed_order["Items"][0]["Id"], "living-room-tv");
+
     let filtered = json_body(
         call(
             &router,
