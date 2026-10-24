@@ -25,6 +25,26 @@ async fn call(router: &Router, path: &str, token: Option<&str>) -> Response {
         .unwrap()
 }
 
+async fn report(
+    router: &Router,
+    path: &str,
+    token: &str,
+) -> StatusCode {
+    router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(path)
+                .header("X-Emby-Token", token)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+        .status()
+}
+
 async fn json_body(response: Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap()
 }
@@ -150,6 +170,34 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
         .status(),
         StatusCode::NOT_FOUND
     );
+
+    assert_eq!(
+        report(
+            &router,
+            "/Sessions/Capabilities?playableMediaTypes=Audio,Video&supportedCommands=Play&supportsMediaControl=true",
+            &duplicate.access_token,
+        )
+        .await,
+        StatusCode::NO_CONTENT
+    );
+    let reported = json_body(
+        call(
+            &router,
+            "/Devices/Info?id=living-room-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(
+        reported["Capabilities"]["PlayableMediaTypes"],
+        json!(["Audio", "Video"])
+    );
+    assert_eq!(
+        reported["Capabilities"]["SupportedCommands"],
+        json!(["Play"])
+    );
+    assert_eq!(reported["Capabilities"]["SupportsMediaControl"], true);
 
     auth::revoke(&state, &viewer.access_token).unwrap();
     auth::revoke(&state, &duplicate.access_token).unwrap();
