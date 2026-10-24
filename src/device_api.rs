@@ -65,7 +65,7 @@ async fn devices(
     if query
         .user_id
         .as_deref()
-        .is_some_and(|id| id.is_empty() || id.len() > 128)
+        .is_some_and(|id| uuid::Uuid::parse_str(id).is_err())
     {
         return Err(StatusCode::BAD_REQUEST);
     }
