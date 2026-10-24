@@ -28,6 +28,25 @@ async fn text_body(response: Response) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()
 }
 
+async fn assert_playlist_head(app: &Router, path: &str, token: &str, size: usize) {
+    let response = request(app, "HEAD", path, Some(token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap(),
+        size
+    );
+    assert!(
+        to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn authenticated_hls_playlist_segments_and_current_library_grants() {
@@ -124,6 +143,7 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     );
     assert_eq!(result.headers()[header::CACHE_CONTROL], "private, no-store");
     let manifest = text_body(result).await;
+    assert_playlist_head(&app, &route, &viewer, manifest.len()).await;
     assert!(manifest.starts_with("#EXTM3U\n"));
     assert!(manifest.contains("#EXT-X-DISCONTINUITY"));
     assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
@@ -195,6 +215,7 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let master_response = request(&app, "GET", &master_route, Some(&viewer)).await;
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = text_body(master_response).await;
+    assert_playlist_head(&app, &master_route, &viewer, master.len()).await;
     assert!(master.starts_with("#EXTM3U\n#EXT-X-VERSION:3\n"));
     assert!(master.contains("#EXT-X-STREAM-INF:BANDWIDTH="));
     assert!(!master.contains(&viewer));
@@ -382,6 +403,7 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     let master_response = request(&app, "GET", &master_route, Some(&listener)).await;
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = text_body(master_response).await;
+    assert_playlist_head(&app, &master_route, &listener, master.len()).await;
     assert!(master.contains("#EXT-X-STREAM-INF:BANDWIDTH="));
     let media_name = master
         .lines()
@@ -428,6 +450,8 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     .await;
     assert_eq!(main.status(), StatusCode::OK);
     let main_text = text_body(main).await;
+    let main_route = format!("/Audio/{id}/main.m3u8?segmentLength=2");
+    assert_playlist_head(&app, &main_route, &listener, main_text.len()).await;
     assert!(main_text.lines().any(|line| line.starts_with("hls1/")));
     // Audio main and master represent the same authenticated rendition.
     assert!(main_text.contains(&format!(
