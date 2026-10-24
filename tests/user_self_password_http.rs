@@ -89,3 +89,96 @@ async fn user_must_prove_current_password_and_other_sessions_are_revoked() {
             .is_some()
     );
 }
+
+#[tokio::test]
+async fn self_change_cannot_target_another_account_or_reset_without_password() {
+    let temp = tempfile::tempdir().unwrap();
+    let state = temp.path().join("state");
+    auth::create_user(&state, "admin", "admin-second-passphrase").unwrap();
+    auth::create_user(&state, "member", "member-second-passphrase").unwrap();
+    let admin = auth::authenticate(&state, "admin", "admin-second-passphrase", "server")
+        .unwrap()
+        .unwrap();
+    let member = auth::authenticate(&state, "member", "member-second-passphrase", "server")
+        .unwrap()
+        .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let valid = json!({"CurrentPw":"member-second-passphrase","NewPw":"member-final-passphrase"});
+    let bad_target = Request::builder()
+        .method("POST")
+        .uri(format!("/Users/Password?userId={}", admin.user.id))
+        .header("Content-Type", "application/json")
+        .header("X-Emby-Token", &member.access_token)
+        .body(Body::from(valid.to_string()))
+        .unwrap();
+    assert_eq!(
+        router.clone().oneshot(bad_target).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        request(
+            &router,
+            Some(&member.access_token),
+            json!({
+                "CurrentPw":"member-second-passphrase",
+                "NewPw":"member-final-passphrase",
+                "ResetPassword":true
+            }),
+        )
+        .await,
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(
+            &router,
+            Some(&member.access_token),
+            json!({"CurrentPw":"member-second-passphrase","NewPw":"short"}),
+        )
+        .await,
+        StatusCode::BAD_REQUEST
+    );
+    assert!(
+        auth::authenticate(&state, "member", "member-second-passphrase", "server")
+            .unwrap()
+            .is_some()
+    );
+
+    assert_eq!(
+        auth::change_own_password(
+            &state,
+            &member.user.id,
+            &"0".repeat(64),
+            "member-second-passphrase",
+            "member-final-passphrase",
+        )
+        .unwrap(),
+        auth::OwnPasswordChange::StaleSession
+    );
+    assert!(
+        auth::authenticate(&state, "member", "member-final-passphrase", "server")
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        request(
+            &router,
+            Some(&admin.access_token),
+            json!({"CurrentPw":"admin-second-passphrase","NewPw":"admin-final-passphrase"}),
+        )
+        .await,
+        StatusCode::NO_CONTENT
+    );
+    assert!(
+        auth::identify(&state, &admin.access_token, "server")
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        auth::authenticate(&state, "admin", "admin-final-passphrase", "server")
+            .unwrap()
+            .is_some()
+    );
+}
