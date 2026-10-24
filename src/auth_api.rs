@@ -25,6 +25,7 @@ struct PasswordLogin {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Users/AuthenticateByName", post(password_login))
+        .route("/Users", get(users))
         .route("/Users/New", post(create_account))
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id))
@@ -36,6 +37,40 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/QuickConnect/Initiate", post(quick_connect_unavailable))
         .route("/QuickConnect/Connect", get(quick_connect_unavailable))
         .route("/QuickConnect/Authorize", post(quick_connect_authorize))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UsersQuery {
+    is_hidden: Option<bool>,
+    is_disabled: Option<bool>,
+}
+
+/// Pinned GET /Users response subset, explicitly more restrictive than
+/// upstream: only administrators can enumerate account names in this stage.
+async fn users(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<UsersQuery>,
+) -> Result<Json<Vec<User>>, StatusCode> {
+    let (requester, _) = authenticated(state.clone(), headers).await?;
+    if !requester.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if query.is_hidden == Some(true) {
+        // Pelagos has no hidden account configuration or public login list.
+        return Ok(Json(Vec::new()));
+    }
+    let dir = state_dir(&state)?;
+    let id = state.server_id().to_owned();
+    let mut entries = tokio::task::spawn_blocking(move || auth::list_users(&dir, &id))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(disabled) = query.is_disabled {
+        entries.retain(|user| user.policy.is_disabled == disabled);
+    }
+    Ok(Json(entries))
 }
 
 /// Pinned Jellyfin CreateUserByName subset. HTTP cannot bootstrap the first

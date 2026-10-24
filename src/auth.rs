@@ -165,6 +165,21 @@ fn user_from_row(row: &rusqlite::Row<'_>, server_id: &str) -> rusqlite::Result<U
     })
 }
 
+/// Privileged list of minimal account DTOs. Never select credential hashes,
+/// raw tokens or other secrets for public serialization.
+pub fn list_users(state_dir: &Path, server_id: &str) -> Result<Vec<User>> {
+    let db = database(state_dir)?;
+    let mut stmt = db.prepare(
+        "SELECT u.id,u.username,u.is_admin,u.disabled,
+                (u.is_admin=1 OR EXISTS(
+                   SELECT 1 FROM pelagos_download_grants d WHERE d.user_id=u.id
+                ))
+         FROM pelagos_users u ORDER BY u.username_key, u.id",
+    )?;
+    let rows = stmt.query_map([], |row| user_from_row(row, server_id))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
 /// Bootstrap through the CLI; no anonymous HTTP route may create an administrator.
 pub fn create_user(state_dir: &Path, name: &str, password: &str) -> Result<User> {
     if !valid_username(name) {
