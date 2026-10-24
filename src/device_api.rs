@@ -36,6 +36,7 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Devices", get(devices).delete(delete_device))
         .route("/Devices/Info", get(device_info))
+        .route("/Devices/Options", get(device_options).post(update_device_options))
 }
 
 async fn administrator_state(
@@ -126,5 +127,63 @@ async fn delete_device(
     match result {
         auth::DeviceSessionRevocation::Revoked => Ok(StatusCode::NO_CONTENT),
         auth::DeviceSessionRevocation::NotFound => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct DeviceOptionsPatch {
+    custom_name: String,
+}
+
+async fn device_options(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<DeviceByIdQuery>,
+) -> Result<Json<auth::DeviceOptionsDto>, StatusCode> {
+    let dir = administrator_state(state, headers).await?;
+    if query.id.is_empty() || query.id.len() > 256 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let id = query.id;
+    let found = tokio::task::spawn_blocking(move || auth::registered_device_options(&dir, &id))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(
+        found
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .ok_or(StatusCode::NOT_FOUND)?,
+    ))
+}
+
+/// Pinned POST /Devices/Options name-only subset. Unsupported options
+/// and passwordless anonymous device mutation are not accepted.
+async fn update_device_options(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<DeviceByIdQuery>,
+    Json(body): Json<DeviceOptionsPatch>,
+) -> Result<StatusCode, StatusCode> {
+    let dir = administrator_state(state, headers).await?;
+    if query.id.is_empty() || query.id.len() > 256 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if body.custom_name.is_empty()
+        || body.custom_name.len() > 128
+        || body.custom_name.trim() != body.custom_name
+        || body.custom_name.chars().any(char::is_control)
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let outcome = tokio::task::spawn_blocking(move || {
+        auth::rename_registered_device(&dir, &query.id, &body.custom_name)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match outcome {
+        auth::DeviceCustomNameUpdate::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::DeviceCustomNameUpdate::NotFound => Err(StatusCode::NOT_FOUND),
     }
 }
