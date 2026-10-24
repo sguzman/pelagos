@@ -510,6 +510,17 @@ impl HlsAdaptiveSegmentedArtifact {
     }
 }
 
+/// Only measured window durations within half a second of their matching
+/// position are permitted; missing or drifting windows are not a ladder.
+fn adaptive_segments_aligned(reference: &[HlsSegment], next: &[HlsSegment]) -> bool {
+    reference.len() == next.len()
+        && !reference.is_empty()
+        && reference
+            .iter()
+            .zip(next)
+            .all(|(a, b)| (a.duration_seconds - b.duration_seconds).abs() <= 0.5)
+}
+
 /// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
 /// Publish the master only after all requested outputs are verified. The
 /// authenticated video HTTP path can expose these as an opt-in, source- and
@@ -521,6 +532,30 @@ pub async fn generate_adaptive_segmented_vod(
     source: &Path,
     output_dir: &Path,
     target_seconds: u32,
+    qualities: &[MpegTsQuality],
+) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    generate_adaptive_segmented_vod_from(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        0.0,
+        qualities,
+    )
+    .await
+}
+
+/// Seek-aware adaptive short VOD. Every independent rendition encodes
+/// exactly the same bounded source window positions. This is a structural
+/// window-alignment check, not a claim of seamless adaptive clock switching.
+pub async fn generate_adaptive_segmented_vod_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
     qualities: &[MpegTsQuality],
 ) -> io::Result<HlsAdaptiveSegmentedArtifact> {
     if !(2..=4).contains(&qualities.len()) {
@@ -543,10 +578,20 @@ pub async fn generate_adaptive_segmented_vod(
             source,
             &output_dir.join(&name),
             target_seconds,
-            0.0,
+            start_seconds,
             Some(*quality),
         )
         .await?;
+        // Measured window durations must agree across the adaptive ladder.
+        // A severe difference could cause players to jump at bitrate switches.
+        if let Some((_, _, reference)) = candidates.first() {
+            if !adaptive_segments_aligned(&reference.segments, &rendition.segments) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "adaptive rendition segment windows do not align",
+                ));
+            }
+        }
         let duration: f64 = rendition
             .segments
             .iter()
