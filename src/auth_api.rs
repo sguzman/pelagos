@@ -646,15 +646,48 @@ fn parse_reported_capabilities(
 const PINNED_MEDIA_TYPES: &[&str] = &["Unknown", "Video", "Audio", "Photo", "Book"];
 
 const PINNED_SESSION_COMMANDS: &[&str] = &[
-    "MoveUp", "MoveDown", "MoveLeft", "MoveRight", "PageUp", "PageDown",
-    "PreviousLetter", "NextLetter", "ToggleOsd", "ToggleContextMenu",
-    "Select", "Back", "TakeScreenshot", "SendKey", "SendString", "GoHome",
-    "GoToSettings", "VolumeUp", "VolumeDown", "Mute", "Unmute",
-    "ToggleMute", "SetVolume", "SetAudioStreamIndex", "SetSubtitleStreamIndex",
-    "ToggleFullscreen", "DisplayContent", "GoToSearch", "DisplayMessage",
-    "SetRepeatMode", "ChannelUp", "ChannelDown", "Guide", "ToggleStats",
-    "PlayMediaSource", "PlayTrailers", "SetShuffleQueue", "PlayState",
-    "PlayNext", "ToggleOsdMenu", "Play", "SetMaxStreamingBitrate",
+    "MoveUp",
+    "MoveDown",
+    "MoveLeft",
+    "MoveRight",
+    "PageUp",
+    "PageDown",
+    "PreviousLetter",
+    "NextLetter",
+    "ToggleOsd",
+    "ToggleContextMenu",
+    "Select",
+    "Back",
+    "TakeScreenshot",
+    "SendKey",
+    "SendString",
+    "GoHome",
+    "GoToSettings",
+    "VolumeUp",
+    "VolumeDown",
+    "Mute",
+    "Unmute",
+    "ToggleMute",
+    "SetVolume",
+    "SetAudioStreamIndex",
+    "SetSubtitleStreamIndex",
+    "ToggleFullscreen",
+    "DisplayContent",
+    "GoToSearch",
+    "DisplayMessage",
+    "SetRepeatMode",
+    "ChannelUp",
+    "ChannelDown",
+    "Guide",
+    "ToggleStats",
+    "PlayMediaSource",
+    "PlayTrailers",
+    "SetShuffleQueue",
+    "PlayState",
+    "PlayNext",
+    "ToggleOsdMenu",
+    "Play",
+    "SetMaxStreamingBitrate",
     "SetPlaybackOrder",
 ];
 
@@ -662,7 +695,10 @@ fn known_capability_values(
     values: Vec<String>,
     allowed: &[&str],
 ) -> Result<Vec<String>, StatusCode> {
-    if values.iter().any(|value| !allowed.contains(&value.as_str())) {
+    if values
+        .iter()
+        .any(|value| !allowed.contains(&value.as_str()))
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(values)
