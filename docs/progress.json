@@ -3201,20 +3201,20 @@
             {
               "id": "T523",
               "emoji": "🚪",
-              "name": "Administrator single-device logout with transactional session revocation",
+              "name": "Administrator bounded multi-device logout with atomic session revocation",
               "checks": [
                 {
-                  "title": "Implement pinned DELETE /Devices strict one-id subset that revokes all sessions for a known registered device in one authentication DB transaction without erasing registration or unrelated tokens",
+                  "title": "Implement pinned DELETE /Devices with up to 16 unique validated percent-decoded device IDs; prevalidate every registration then transactionally revoke matching sessions without changing unrelated sessions or stored device registrations",
                   "passed": true,
-                  "evidence": "src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device; pinned Jellyfin v12.3 DevicesController.DeleteDevice"
+                  "evidence": "src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device with RawQuery and form_urlencoded; pinned Jellyfin v12.3 DevicesController.DeleteDevice"
                 },
                 {
-                  "title": "Native HTTP CI verifies anonymous/member denial, missing and unknown IDs, sibling-session invalidation, other-device isolation, registration persistence and new login after revocation",
+                  "title": "Native HTTP suite verifies anonymous/member denial, missing/unknown device IDs, invalid mixed-batch rollback, valid multi-device logout, percent-encoded IDs, surviving device records and new login after revocation",
                   "passed": true,
-                  "evidence": "GitHub Actions 40051766079 — complete Rust tests, formatting, Clippy, ledger and pinned upstream checks passed"
+                  "evidence": "GitHub Actions 40052304486 and 40052337903 — full Rust unit/HTTP tests, formatting, Clippy, pinned source/controller matrices and roadmap gates passed"
                 },
                 {
-                  "title": "Upstream multi-device query arrays, concurrent session race testing and unmodified device-management client acceptance",
+                  "title": "Unmodified Jellyfin admin and TV clients, concurrent device-session race cases and full upstream multi-device management acceptance",
                   "passed": false
                 }
               ],
