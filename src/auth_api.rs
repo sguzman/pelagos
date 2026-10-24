@@ -35,7 +35,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         .route("/Sessions/Capabilities", post(report_session_capabilities))
-        .route("/Sessions/Capabilities/Full", post(report_session_capabilities_full))
+        .route(
+            "/Sessions/Capabilities/Full",
+            post(report_session_capabilities_full),
+        )
         // Public account listing intentionally discloses no usernames yet.
         .route("/Users/Public", get(public_users))
         .route("/QuickConnect/Enabled", get(quick_connect_enabled))
