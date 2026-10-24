@@ -2893,20 +2893,20 @@
             {
               "id": "T506",
               "emoji": "📁",
-              "name": "Administrator creation of one canonical indexed virtual media library",
+              "name": "Administrator creation of a canonical one-root media library with independent display name",
               "checks": [
                 {
-                  "title": "Implement administrator-only pinned VirtualFolders POST subset: one existing canonical folder with basename name, default options, private read-only index and explicit refusal of unsupported configuration",
+                  "title": "Implement administrator-only pinned VirtualFolders POST subset with one canonical existing root, independent UTF-8 display label, default options and atomic registered-root/label/index creation",
                   "passed": true,
-                  "evidence": "src/catalog_api.rs create_virtual_folder; src/catalog.rs index; pinned Jellyfin v12.3 LibraryStructureController.AddVirtualFolder"
+                  "evidence": "src/catalog_api.rs create_virtual_folder; src/catalog.rs index_internal/register_named with v4 display_name; pinned Jellyfin v12.3 LibraryStructureController.AddVirtualFolder"
                 },
                 {
-                  "title": "Rust CI validates authorization, canonical/symlink inputs, duplicate names, disabled advanced options, registered root inventory, non-registered isolation, grants and persistence",
+                  "title": "Rust CI verifies basename and custom-name creation, case-insensitive name conflicts, duplicate root denial, canonical/symlink checks, permission isolation, unsupported options, and persisted views",
                   "passed": true,
-                  "evidence": "GitHub Actions 40040446626: full Rust tests, Clippy, cargo fmt, pinned contract and evidence-backed roadmap checks passed"
+                  "evidence": "GitHub Actions 40043005135: full Rust unit/HTTP integration suites, formatting, Clippy, pinned route and roadmap checks passed"
                 },
                 {
-                  "title": "Concurrent registration, multi-path/custom-name/library options, deletion/rename lifecycle and unmodified Jellyfin admin client acceptance",
+                  "title": "Concurrent high-scale registration, multi-path/library-options support, complete Jellyfin client naming semantics and unmodified administrator client acceptance",
                   "passed": false
                 }
               ],
