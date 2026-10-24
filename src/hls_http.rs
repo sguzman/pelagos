@@ -466,6 +466,12 @@ mod tests {
     fn published_bundles_are_token_scoped_bounded_and_cleaned_after_last_reader() {
         let temp = tempfile::tempdir().unwrap();
         let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
+        // Only one generation is admitted at a time; there is no FFmpeg
+        // child or private output for excess concurrent HTTP requests.
+        let admitted = registry.jobs.try_acquire().unwrap();
+        assert!(registry.jobs.try_acquire().is_err());
+        drop(admitted);
+        assert!(registry.jobs.try_acquire().is_ok());
         let owner = "synthetic-private-token";
         let digest: [u8; 32] = Sha256::digest(owner.as_bytes()).into();
         let first_root = temp.path().join("session-0");
