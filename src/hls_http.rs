@@ -369,6 +369,16 @@ async fn serve_segment(
     if kind != expected_kind || source != publication.source {
         return Err(StatusCode::NOT_FOUND);
     }
+    // A published HLS segment must not survive replacement or modification
+    // of the source file. Regeneration will create a new publication key.
+    let metadata = tokio::fs::metadata(&source)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if metadata.len() != publication.source_size
+        || metadata.modified().ok() != publication.source_modified
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     if name == "index.m3u8" {
         let text = &publication.media_playlist;
