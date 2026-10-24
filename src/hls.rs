@@ -594,6 +594,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_independent_segments_publish_measured_playlist_and_remove_on_request() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.wav");
+        stdfs::write(&source, b"synthetic").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "fake-ffmpeg",
+            "for i in 1 2; do printf '\\107'; head -c 187 /dev/zero; done",
+        );
+        let inspector = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_type":"audio","codec_name":"aac"}]}' ;; *) printf '%s' '{"format":{"duration":"4.05"},"streams":[{"codec_type":"audio","codec_name":"pcm_s16le"}]}' ;; esac"#,
+        );
+        let runner = TranscodeController::new(encoder, 1, Duration::from_secs(4), 1024).unwrap();
+        let dir = temp.path().join("segments");
+        let bundle = generate_segmented_vod(&runner, &inspector, &source, &dir, 2)
+            .await
+            .unwrap();
+        assert_eq!(bundle.segment_paths.len(), 2);
+        assert_eq!(bundle.transport_bytes, 752);
+        for path in &bundle.segment_paths {
+            assert_eq!(stdfs::metadata(path).unwrap().len(), 376);
+            assert_eq!(stdfs::read(path).unwrap()[0], 0x47);
+        }
+        let manifest = stdfs::read_to_string(&bundle.playlist_path).unwrap();
+        assert!(manifest.contains("#EXT-X-TARGETDURATION:2\n"));
+        assert!(manifest.contains("#EXTINF:2.000,\nsegment00000.ts\n"));
+        assert!(manifest.contains("#EXTINF:2.000,\nsegment00001.ts\n"));
+        assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
+        assert_eq!(stdfs::read(&source).unwrap(), b"synthetic");
+        bundle.remove().unwrap();
+        assert!(!dir.exists());
+        assert_eq!(
+            generate_segmented_vod(&runner, &inspector, &source, temp.path(), 2)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+    }
+
+    #[tokio::test]
+    async fn segmented_hls_rejects_invalid_jobs_and_rolls_back_midstream() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("audio.wav");
+        stdfs::write(&source, b"synthetic").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "fake-ffmpeg",
+            "for i in 1 2; do printf '\\107'; head -c 187 /dev/zero; done",
+        );
+        let fail_second = executable(
+            temp.path(),
+            "fail-second-ffprobe",
+            r#"case "$*" in *segment00001*) exit 7 ;; *segment*) printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_type":"audio"}]}' ;; *) printf '%s' '{"format":{"duration":"4.0"},"streams":[{"codec_type":"audio"}]}' ;; esac"#,
+        );
+        let runner = TranscodeController::new(encoder, 1, Duration::from_secs(4), 1024).unwrap();
+        for target in [0, 11] {
+            let dir = temp.path().join(format!("invalid-{target}"));
+            assert_eq!(
+                generate_segmented_vod(&runner, &fail_second, &source, &dir, target)
+                    .await
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::InvalidInput
+            );
+            assert!(!dir.exists());
+        }
+        let bundle_dir = temp.path().join("rollback");
+        assert!(generate_segmented_vod(&runner, &fail_second, &source, &bundle_dir, 2).await.is_err());
+        assert!(!bundle_dir.exists());
+    }
+
+    #[tokio::test]
     async fn bounded_playlist_uses_verified_duration_and_relative_segment_name() {
         let temp = tempfile::tempdir().unwrap();
         let input = temp.path().join("input.mp4");
