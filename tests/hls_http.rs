@@ -185,6 +185,46 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
             .status(),
         StatusCode::OK
     );
+    // The pinned master endpoint serves one measured, completed rendition;
+    // its nested media playlist uses paths relative to the hls1 directory.
+    let master_route = format!("/Videos/{id}/master.m3u8?segmentLength=2");
+    assert_eq!(
+        request(&app, "GET", &master_route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let master_response = request(&app, "GET", &master_route, Some(&viewer)).await;
+    assert_eq!(master_response.status(), StatusCode::OK);
+    let master = text_body(master_response).await;
+    assert!(master.starts_with("#EXTM3U\n#EXT-X-VERSION:3\n"));
+    assert!(master.contains("#EXT-X-STREAM-INF:BANDWIDTH="));
+    assert!(!master.contains(&viewer));
+    let media_name = master.lines().find(|l| l.starts_with("hls1/")).unwrap();
+    assert!(media_name.ends_with("/index.m3u8"));
+    let media_url = format!("/Videos/{id}/{media_name}");
+    assert_eq!(
+        request(&app, "GET", &media_url, Some(&admin)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let media_response = request(&app, "GET", &media_url, Some(&viewer)).await;
+    assert_eq!(media_response.status(), StatusCode::OK);
+    let media_text = text_body(media_response).await;
+    assert!(media_text.contains("#EXT-X-DISCONTINUITY"));
+    assert!(media_text.contains("\n0.ts\n"));
+    assert!(media_text.contains("\n1.ts\n"));
+    assert!(!media_text.contains("segment00000.ts"));
+    let parent = media_url.strip_suffix("index.m3u8").unwrap();
+    let second_segment = format!("{parent}1.ts");
+    assert_eq!(
+        request(&app, "GET", &second_segment, Some(&viewer)).await.status(),
+        StatusCode::OK
+    );
+    let media_head = request(&app, "HEAD", &media_url, Some(&viewer)).await;
+    assert_eq!(media_head.status(), StatusCode::OK);
+    assert_eq!(
+        media_head.headers()[header::CONTENT_LENGTH].to_str().unwrap().parse::<usize>().unwrap(),
+        media_text.len()
+    );
+    assert!(to_bytes(media_head.into_body(), 1_024).await.unwrap().is_empty());
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         request(&app, "GET", first_path, Some(&viewer))
@@ -215,4 +255,6 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
         .nth(1)
         .unwrap();
     assert!(!Path::new(&std::env::temp_dir().join(format!("pelagos-hls-{playlist_id}"))).exists());
+    let master_id = media_name.split('/').nth(1).unwrap();
+    assert!(!std::env::temp_dir().join(format!("pelagos-hls-{master_id}")).exists());
 }
