@@ -821,17 +821,17 @@
               "name": "Owned-session Jellyfin client capability reporting and durable metadata",
               "checks": [
                 {
-                  "title": "Implement authenticated pinned POST /Sessions/Capabilities query subset with token-owned session mutation, bounded client fields, durable report and unimplemented remote-control capability left disabled",
+                  "title": "Implement token-owned POST /Sessions/Capabilities bounded query subset with exact Jellyfin v12.3 MediaType and GeneralCommandType enum validation and persistent SQLite capability state while leaving unsupported remote control inactive",
                   "passed": true,
-                  "evidence": "src/auth.rs set_session_capabilities/list_sessions with private SQLite FK persistence; src/auth_api.rs report_session_capabilities; pinned Jellyfin v12.3 SessionController.PostCapabilities"
+                  "evidence": "src/auth.rs set_session_capabilities/list_sessions, src/auth_api.rs PINNED_MEDIA_TYPES/PINNED_SESSION_COMMANDS/known_capability_values; pinned Jellyfin v12.3 SessionController.PostCapabilities, MediaType.cs, GeneralCommandType.cs"
                 },
                 {
-                  "title": "Native HTTP CI validates unauthenticated/other-session denial, malformed media/command inputs, client metadata visibility, untouched sibling sessions, restart and token revocation",
+                  "title": "HTTP CI rejects unauthenticated, cross-session and invalid enum reports (including Pause and Music), preserves valid session report across restart and revokes it with token deletion",
                   "passed": true,
-                  "evidence": "GitHub Actions 40047277534 — complete Rust unit and integration tests, formatting, Clippy, pinned controller/source and roadmap checks passed"
+                  "evidence": "GitHub Actions 40047277534 and 40054650672 — complete Rust unit/HTTP tests, rustfmt, Clippy, pinned source and roadmap checks passed; 5 MediaType and 43 GeneralCommandType spellings checked against pinned v12.3 enums"
                 },
                 {
-                  "title": "Full ClientCapabilitiesDto/DeviceProfile support, real client capability negotiation, remote-control actions and unmodified TV acceptance",
+                  "title": "Actual remote command handling, typed media/device-profile negotiation and unmodified Smart TV acceptance",
                   "passed": false
                 }
               ],
@@ -843,17 +843,17 @@
               "name": "Full-form Jellyfin client capabilities JSON subset",
               "checks": [
                 {
-                  "title": "Implement pinned POST /Sessions/Capabilities/Full with guarded own-session updates and parsed comma-delimited or JSON-array client media/command types; reject unsupported device profiles and links",
+                  "title": "Implement token-owned full JSON ClientCapabilitiesDto report with exact pinned enum validation, comma-delimited or array syntax, and supported report fields; structured DeviceProfile/URL subset is separately tracked in T140",
                   "passed": true,
-                  "evidence": "src/auth_api.rs report_session_capabilities_full/from_capability_sequence/save_session_capabilities; src/auth.rs set_session_capabilities; pinned v12.3 SessionController.PostFullCapabilities and ClientCapabilitiesDto; full DTO profile transport extended separately in T140"
+                  "evidence": "src/auth_api.rs report_session_capabilities_full/from_capability_sequence/known_capability_values; src/auth.rs set_session_capabilities; pinned SessionController.PostFullCapabilities, ClientCapabilitiesDto and MediaType/GeneralCommandType enums"
                 },
                 {
-                  "title": "CI covers authenticated full-form request, unsupported DeviceProfile, cross-session denial, session metadata persistence and no fabricated remote-control support",
+                  "title": "Native CI validates valid full JSON forms, malformed profile and unsupported enum rejection, cross-session denial, durable capability state and absence of fabricated remote-control services",
                   "passed": true,
-                  "evidence": "GitHub Actions 40047568095 — full Rust formatting, Clippy, native HTTP/unit tests, roadmap ledger and pinned source/controller contract gates passed"
+                  "evidence": "GitHub Actions 40047568095, 40054083071 and 40054650672 — Rust HTTP/unit, Clippy, formatting and source/roadmap matrix passed"
                 },
                 {
-                  "title": "DeviceProfile/URL metadata, complete upstream DTO validation, unmodified Jellyfin TV negotiation and actual remote-control/media functionality accepted",
+                  "title": "Typed DeviceProfile codec decision support, complete upstream DTO semantics, unmodified Smart TV negotiation and actual remote-control/media functionality",
                   "passed": false
                 }
               ],
@@ -3270,17 +3270,17 @@
               "name": "Administrator bounded multi-device logout with atomic session revocation",
               "checks": [
                 {
-                  "title": "Implement pinned DELETE /Devices with up to 16 unique validated percent-decoded device IDs; prevalidate every registration then transactionally revoke matching sessions without changing unrelated sessions or stored device registrations",
+                  "title": "Implement pinned DELETE /Devices with 16 distinct decoded IDs, <=32 query parameters, <=4096 bytes; prevalidate all IDs and atomically revoke matching tokens without erasing registrations or other sessions",
                   "passed": true,
-                  "evidence": "src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device with RawQuery and form_urlencoded; pinned Jellyfin v12.3 DevicesController.DeleteDevice"
+                  "evidence": "src/auth.rs revoke_registered_device_sessions; src/device_api.rs delete_device RawQuery validation; pinned Jellyfin v12.3 DevicesController.DeleteDevice"
                 },
                 {
-                  "title": "Native HTTP suite verifies anonymous/member denial, missing/unknown device IDs, invalid mixed-batch rollback, valid multi-device logout, percent-encoded IDs, surviving device records and new login after revocation",
+                  "title": "Native HTTP CI checks admin authentication, missing/unknown, mixed-batch rollback, valid repeated and distinct IDs, oversized/overcount rejection, encoded IDs, other-device isolation and credential revocation",
                   "passed": true,
-                  "evidence": "GitHub Actions 40052304486 and 40052337903 — full Rust unit/HTTP tests, formatting, Clippy, pinned source/controller matrices and roadmap gates passed"
+                  "evidence": "GitHub Actions 40052304486, 40052337903 and 40054840625 — all Rust unit/HTTP tests, fmt, Clippy, pinned source and roadmap gates passed"
                 },
                 {
-                  "title": "Unmodified Jellyfin admin and TV clients, concurrent device-session race cases and full upstream multi-device management acceptance",
+                  "title": "Full upstream device deletion/persistence semantics, concurrent device-session races and unmodified Jellyfin client acceptance",
                   "passed": false
                 }
               ],
