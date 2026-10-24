@@ -116,7 +116,12 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
     assert_eq!(after_logout[0]["Id"], second.session_info.id);
 }
 
-async fn report_full(router: &Router, token: Option<&str>, route: &str, value: Value) -> StatusCode {
+async fn report_full(
+    router: &Router,
+    token: Option<&str>,
+    route: &str,
+    value: Value,
+) -> StatusCode {
     let mut request = Request::builder()
         .method("POST")
         .uri(route)
@@ -138,9 +143,14 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_unknown_device_pro
     let state = fixture.path().join("state");
     auth::create_user(&state, "admin", "full-capabilities-admin-password").unwrap();
     auth::create_user(&state, "viewer", "full-capabilities-viewer-password").unwrap();
-    let viewer = auth::authenticate(&state, "viewer", "full-capabilities-viewer-password", "server")
-        .unwrap()
-        .unwrap();
+    let viewer = auth::authenticate(
+        &state,
+        "viewer",
+        "full-capabilities-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
