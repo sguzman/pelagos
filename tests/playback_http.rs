@@ -100,7 +100,7 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     let executable = temp.path().join("fake-ffprobe");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf '%s' '{\"format\":{\"duration\":\"61.25\"},\"streams\":[{\"index\":0,\"codec_type\":\"video\",\"codec_name\":\"h264\",\"profile\":\"High\",\"avg_frame_rate\":\"30000/1001\",\"r_frame_rate\":\"30/1\",\"pix_fmt\":\"yuv420p\",\"color_primaries\":\"bt709\",\"width\":640,\"height\":360},{\"index\":1,\"codec_type\":\"audio\",\"codec_name\":\"aac\",\"sample_rate\":\"48000\",\"channels\":2}]}'\n",
+        "#!/bin/sh\nprintf '%s' '{\"format\":{\"duration\":\"61.25\",\"bit_rate\":\"4000000\"},\"streams\":[{\"index\":0,\"codec_type\":\"video\",\"codec_name\":\"h264\",\"profile\":\"High\",\"avg_frame_rate\":\"30000/1001\",\"r_frame_rate\":\"30/1\",\"pix_fmt\":\"yuv420p\",\"color_primaries\":\"bt709\",\"width\":640,\"height\":360},{\"index\":1,\"codec_type\":\"audio\",\"codec_name\":\"aac\",\"sample_rate\":\"48000\",\"channels\":2}]}'\n",
     )
     .unwrap();
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
@@ -356,6 +356,44 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         request(&router, "POST", &route, Some(&token), "{}")
             .await
             .status(),
+        StatusCode::OK
+    );
+
+    // No transcoder is available to satisfy a requested bandwidth or
+    // output-channel ceiling. A static source is only offered when measured
+    // FFprobe properties already fit the limits.
+    for (body, expected) in [
+        (
+            serde_json::json!({"MaxStreamingBitrate":4_000_000,"MaxAudioChannels":2}),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({"MaxStreamingBitrate":3_000_000}),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({"MaxAudioChannels":1}),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({"MaxAudioChannels":0}),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        assert_eq!(
+            request(&router, "POST", &route, Some(&token), &body.to_string())
+                .await
+                .status(),
+            expected
+        );
+    }
+    assert_eq!(
+        request(
+            &router, "POST",
+            &format!("{route}?maxStreamingBitrate=4000000&maxAudioChannels=2"),
+            Some(&token),
+            r#"{"MaxStreamingBitrate":3000000,"MaxAudioChannels":1}"#
+        ).await.status(),
         StatusCode::OK
     );
 
