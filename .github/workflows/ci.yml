@@ -24,6 +24,10 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: FFmpeg and FFprobe prerequisites
         run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg
+          fi
           command -v ffmpeg
           command -v ffprobe
           ffmpeg -version | head -n 1
