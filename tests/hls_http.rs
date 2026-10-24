@@ -929,6 +929,25 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         .status(),
         StatusCode::BAD_REQUEST
     );
+    // Three target bitrates must be backed by three distinct measured
+    // MPEG-TS renditions, not multiple playlist links to the same bytes.
+    let triple_route = format!("/Videos/{id}/master.m3u8?segmentLength=2&renditions=3");
+    let triple_response = request(&app, "GET", &triple_route, Some(&owner)).await;
+    assert_eq!(triple_response.status(), StatusCode::OK);
+    let triple_master = text_body(triple_response).await;
+    assert_eq!(
+        triple_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
+        3
+    );
+    assert_eq!(triple_master.matches(",RESOLUTION=640x360").count(), 3);
+    assert_ne!(triple_master, master);
+    assert_ne!(triple_master, seek_master);
+    assert!(triple_master.contains("variant02/index.m3u8"));
+    assert_eq!(
+        text_body(request(&app, "GET", &triple_route, Some(&owner)).await).await,
+        triple_master
+    );
+
     let paths = master
         .lines()
         .filter(|line| line.starts_with("hls1/"))
