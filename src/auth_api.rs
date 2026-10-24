@@ -642,6 +642,32 @@ fn parse_reported_capabilities(
     Ok(entries)
 }
 
+/// Exact Jellyfin v12.3 MediaType and GeneralCommandType enum names.
+const PINNED_MEDIA_TYPES: &[&str] = &["Unknown", "Video", "Audio", "Photo", "Book"];
+
+const PINNED_SESSION_COMMANDS: &[&str] = &[
+    "MoveUp", "MoveDown", "MoveLeft", "MoveRight", "PageUp", "PageDown",
+    "PreviousLetter", "NextLetter", "ToggleOsd", "ToggleContextMenu",
+    "Select", "Back", "TakeScreenshot", "SendKey", "SendString", "GoHome",
+    "GoToSettings", "VolumeUp", "VolumeDown", "Mute", "Unmute",
+    "ToggleMute", "SetVolume", "SetAudioStreamIndex", "SetSubtitleStreamIndex",
+    "ToggleFullscreen", "DisplayContent", "GoToSearch", "DisplayMessage",
+    "SetRepeatMode", "ChannelUp", "ChannelDown", "Guide", "ToggleStats",
+    "PlayMediaSource", "PlayTrailers", "SetShuffleQueue", "PlayState",
+    "PlayNext", "ToggleOsdMenu", "Play", "SetMaxStreamingBitrate",
+    "SetPlaybackOrder",
+];
+
+fn known_capability_values(
+    values: Vec<String>,
+    allowed: &[&str],
+) -> Result<Vec<String>, StatusCode> {
+    if values.iter().any(|value| !allowed.contains(&value.as_str())) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(values)
+}
+
 /// Bounded pinned Jellyfin POST /Sessions/Capabilities. Clients may report
 /// metadata about their own session, never another user's session. Reporting
 /// a remote-control command does not implement a server-side command route.
@@ -651,8 +677,14 @@ async fn report_session_capabilities(
     Query(query): Query<SessionCapabilitiesQuery>,
 ) -> Result<StatusCode, StatusCode> {
     let report = auth::SessionCapabilitiesReport {
-        playable_media_types: parse_reported_capabilities(query.playable_media_types, 16)?,
-        supported_commands: parse_reported_capabilities(query.supported_commands, 64)?,
+        playable_media_types: known_capability_values(
+            parse_reported_capabilities(query.playable_media_types, 16)?,
+            PINNED_MEDIA_TYPES,
+        )?,
+        supported_commands: known_capability_values(
+            parse_reported_capabilities(query.supported_commands, 64)?,
+            PINNED_SESSION_COMMANDS,
+        )?,
         supports_media_control: query.supports_media_control.unwrap_or(false),
         supports_persistent_identifier: query.supports_persistent_identifier.unwrap_or(true),
         device_profile: None,
@@ -737,8 +769,14 @@ async fn report_session_capabilities_full(
         }
     }
     let report = auth::SessionCapabilitiesReport {
-        playable_media_types: from_capability_sequence(body.playable_media_types, 16)?,
-        supported_commands: from_capability_sequence(body.supported_commands, 64)?,
+        playable_media_types: known_capability_values(
+            from_capability_sequence(body.playable_media_types, 16)?,
+            PINNED_MEDIA_TYPES,
+        )?,
+        supported_commands: known_capability_values(
+            from_capability_sequence(body.supported_commands, 64)?,
+            PINNED_SESSION_COMMANDS,
+        )?,
         supports_media_control: body.supports_media_control.unwrap_or(false),
         supports_persistent_identifier: body.supports_persistent_identifier.unwrap_or(false),
         device_profile: body.device_profile,
