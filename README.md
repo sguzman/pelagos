@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`████░░░░░░ 35%` across 155 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`████░░░░░░ 35%` across 156 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40045301553](https://github.com/sguzman/pelagos/actions/runs/40045301553) — administrator-only account login-name updates, stable IDs/sessions/grants, new-name login, Rust suites, Clippy and pinned contracts.
+**Latest passing CI:** [run 40045690959](https://github.com/sguzman/pelagos/actions/runs/40045690959) — administrator-only ordinary-account password replacement, revoked prior sessions, login regressions, full Rust suite, Clippy and pinned gates.
 
 ## 🚀 Current starter
 
@@ -102,6 +102,8 @@ A pinned **administrator-only** `POST /Users/New` subset now creates password-ba
 The administrator account API now includes protected `GET /Users` listing and disabled filtering, limited `GET /Users/{userId}` inspection, and a strict `POST /Users/{userId}/Policy` subset accepting only `IsDisabled`. Disabling an ordinary account revokes outstanding tokens immediately; disabling any administrator is refused. Unsupported policy fields are rejected. Account listing, policy changes, and ID lookup passed native CI ([run 40044882895](https://github.com/sguzman/pelagos/actions/runs/40044882895)). Full Jellyfin user policy and real-client parity remain open.
 
 A strict `POST /Users/{userId}` subset now permits an administrator to update **only** the account's `Name`; the account ID, current sessions, password hash, and per-library permissions remain unchanged. Existing tokens immediately report the new username, while the old username no longer authenticates. Unimplemented UserDto fields are rejected, not silently ignored ([CI 40045301553](https://github.com/sguzman/pelagos/actions/runs/40045301553)).
+
+A restricted `POST /Users/{userId}/Password` permits an authenticated administrator to replace a non-administrator password without exposing credentials. The password is Argon2-hashed, all existing user tokens are revoked in one transaction, and prior login credentials stop working. Current-password and passwordless reset flows are **not** modeled ([CI 40045690959](https://github.com/sguzman/pelagos/actions/runs/40045690959)).
 
 ## 🦀 Architecture and independence
 

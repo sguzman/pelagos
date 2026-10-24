@@ -3065,6 +3065,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T516",
+              "emoji": "🔑",
+              "name": "Administrator ordinary-account password reset with session revocation",
+              "checks": [
+                {
+                  "title": "Implement restricted pinned POST Users/{userId}/Password with elevated account reset, Argon2 replacement and atomic invalidation of existing access tokens, while protecting administrator passwords",
+                  "passed": true,
+                  "evidence": "src/auth.rs reset_ordinary_user_password; src/auth_api.rs admin_reset_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword"
+                },
+                {
+                  "title": "Rust CI verifies anonymous/member denial, administrator protection, short password and unsupported reset-option rejection, token revocation, old/new credential behavior, stable account IDs and restart",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40045690959: full Rust unit/HTTP suites, formatting, Clippy, source matrix and progress-ledger checks passed"
+                },
+                {
+                  "title": "Full Jellyfin UpdateUserPassword semantics, user current-password flows, recovery and unmodified real client acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },
