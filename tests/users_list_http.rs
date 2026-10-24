@@ -29,6 +29,10 @@ async fn json(response: Response) -> Value {
     serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap()
 }
 
+async fn listed(router: &Router, token: &str, path: &str) -> Value {
+    json(call(router, path, Some(token)).await).await
+}
+
 #[tokio::test]
 async fn account_inventory_is_administrator_only_scoped_and_durable() {
     let fixture = tempfile::tempdir().unwrap();
@@ -63,8 +67,14 @@ async fn account_inventory_is_administrator_only_scoped_and_durable() {
     )
     .await
     .unwrap();
-    assert!(!raw.windows("list-users-admin-password".len()).any(|part| part == b"list-users-admin-password"));
-    assert!(!raw.windows("list-users-viewer-password".len()).any(|part| part == b"list-users-viewer-password"));
+    assert!(
+        !raw.windows("list-users-admin-password".len())
+            .any(|part| part == b"list-users-admin-password")
+    );
+    assert!(
+        !raw.windows("list-users-viewer-password".len())
+            .any(|part| part == b"list-users-viewer-password")
+    );
     let users: Value = serde_json::from_slice(&raw).unwrap();
     let array = users.as_array().unwrap();
     assert_eq!(array.len(), 2);
@@ -84,7 +94,7 @@ async fn account_inventory_is_administrator_only_scoped_and_durable() {
         serde_json::json!([])
     );
     assert_eq!(
-        json(call(&router, "/Users?isDisabled=false", Some(&admin.access_token)).await).await,
+        listed(&router, &admin.access_token, "/Users?isDisabled=false").await,
         users
     );
     assert_eq!(
@@ -99,11 +109,11 @@ async fn account_inventory_is_administrator_only_scoped_and_durable() {
     )
     .unwrap();
     drop(db);
-    let disabled = json(call(&router, "/Users?isDisabled=true", Some(&admin.access_token)).await).await;
+    let disabled = listed(&router, &admin.access_token, "/Users?isDisabled=true").await;
     assert_eq!(disabled.as_array().unwrap().len(), 1);
     assert_eq!(disabled[0]["Name"], "viewer");
     assert_eq!(disabled[0]["Policy"]["IsDisabled"], true);
-    let active = json(call(&router, "/Users?isDisabled=false", Some(&admin.access_token)).await).await;
+    let active = listed(&router, &admin.access_token, "/Users?isDisabled=false").await;
     assert_eq!(active.as_array().unwrap().len(), 1);
     assert_eq!(active[0]["Name"], "admin");
 
@@ -112,7 +122,7 @@ async fn account_inventory_is_administrator_only_scoped_and_durable() {
         state.clone(),
     )));
     assert_eq!(
-        json(call(&restarted, "/Users", Some(&admin.access_token)).await).await[1]["Policy"]["IsDisabled"],
+        listed(&restarted, &admin.access_token, "/Users").await[1]["Policy"]["IsDisabled"],
         true
     );
 }
