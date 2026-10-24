@@ -491,7 +491,7 @@ mod tests {
         let ffprobe = executable(
             temp.path(),
             "fake-ffprobe",
-            r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_name":"aac"}]}'"#,
+            r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":320,"height":180}]}'"#,
         );
         let controller = TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
         let profiles = [
@@ -511,7 +511,9 @@ mod tests {
         assert_eq!(result.variants.len(), 2);
         assert_eq!(result.renditions.len(), 2);
         assert_eq!(result.variants[0].bandwidth, 1504);
+        assert_eq!(result.variants[0].resolution, Some((320, 180)));
         assert_eq!(result.variants[1].bandwidth, 3008);
+        assert_eq!(result.variants[1].resolution, Some((320, 180)));
         assert_eq!(result.variants[0].playlist_name, "variant00/index.m3u8");
         assert_eq!(result.variants[1].playlist_name, "variant01/index.m3u8");
         assert_eq!(
