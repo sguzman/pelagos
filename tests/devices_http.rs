@@ -131,7 +131,7 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     assert_eq!(tv["LastUserId"], viewer.user.id);
     assert_eq!(tv["LastUserName"], "viewer");
     assert_eq!(tv["AccessToken"], Value::Null);
-    assert_eq!(tv["DateLastActivity"], Value::Null);
+    assert!(tv["DateLastActivity"].as_str().unwrap().ends_with('Z'));
     assert_eq!(tv["Capabilities"]["SupportsMediaControl"], false);
     assert!(!listing.to_string().contains(&viewer.access_token));
     assert!(!listing.to_string().contains(&duplicate.access_token));
@@ -205,6 +205,42 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     );
     assert_eq!(reported["Capabilities"]["SupportsMediaControl"], true);
 
+    // A valid device request advances the observed device activity time,
+    // and its timestamp stays known after the token is revoked.
+    let db = rusqlite::Connection::open(state.join("pelagos-auth.sqlite3")).unwrap();
+    db.execute(
+        "UPDATE pelagos_devices SET last_authenticated_unix=unixepoch()-3600
+         WHERE id=?1",
+        ["living-room-tv"],
+    )
+    .unwrap();
+    drop(db);
+    let inactive = json_body(
+        call(
+            &router,
+            "/Devices/Info?id=living-room-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    let old_seen = inactive["DateLastActivity"].as_str().unwrap().to_owned();
+    assert_eq!(
+        call(&router, "/Users/Me", Some(&viewer.access_token))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let refreshed = json_body(
+        call(
+            &router,
+            "/Devices/Info?id=living-room-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_ne!(refreshed["DateLastActivity"], old_seen);
     auth::revoke(&state, &viewer.access_token).unwrap();
     auth::revoke(&state, &duplicate.access_token).unwrap();
     auth::revoke(&state, &second.access_token).unwrap();
