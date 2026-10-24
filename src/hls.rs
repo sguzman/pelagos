@@ -854,10 +854,7 @@ mod tests {
         assert!(adaptive_segments_aligned(&reference, &reference));
         assert!(!adaptive_segments_aligned(&reference[..7], &reference));
         assert!(!adaptive_segments_aligned(&[], &[]));
-        assert!(!adaptive_segments_aligned(
-            &reference,
-            &[window(2.51); 8]
-        ));
+        assert!(!adaptive_segments_aligned(&reference, &[window(2.51); 8]));
         assert!(!adaptive_segments_aligned(
             &reference,
             &[window(f64::NAN); 8]
