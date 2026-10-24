@@ -75,10 +75,6 @@ async fn administrator_can_register_one_existing_canonical_library_without_affec
     );
     assert!(catalog::library_roots(&state).unwrap().is_empty());
     for invalid in [
-        format!(
-            "/Library/VirtualFolders?name=Alias&paths={}",
-            movies.display()
-        ),
         "/Library/VirtualFolders?name=Movies&paths=relative/path".to_owned(),
         format!(
             "/Library/VirtualFolders?name=Movies&paths={},{}",
@@ -216,4 +212,101 @@ async fn virtual_library_registration_rejects_symlinked_root_and_missing_paths()
         StatusCode::BAD_REQUEST
     );
     assert!(catalog::library_roots(&state).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn custom_library_names_are_registered_once_and_displayed_without_moving_directories() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    let root = fixture.path().join("PhysicalMedia");
+    let second = fixture.path().join("OtherFiles");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&second).unwrap();
+    std::fs::write(root.join("Film.mp4"), b"movie").unwrap();
+    std::fs::write(second.join("Audio.mp3"), b"song").unwrap();
+    auth::create_user(&state, "admin", "custom-library-admin-password").unwrap();
+    auth::create_user(&state, "viewer", "custom-library-viewer-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "custom-library-admin-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate(&state, "viewer", "custom-library-viewer-password", "server")
+        .unwrap()
+        .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let route = format!(
+        "/Library/VirtualFolders?name=Cinema&paths={}",
+        root.display()
+    );
+    assert_eq!(
+        call(&router, "POST", &route, Some(&admin.access_token), "")
+            .await
+            .status(),
+        StatusCode::NO_CONTENT
+    );
+    let entries = catalog::library_entries(&state).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].name, "Cinema");
+    assert_eq!(std::fs::read(root.join("Film.mp4")).unwrap(), b"movie");
+    let folders = json(
+        call(
+            &router,
+            "GET",
+            "/Library/VirtualFolders",
+            Some(&admin.access_token),
+            "",
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(folders[0]["Name"], "Cinema");
+    assert_eq!(
+        folders[0]["Locations"][0],
+        std::fs::canonicalize(&root).unwrap().to_str().unwrap()
+    );
+    for duplicate in [
+        format!("/Library/VirtualFolders?name=Another&paths={}", root.display()),
+        format!("/Library/VirtualFolders?name=cinema&paths={}", second.display()),
+    ] {
+        assert_eq!(
+            call(&router, "POST", &duplicate, Some(&admin.access_token), "")
+                .await
+                .status(),
+            StatusCode::CONFLICT
+        );
+    }
+    assert_eq!(catalog::library_entries(&state).unwrap().len(), 1);
+    assert_eq!(catalog::all_files(&state).unwrap().len(), 1);
+    assert_eq!(
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await)
+            .await["TotalRecordCount"],
+        0
+    );
+    auth::grant_library(&state, "viewer", &root).unwrap();
+    let views = json(
+        call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await,
+    )
+    .await;
+    assert_eq!(views["Items"][0]["Name"], "Cinema");
+    assert_eq!(views["Items"][0]["Id"], folders[0]["ItemId"]);
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    assert_eq!(
+        json(
+            call(
+                &restarted,
+                "GET",
+                "/Library/VirtualFolders",
+                Some(&admin.access_token),
+                "",
+            )
+            .await,
+        )
+        .await,
+        folders
+    );
 }
