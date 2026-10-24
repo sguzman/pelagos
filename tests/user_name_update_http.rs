@@ -231,13 +231,21 @@ async fn modern_user_update_alias_is_admin_scoped_and_retains_account_identity()
     let route = format!("/Users?userId={}", member.user.id);
     let patch = json!({"Name":"Renamed Member"});
     assert_eq!(
-        call(&router, "POST", &route, None, patch.clone()).await.status(),
+        call(&router, "POST", &route, None, patch.clone())
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
-        call(&router, "POST", &route, Some(&member.access_token), patch.clone())
-            .await
-            .status(),
+        call(
+            &router,
+            "POST",
+            &route,
+            Some(&member.access_token),
+            patch.clone()
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -290,13 +298,20 @@ async fn modern_user_update_alias_is_admin_scoped_and_retains_account_identity()
             .name,
         "Renamed Member"
     );
-    assert!(auth::authenticate(&state, "member", "alias-member-original-password", "server")
-        .unwrap()
-        .is_none());
     assert!(
-        auth::authenticate(&state, "Renamed Member", "alias-member-original-password", "server")
+        auth::authenticate(&state, "member", "alias-member-original-password", "server")
             .unwrap()
-            .is_some()
+            .is_none()
+    );
+    assert!(
+        auth::authenticate(
+            &state,
+            "Renamed Member",
+            "alias-member-original-password",
+            "server"
+        )
+        .unwrap()
+        .is_some()
     );
     assert_eq!(
         call(
@@ -312,8 +327,14 @@ async fn modern_user_update_alias_is_admin_scoped_and_retains_account_identity()
     );
     assert_eq!(
         json_body(
-            call(&router, "GET", "/Users/Me", Some(&admin.access_token), json!({}))
-                .await,
+            call(
+                &router,
+                "GET",
+                "/Users/Me",
+                Some(&admin.access_token),
+                json!({})
+            )
+            .await,
         )
         .await["Name"],
         "Renamed Admin"
