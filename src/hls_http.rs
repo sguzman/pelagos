@@ -370,10 +370,22 @@ async fn generate_hls_playlist(
         // video VOD. The builder measures every output; never fabricate
         // distinct bitrate variants from duplicated encoded bytes.
         const PROFILES: [MpegTsQuality; 4] = [
-            MpegTsQuality { video_kbps: 400, audio_kbps: 96 },
-            MpegTsQuality { video_kbps: 800, audio_kbps: 128 },
-            MpegTsQuality { video_kbps: 1400, audio_kbps: 160 },
-            MpegTsQuality { video_kbps: 2200, audio_kbps: 192 },
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 96,
+            },
+            MpegTsQuality {
+                video_kbps: 800,
+                audio_kbps: 128,
+            },
+            MpegTsQuality {
+                video_kbps: 1400,
+                audio_kbps: 160,
+            },
+            MpegTsQuality {
+                video_kbps: 2200,
+                audio_kbps: 192,
+            },
         ];
         let adaptive = hls::generate_adaptive_segmented_vod(
             &registry.controller,
@@ -403,11 +415,15 @@ async fn generate_hls_playlist(
             {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
-            let name = variant.playlist_name
+            let name = variant
+                .playlist_name
                 .strip_suffix("/index.m3u8")
                 .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
                 .to_owned();
-            if !matches!(name.as_str(), "variant00" | "variant01" | "variant02" | "variant03") {
+            if !matches!(
+                name.as_str(),
+                "variant00" | "variant01" | "variant02" | "variant03"
+            ) {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
             if variant.bandwidth == 0 || variant.bandwidth > 1_000_000_000 {
@@ -422,12 +438,11 @@ async fn generate_hls_playlist(
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             let mut segments = Vec::new();
             for (index, path) in rendition.segment_paths.iter().enumerate() {
-                media_playlist = media_playlist.replace(
-                    &format!("segment{index:05}.ts"),
-                    &format!("{index}.ts"),
-                );
+                media_playlist = media_playlist
+                    .replace(&format!("segment{index:05}.ts"), &format!("{index}.ts"));
                 let size = rendition.segments[index].transport_bytes;
-                total_bytes = total_bytes.checked_add(size)
+                total_bytes = total_bytes
+                    .checked_add(size)
                     .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
                 if total_bytes > MAX_SEGMENT_BYTES {
                     return Err(StatusCode::NOT_IMPLEMENTED);
@@ -588,7 +603,12 @@ async fn serve_segment(
                 .iter()
                 .find(|variant| variant.name == variant_name)
                 .ok_or(StatusCode::NOT_FOUND)?;
-            (leaf_name, &variant.media_playlist, &variant.segments, variant_name)
+            (
+                leaf_name,
+                &variant.media_playlist,
+                &variant.segments,
+                variant_name,
+            )
         } else {
             if !publication.variants.is_empty() {
                 return Err(StatusCode::NOT_FOUND);
@@ -736,7 +756,13 @@ async fn video_variant_segment(
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     serve_segment(
-        state, item, playlist, format!("{variant}/{name}"), headers, "video", false,
+        state,
+        item,
+        playlist,
+        format!("{variant}/{name}"),
+        headers,
+        "video",
+        false,
     )
     .await
 }
@@ -747,7 +773,13 @@ async fn head_video_variant_segment(
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     serve_segment(
-        state, item, playlist, format!("{variant}/{name}"), headers, "video", true,
+        state,
+        item,
+        playlist,
+        format!("{variant}/{name}"),
+        headers,
+        "video",
+        true,
     )
     .await
 }
@@ -889,7 +921,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
-                rendition_count: 1,
+                    rendition_count: 1,
                 },
             )
             .await,
@@ -915,7 +947,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
-                rendition_count: 1,
+                    rendition_count: 1,
                 },
             )
             .await
@@ -963,7 +995,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
-                rendition_count: 1,
+                    rendition_count: 1,
                 },
             )
             .await,
@@ -983,7 +1015,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
-                rendition_count: 1,
+                    rendition_count: 1,
                 },
             )
             .await,
@@ -1003,7 +1035,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
-                rendition_count: 1,
+                    rendition_count: 1,
                 },
             )
             .await,
