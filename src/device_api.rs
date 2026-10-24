@@ -112,17 +112,25 @@ async fn delete_device(
 ) -> Result<StatusCode, StatusCode> {
     let dir = administrator_state(state, headers).await?;
     let raw = raw.unwrap_or_default();
+    if raw.len() > 4096 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let mut device_ids = Vec::new();
+    let mut parameters = 0;
     for (key, id) in form_urlencoded::parse(raw.as_bytes()) {
-        if key != "id"
+        parameters += 1;
+        if parameters > 32
+            || key != "id"
             || id.is_empty()
             || id.len() > 256
             || id.chars().any(char::is_control)
-            || device_ids.len() >= 16
         {
             return Err(StatusCode::BAD_REQUEST);
         }
         if !device_ids.iter().any(|known: &String| known == id.as_ref()) {
+            if device_ids.len() >= 16 {
+                return Err(StatusCode::BAD_REQUEST);
+            }
             device_ids.push(id.into_owned());
         }
     }
