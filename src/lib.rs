@@ -21,4 +21,5 @@ pub mod search;
 pub mod shows;
 pub mod streaming;
 pub mod theme;
+pub mod transcode;
 pub mod user_data;
