@@ -375,12 +375,11 @@ async fn user_by_id(
     }
     let dir = state_dir(&state)?;
     let server_id = state.server_id().to_owned();
-    let requested = tokio::task::spawn_blocking(move || {
-        auth::find_user(&dir, &user_id, &server_id)
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let requested =
+        tokio::task::spawn_blocking(move || auth::find_user(&dir, &user_id, &server_id))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(requested.ok_or(StatusCode::NOT_FOUND)?))
 }
 
