@@ -29,6 +29,8 @@ pub struct PlaybackRequest {
     enable_direct_play: Option<bool>,
     enable_direct_stream: Option<bool>,
     enable_transcoding: Option<bool>,
+    max_streaming_bitrate: Option<i64>,
+    max_audio_channels: Option<i64>,
     device_profile: Option<Value>,
 }
 
@@ -44,6 +46,8 @@ struct PlaybackQuery {
     enable_direct_play: Option<bool>,
     enable_direct_stream: Option<bool>,
     enable_transcoding: Option<bool>,
+    max_streaming_bitrate: Option<i64>,
+    max_audio_channels: Option<i64>,
 }
 
 impl PlaybackQuery {
@@ -76,6 +80,12 @@ impl PlaybackQuery {
         }
         if self.enable_transcoding.is_some() {
             request.enable_transcoding = self.enable_transcoding;
+        }
+        if self.max_streaming_bitrate.is_some() {
+            request.max_streaming_bitrate = self.max_streaming_bitrate;
+        }
+        if self.max_audio_channels.is_some() {
+            request.max_audio_channels = self.max_audio_channels;
         }
         request
     }
@@ -257,6 +267,26 @@ fn source_from_probe(
     }
 }
 
+/// Exact FFprobe report bitrate, preferring format total and otherwise
+/// summing all positive audio/video stream bitrates only when each is known.
+fn measured_bitrate(report: &probe::ProbeReport) -> Option<i64> {
+    report
+        .format
+        .as_ref()
+        .and_then(|format| number(&format["bit_rate"]))
+        .filter(|rate| *rate > 0)
+        .or_else(|| {
+            let mut total = 0_i64;
+            for stream in &report.streams {
+                if !matches!(stream["codec_type"].as_str(), Some("audio" | "video")) {
+                    continue;
+                }
+                total = total.checked_add(number(&stream["bit_rate"]).filter(|n| *n > 0)?)?;
+            }
+            (total > 0).then_some(total)
+        })
+}
+
 /// Matches Jellyfin v12.3 DirectPlayProfile Container, AudioCodec, VideoCodec
 /// and Type. Empty lists mean any codec; a leading "-" denies listed values.
 fn profile_contains(list: &str, actual: &str) -> bool {
@@ -346,22 +376,7 @@ fn profile_allows_direct_file(
             .as_i64()
             .filter(|value| *value > 0)
             .ok_or(StatusCode::BAD_REQUEST)?;
-        let measured = report
-            .format
-            .as_ref()
-            .and_then(|format| number(&format["bit_rate"]))
-            .filter(|bitrate| *bitrate > 0)
-            .or_else(|| {
-                let mut total = 0_i64;
-                for stream in &report.streams {
-                    if !matches!(stream["codec_type"].as_str(), Some("audio" | "video")) {
-                        continue;
-                    }
-                    total = total.checked_add(number(&stream["bit_rate"]).filter(|n| *n > 0)?)?;
-                }
-                (total > 0).then_some(total)
-            });
-        if measured.is_none_or(|bitrate| bitrate > limit) {
+        if measured_bitrate(report).is_none_or(|bitrate| bitrate > limit) {
             return Ok(false);
         }
     }
@@ -534,6 +549,26 @@ async fn playback_info(
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    // Without an FFmpeg/remux fallback, never claim a static source can fit
+    // requested stream bandwidth or output-channel limits when it cannot.
+    if let Some(limit) = req.max_streaming_bitrate {
+        if limit <= 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if measured_bitrate(&probed).is_none_or(|bitrate| bitrate > limit) {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
+    if let Some(limit) = req.max_audio_channels {
+        if limit <= 0 {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if probed.streams.iter().filter(|stream| stream["codec_type"] == "audio")
+            .any(|stream| number(&stream["channels"]).is_none_or(|channels| channels > limit))
+        {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
     let source = source_from_probe(&item_id, kind, &file, &probed);
     // An explicit playback profile overrides the token's previously reported
     // capabilities. Session profiles are never shared across users or tokens.
