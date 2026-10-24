@@ -267,8 +267,14 @@ async fn custom_library_names_are_registered_once_and_displayed_without_moving_d
         std::fs::canonicalize(&root).unwrap().to_str().unwrap()
     );
     for duplicate in [
-        format!("/Library/VirtualFolders?name=Another&paths={}", root.display()),
-        format!("/Library/VirtualFolders?name=cinema&paths={}", second.display()),
+        format!(
+            "/Library/VirtualFolders?name=Another&paths={}",
+            root.display()
+        ),
+        format!(
+            "/Library/VirtualFolders?name=cinema&paths={}",
+            second.display()
+        ),
     ] {
         assert_eq!(
             call(&router, "POST", &duplicate, Some(&admin.access_token), "")
@@ -280,15 +286,12 @@ async fn custom_library_names_are_registered_once_and_displayed_without_moving_d
     assert_eq!(catalog::library_entries(&state).unwrap().len(), 1);
     assert_eq!(catalog::all_files(&state).unwrap().len(), 1);
     assert_eq!(
-        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await)
-            .await["TotalRecordCount"],
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await["TotalRecordCount"],
         0
     );
     auth::grant_library(&state, "viewer", &root).unwrap();
-    let views = json(
-        call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await,
-    )
-    .await;
+    let views =
+        json(call(&router, "GET", "/UserViews", Some(&viewer.access_token), "").await).await;
     assert_eq!(views["Items"][0]["Name"], "Cinema");
     assert_eq!(views["Items"][0]["Id"], folders[0]["ItemId"]);
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
