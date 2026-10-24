@@ -389,11 +389,14 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     }
     assert_eq!(
         request(
-            &router, "POST",
+            &router,
+            "POST",
             &format!("{route}?maxStreamingBitrate=4000000&maxAudioChannels=2"),
             Some(&token),
             r#"{"MaxStreamingBitrate":3000000,"MaxAudioChannels":1}"#
-        ).await.status(),
+        )
+        .await
+        .status(),
         StatusCode::OK
     );
 
