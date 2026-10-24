@@ -30,6 +30,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id).post(update_user_name))
         .route("/Users/{user_id}/Policy", post(update_user_policy))
+        .route("/Users/{user_id}/Password", post(admin_reset_password))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         // Public account listing intentionally discloses no usernames yet.
@@ -112,6 +113,45 @@ async fn update_user_name(
         auth::UserNameUpdate::Updated => Ok(StatusCode::NO_CONTENT),
         auth::UserNameUpdate::NotFound => Err(StatusCode::NOT_FOUND),
         auth::UserNameUpdate::Conflict => Err(StatusCode::CONFLICT),
+    }
+}
+
+/// Password resets for ordinary accounts only. The complete pinned
+/// UpdateUserPassword shape (including current-password validation and
+/// passwordless reset) remains intentionally unsupported here.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase", deny_unknown_fields)]
+struct AdministratorPasswordRequest {
+    new_pw: String,
+}
+
+async fn admin_reset_password(
+    State(state): State<Arc<AppState>>,
+    RoutePath(user_id): RoutePath<String>,
+    headers: HeaderMap,
+    Json(body): Json<AdministratorPasswordRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    if !current.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    if user_id.is_empty() || user_id.len() > 128 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if !(12..=1024).contains(&body.new_pw.len()) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let dir = state_dir(&state)?;
+    match tokio::task::spawn_blocking(move || {
+        auth::reset_ordinary_user_password(&dir, &user_id, &body.new_pw)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        auth::PasswordReset::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::PasswordReset::NotFound => Err(StatusCode::NOT_FOUND),
+        auth::PasswordReset::AdministratorProtected => Err(StatusCode::FORBIDDEN),
     }
 }
 

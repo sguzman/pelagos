@@ -218,6 +218,49 @@ pub fn rename_user(state_dir: &Path, user_id: &str, new_name: &str) -> Result<Us
     Ok(UserNameUpdate::Updated)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PasswordReset {
+    Updated,
+    NotFound,
+    AdministratorProtected,
+}
+
+/// Administrator reset subset: Argon2 replacement plus token revocation
+/// happen in the same private authentication database transaction.
+pub fn reset_ordinary_user_password(
+    state_dir: &Path,
+    target_user_id: &str,
+    new_password: &str,
+) -> Result<PasswordReset> {
+    validate_password(new_password)?;
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let admin = tx
+        .query_row(
+            "SELECT is_admin FROM pelagos_users WHERE id=?1",
+            params![target_user_id],
+            |row| row.get::<_, bool>(0),
+        )
+        .optional()?;
+    let Some(is_admin) = admin else {
+        return Ok(PasswordReset::NotFound);
+    };
+    if is_admin {
+        return Ok(PasswordReset::AdministratorProtected);
+    }
+    let hashed = password_hash(new_password)?;
+    tx.execute(
+        "UPDATE pelagos_users SET password_hash=?1 WHERE id=?2",
+        params![hashed, target_user_id],
+    )?;
+    tx.execute(
+        "DELETE FROM pelagos_tokens WHERE user_id=?1",
+        params![target_user_id],
+    )?;
+    tx.commit()?;
+    Ok(PasswordReset::Updated)
+}
+
 /// Read one account without ever projecting password material.
 pub fn find_user(state_dir: &Path, user_id: &str, server_id: &str) -> Result<Option<User>> {
     let db = database(state_dir)?;
