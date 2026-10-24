@@ -207,8 +207,7 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     );
     assert_ne!(seek_manifest, manifest);
     let seek_master = format!("/Videos/{id}/master.m3u8?segmentLength=2&startTimeTicks=10000000");
-    let seek_master_text =
-        text_body(request(&app, "GET", &seek_master, Some(&viewer)).await).await;
+    let seek_master_text = text_body(request(&app, "GET", &seek_master, Some(&viewer)).await).await;
     let sought_id = seek_manifest
         .lines()
         .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
