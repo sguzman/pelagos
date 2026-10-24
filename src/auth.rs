@@ -682,10 +682,7 @@ pub struct SessionCapabilitiesReport {
 
 /// Read only the current, enabled owner's session-reported device profile.
 /// Revoking the token or disabling the account immediately hides the profile.
-pub fn session_device_profile(
-    state_dir: &Path,
-    token: &str,
-) -> Result<Option<serde_json::Value>> {
+pub fn session_device_profile(state_dir: &Path, token: &str) -> Result<Option<serde_json::Value>> {
     if token.len() != 64 || !token.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Ok(None);
     }
