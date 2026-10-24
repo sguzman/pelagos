@@ -365,6 +365,111 @@ async fn generate_hls_playlist(
         path: private_root.clone(),
         armed: true,
     };
+    if rendition_count > 1 {
+        // This opt-in prototype is limited to pre-encoded, short, private
+        // video VOD. The builder measures every output; never fabricate
+        // distinct bitrate variants from duplicated encoded bytes.
+        const PROFILES: [MpegTsQuality; 4] = [
+            MpegTsQuality { video_kbps: 400, audio_kbps: 96 },
+            MpegTsQuality { video_kbps: 800, audio_kbps: 128 },
+            MpegTsQuality { video_kbps: 1400, audio_kbps: 160 },
+            MpegTsQuality { video_kbps: 2200, audio_kbps: 192 },
+        ];
+        let adaptive = hls::generate_adaptive_segmented_vod(
+            &registry.controller,
+            state.probe_executable(),
+            &source,
+            &private_root.join("bundle"),
+            target_seconds,
+            &PROFILES[..usize::from(rendition_count)],
+        )
+        .await
+        .map_err(|err| match err.kind() {
+            io::ErrorKind::WouldBlock => StatusCode::TOO_MANY_REQUESTS,
+            io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
+            io::ErrorKind::InvalidData => StatusCode::NOT_IMPLEMENTED,
+            _ => StatusCode::SERVICE_UNAVAILABLE,
+        })?;
+        if adaptive.variants.len() < 2 {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let mut master_playlist = String::from("#EXTM3U\n#EXT-X-VERSION:3\n");
+        let mut variants = Vec::new();
+        let mut total_bytes = 0_u64;
+        for (variant, rendition) in adaptive.variants.iter().zip(&adaptive.renditions) {
+            if !variant.playlist_name.starts_with("variant")
+                || rendition.segments.is_empty()
+                || rendition.segments.len() > 64
+            {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            let name = variant.playlist_name
+                .strip_suffix("/index.m3u8")
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+                .to_owned();
+            if !matches!(name.as_str(), "variant00" | "variant01" | "variant02" | "variant03") {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            if variant.bandwidth == 0 || variant.bandwidth > 1_000_000_000 {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            master_playlist.push_str(&format!(
+                "#EXT-X-STREAM-INF:BANDWIDTH={}\nhls1/{id}/{name}/index.m3u8\n",
+                variant.bandwidth
+            ));
+            let mut media_playlist = tokio::fs::read_to_string(&rendition.playlist_path)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut segments = Vec::new();
+            for (index, path) in rendition.segment_paths.iter().enumerate() {
+                media_playlist = media_playlist.replace(
+                    &format!("segment{index:05}.ts"),
+                    &format!("{index}.ts"),
+                );
+                let size = rendition.segments[index].transport_bytes;
+                total_bytes = total_bytes.checked_add(size)
+                    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+                if total_bytes > MAX_SEGMENT_BYTES {
+                    return Err(StatusCode::NOT_IMPLEMENTED);
+                }
+                segments.push((path.clone(), size));
+            }
+            if media_playlist.len() > MAX_MANIFEST {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            variants.push(PublishedVariant {
+                name,
+                media_playlist,
+                segments,
+            });
+        }
+        if master_playlist.len() > MAX_MANIFEST {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        reauthorize_publication(&state, &headers, &cache_key).await?;
+        let response = playlist_response(&master_playlist);
+        let publication = Arc::new(Published {
+            id,
+            item,
+            kind: expected_kind,
+            digest: Sha256::digest(token.as_bytes()).into(),
+            source,
+            source_size,
+            source_modified,
+            target_seconds,
+            start_time_ticks,
+            rendition_count,
+            private_root,
+            main_playlist: String::new(),
+            master_playlist,
+            media_playlist: String::new(),
+            segments: Vec::new(),
+            variants,
+        });
+        cleanup.armed = false;
+        registry.publish(publication);
+        return Ok(response);
+    }
     let artifact = hls::generate_segmented_vod_from(
         &registry.controller,
         state.probe_executable(),
@@ -742,6 +847,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                rendition_count: 1,
                 },
             )
             .await,
@@ -767,6 +873,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                rendition_count: 1,
                 },
             )
             .await
@@ -814,6 +921,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                rendition_count: 1,
                 },
             )
             .await,
@@ -833,6 +941,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                rendition_count: 1,
                 },
             )
             .await,
@@ -852,6 +961,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                rendition_count: 1,
                 },
             )
             .await,
