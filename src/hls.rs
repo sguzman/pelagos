@@ -21,6 +21,57 @@ const SEGMENT_NAME: &str = "segment00000.ts";
 const PLAYLIST_NAME: &str = "index.m3u8";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(20);
 
+const MAX_VOD_SEGMENTS: usize = 512;
+
+/// A completed independently decodable MPEG-TS segment, with duration
+/// measured from the segment rather than guessed from FFmpeg target time.
+#[derive(Debug, Clone, Copy)]
+pub struct HlsSegment {
+    pub duration_seconds: f64,
+    pub transport_bytes: u64,
+}
+
+/// Serialize a bounded VOD media playlist only after every MPEG-TS segment
+/// has passed probing/packet validation. Filenames are generated internally,
+/// never accepted from clients or arbitrary filesystem content.
+///
+/// This function does not perform segment muxing; callers must independently
+/// verify that all supplied TS segments begin at usable decoder boundaries.
+pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> {
+    if segments.is_empty() || segments.len() > MAX_VOD_SEGMENTS {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment count"));
+    }
+    let mut max_duration = 0.0_f64;
+    let mut total = 0.0_f64;
+    for segment in segments {
+        if !segment.duration_seconds.is_finite()
+            || !(0.001..=86_400.0).contains(&segment.duration_seconds)
+            || segment.transport_bytes < 188
+            || segment.transport_bytes % 188 != 0
+        {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment metadata"));
+        }
+        total += segment.duration_seconds;
+        max_duration = max_duration.max(segment.duration_seconds);
+        if total > 86_400.0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "HLS VOD exceeds one day"));
+        }
+    }
+    let mut playlist = format!(
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n",
+        max_duration.ceil() as u32
+    );
+    for (index, segment) in segments.iter().enumerate() {
+        playlist.push_str(&format!(
+            "#EXTINF:{:.3},\nsegment{index:05}.ts\n",
+            segment.duration_seconds
+        ));
+    }
+    playlist.push_str("#EXT-X-ENDLIST\n");
+    Ok(playlist)
+}
+
+
 struct PartialBundle {
     dir: PathBuf,
     committed: bool,
@@ -168,10 +219,10 @@ async fn generate_single_segment_vod_with_quality(
             "transport must contain MPEG-TS packets and stream metadata",
         ));
     }
-    let playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:{duration_seconds:.3},\n{SEGMENT_NAME}\n#EXT-X-ENDLIST\n",
-        duration_seconds.ceil() as u32,
-    );
+    let playlist = render_vod_media_playlist(&[HlsSegment {
+        duration_seconds,
+        transport_bytes,
+    }])?;
     let playlist_path = output_dir.join(PLAYLIST_NAME);
     let mut out = OpenOptions::new()
         .create_new(true)
