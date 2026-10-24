@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 37%` across 167 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 37%` across 168 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -423,11 +423,11 @@
   - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
   - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 36%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 37%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█████░░░░░ 52%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 53%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -501,6 +501,10 @@
   - [x] Implement bounded v12.3 DirectPlayProfile media/container/codec matching with comma-delimited positive and negative lists, optional static bitrate ceilings, explicit PlaybackInfo device-profile request and own-session previously reported fallback, refusing unmatched or unsupported constraints — src/playback.rs profile_contains/profile_allows_direct_file/playback_info; src/auth.rs session_device_profile; pinned Jellyfin v12.3 DirectPlayProfile.cs, ContainerHelper.cs, DlnaProfileType.cs and PlaybackInfoDto.cs
   - [x] Native CI verifies valid H.264/AAC MP4 and FLAC, wrong containers/codecs, profile caps, malformed profile fields, session capability report fallback and explicit request override, while declining unimplemented transcode and maintaining authorization — GitHub Actions 40055594514, 40055741333 and 40055776201 — complete native Rust unit and HTTP tests, rustfmt, Clippy, pinned route/controller/source matrices passed
   - [ ] Complete Jellyfin typed device profile/codec/level/subtitle/bitrate negotiation, remux/transcode fallback and unmodified TV/mobile clients accepted
+- 🎚️ **T338 — PlaybackInfo bounded client bitrate and output-channel constraints** — `███████░░░ 67%`
+  - [x] Accept pinned MaxStreamingBitrate and MaxAudioChannels through POST DTO or deprecated query precedence and decline direct-file offers that exceed probed total bitrate or audio channels without implemented transcoding; invalid bounds fail closed — src/playback.rs PlaybackRequest/PlaybackQuery.apply/measured_bitrate/playback_info; pinned Jellyfin v12.3 MediaInfoController.GetPostedPlaybackInfo and PlaybackInfoDto.cs
+  - [x] Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override — GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed
+  - [ ] Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 

@@ -2519,6 +2519,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T338",
+              "emoji": "🎚️",
+              "name": "PlaybackInfo bounded client bitrate and output-channel constraints",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Accept pinned MaxStreamingBitrate and MaxAudioChannels through POST DTO or deprecated query precedence and decline direct-file offers that exceed probed total bitrate or audio channels without implemented transcoding; invalid bounds fail closed",
+                  "passed": true,
+                  "evidence": "src/playback.rs PlaybackRequest/PlaybackQuery.apply/measured_bitrate/playback_info; pinned Jellyfin v12.3 MediaInfoController.GetPostedPlaybackInfo and PlaybackInfoDto.cs"
+                },
+                {
+                  "title": "Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed"
+                },
+                {
+                  "title": "Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
