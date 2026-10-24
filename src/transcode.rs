@@ -516,10 +516,22 @@ mod tests {
     async fn encoder_targets_accept_only_bounded_numeric_bitrates() {
         let (_temp, executable, source, output) = fixture("printf 'MPEGTS'");
         for invalid in [
-            MpegTsQuality { video_kbps: 299, audio_kbps: 64 },
-            MpegTsQuality { video_kbps: 20_001, audio_kbps: 64 },
-            MpegTsQuality { video_kbps: 500, audio_kbps: 31 },
-            MpegTsQuality { video_kbps: 500, audio_kbps: 321 },
+            MpegTsQuality {
+                video_kbps: 299,
+                audio_kbps: 64,
+            },
+            MpegTsQuality {
+                video_kbps: 20_001,
+                audio_kbps: 64,
+            },
+            MpegTsQuality {
+                video_kbps: 500,
+                audio_kbps: 31,
+            },
+            MpegTsQuality {
+                video_kbps: 500,
+                audio_kbps: 321,
+            },
         ] {
             assert_eq!(
                 transcode_mpegts_with_quality(
@@ -539,9 +551,13 @@ mod tests {
         }
         let controller =
             TranscodeController::new(executable, 1, Duration::from_secs(2), 128).unwrap();
-        let quality = MpegTsQuality { video_kbps: 1500, audio_kbps: 96 };
+        let quality = MpegTsQuality {
+            video_kbps: 1500,
+            audio_kbps: 96,
+        };
         assert_eq!(
-            controller.try_run_with_quality(&source, &output, quality)
+            controller
+                .try_run_with_quality(&source, &output, quality)
                 .await
                 .unwrap(),
             6
