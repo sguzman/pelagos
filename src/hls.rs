@@ -98,6 +98,7 @@ pub struct HlsVodArtifact {
     pub segment_path: PathBuf,
     pub duration_seconds: f64,
     pub transport_bytes: u64,
+    pub resolution: Option<(u32, u32)>,
 }
 
 /// Create a new, isolated directory containing a complete, single-segment
@@ -152,6 +153,15 @@ async fn generate_single_segment_vod_with_quality(
                 "transport has no finite, positive bounded duration",
             )
         })?;
+    let resolution = inspection.streams.iter().find_map(|stream| {
+        if stream["codec_type"].as_str() != Some("video") {
+            return None;
+        }
+        let width = u32::try_from(stream["width"].as_u64()?).ok()?;
+        let height = u32::try_from(stream["height"].as_u64()?).ok()?;
+        ((16..=16_384).contains(&width) && (16..=16_384).contains(&height))
+            .then_some((width, height))
+    });
     if transport_bytes < 188 || transport_bytes % 188 != 0 || inspection.streams.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -176,6 +186,7 @@ async fn generate_single_segment_vod_with_quality(
         segment_path,
         duration_seconds,
         transport_bytes,
+        resolution,
     })
 }
 
@@ -248,7 +259,7 @@ pub async fn generate_adaptive_vod(
         variants.push(HlsVariant {
             playlist_name,
             bandwidth,
-            resolution: None,
+            resolution: rendition.resolution,
         });
         renditions.push(HlsVodArtifact {
             playlist_path: output_dir.join(&new_name).join(PLAYLIST_NAME),
