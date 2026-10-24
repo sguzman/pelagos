@@ -723,7 +723,10 @@ async fn sessions(
     if query.controllable_by_user_id.is_some() {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    if query.active_within_seconds.is_some_and(|value| value > 31_536_000) {
+    if query
+        .active_within_seconds
+        .is_some_and(|value| value > 31_536_000)
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     let dir = state_dir(&state)?;
