@@ -44,6 +44,29 @@ async fn request_range(
         .unwrap()
 }
 
+async fn request_if_range(
+    app: &Router,
+    method: &str,
+    path: &str,
+    token: &str,
+    byte_range: &str,
+    validator: &str,
+) -> Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method(method)
+                .uri(path)
+                .header("X-Emby-Token", token)
+                .header(header::RANGE, byte_range)
+                .header(header::IF_RANGE, validator)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 async fn text_body(response: Response) -> String {
     let bytes = to_bytes(response.into_body(), 65536).await.unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
@@ -190,6 +213,49 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     let partial = request_range(&app, "GET", first_path, &viewer, "bytes=0-187").await;
     assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(partial.headers()[header::CONTENT_LENGTH], "188");
+    let etag = partial.headers()[header::ETAG].to_str().unwrap().to_owned();
+    assert!(etag.starts_with("\"hls-") && etag.ends_with('"'));
+    assert!(!etag.contains(&viewer));
+    let resumed = request_if_range(&app, "GET", first_path, &viewer, "bytes=0-187", &etag).await;
+    assert_eq!(resumed.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(resumed.headers()[header::ETAG], etag);
+    assert_eq!(to_bytes(resumed.into_body(), 188).await.unwrap().len(), 188);
+    let stale = request_if_range(
+        &app,
+        "GET",
+        first_path,
+        &viewer,
+        "bytes=0-187",
+        "\"other-published-part\"",
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::OK);
+    assert_eq!(stale.headers()[header::ETAG], etag);
+    assert!(stale.headers().get(header::CONTENT_RANGE).is_none());
+    assert_eq!(
+        to_bytes(stale.into_body(), 4 * 1024 * 1024).await.unwrap().len(),
+        bytes.len()
+    );
+    let stale_head = request_if_range(
+        &app,
+        "HEAD",
+        first_path,
+        &viewer,
+        "bytes=0-187",
+        "\"other-published-part\"",
+    )
+    .await;
+    assert_eq!(stale_head.status(), StatusCode::OK);
+    assert_eq!(
+        stale_head.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap(),
+        bytes.len()
+    );
+    assert!(to_bytes(stale_head.into_body(), 4096).await.unwrap().is_empty());
+
     assert_eq!(
         partial.headers()[header::CONTENT_RANGE],
         format!("bytes 0-187/{}", bytes.len())
@@ -487,6 +553,26 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     let partial = request_range(&app, "GET", &first, &listener, "bytes=0-187").await;
     assert_eq!(partial.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(partial.headers()[header::CONTENT_LENGTH], "188");
+    let etag = partial.headers()[header::ETAG].to_str().unwrap().to_owned();
+    let good = request_if_range(&app, "HEAD", &first, &listener, "bytes=0-187", &etag).await;
+    assert_eq!(good.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(good.headers()[header::CONTENT_LENGTH], "188");
+    let stale = request_if_range(
+        &app,
+        "GET",
+        &first,
+        &listener,
+        "bytes=0-187",
+        "\"obsolete-segment\"",
+    )
+    .await;
+    assert_eq!(stale.status(), StatusCode::OK);
+    assert!(stale.headers().get(header::CONTENT_RANGE).is_none());
+    assert_eq!(
+        to_bytes(stale.into_body(), 4 * 1024 * 1024).await.unwrap().len(),
+        bytes.len()
+    );
+
     assert_eq!(to_bytes(partial.into_body(), 188).await.unwrap().len(), 188);
     assert_eq!(
         request(
