@@ -1002,8 +1002,8 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"4.0"},"streams":[{"codec_type":"audio"}]}'"#,
         );
-        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024)
-            .unwrap();
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024).unwrap();
         let output = temp.path().join("cancelled");
         let destination = output.clone();
         let job = tokio::spawn(async move {
