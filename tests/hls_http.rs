@@ -865,6 +865,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = text_body(master_response).await;
     assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    assert_eq!(master.matches(",RESOLUTION=640x360").count(), 2);
     assert!(!master.contains(&owner));
     assert!(master.contains("variant00/index.m3u8"));
     assert!(master.contains("variant01/index.m3u8"));
@@ -881,6 +882,7 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         seek_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
         2
     );
+    assert_eq!(seek_master.matches(",RESOLUTION=640x360").count(), 2);
     let seek_variants = seek_master
         .lines()
         .filter(|line| line.starts_with("hls1/"))
