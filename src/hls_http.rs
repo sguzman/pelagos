@@ -305,7 +305,8 @@ async fn generate_hls_playlist(
     .await
     .map_err(|err| match err.kind() {
         io::ErrorKind::WouldBlock => StatusCode::TOO_MANY_REQUESTS,
-        io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput => StatusCode::NOT_IMPLEMENTED,
+        io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
+        io::ErrorKind::InvalidData => StatusCode::NOT_IMPLEMENTED,
         _ => StatusCode::SERVICE_UNAVAILABLE,
     })?;
     let mut playlist = tokio::fs::read_to_string(&artifact.playlist_path)
