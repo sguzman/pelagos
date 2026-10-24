@@ -194,6 +194,73 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     let response: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(response["MediaSources"][0]["SupportsDirectStream"], false);
     assert_eq!(response["MediaSources"][0]["SupportsTranscoding"], false);
+    // Pinned v12.3 DirectPlayProfile request: matching static container
+    // and codecs may be offered; unsupported profiles must not be advertised.
+    for (profile, expected) in [
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mp4,mkv",
+                    "VideoCodec":"h264", "AudioCodec":"aac"
+                }]
+            }),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mkv",
+                    "VideoCodec":"h264", "AudioCodec":"aac"
+                }]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mp4",
+                    "VideoCodec":"hevc", "AudioCodec":"aac"
+                }]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mp4",
+                    "VideoCodec":"h264", "AudioCodec":"ac3"
+                }]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mp4"
+                }],
+                "CodecProfiles":[{"Type":"Video"}]
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles": [{
+                    "Type":"Video", "Container":"mp4", "UnsupportedField":true
+                }]
+            }),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        let response = request(
+            &router,
+            "POST",
+            &route,
+            Some(&token),
+            &serde_json::json!({"DeviceProfile":profile}).to_string(),
+        )
+        .await;
+        assert_eq!(response.status(), expected);
+    }
     let accepted_user = format!("{route}?userId={current_user}");
     assert_eq!(
         request(&router, "GET", &accepted_user, Some(&token), "")
