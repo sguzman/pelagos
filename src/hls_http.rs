@@ -695,6 +695,151 @@ mod tests {
         assert!(registry.jobs.try_acquire().is_ok());
     }
 
+    #[tokio::test]
+    async fn publication_waiter_rechecks_revoked_grants_tokens_and_source_revisions() {
+        use crate::{auth, catalog, catalog_api};
+        use axum::http::HeaderValue;
+
+        let fixture = tempfile::tempdir().unwrap();
+        let library = fixture.path().join("Movies");
+        let state_dir = fixture.path().join("state");
+        std::fs::create_dir_all(&library).unwrap();
+        let path = library.join("Sample.mp4");
+        std::fs::write(&path, b"synthetic catalogued movie").unwrap();
+        catalog::index(&state_dir, &library).unwrap();
+        auth::create_user(&state_dir, "admin", "hls-reauthorize-admin-password").unwrap();
+        auth::create_user(&state_dir, "viewer", "hls-reauthorize-viewer-password").unwrap();
+        auth::grant_library(&state_dir, "viewer", &library).unwrap();
+        let viewer = auth::authenticate(
+            &state_dir,
+            "viewer",
+            "hls-reauthorize-viewer-password",
+            "server",
+        )
+        .unwrap()
+        .unwrap();
+        let token = viewer.access_token;
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Emby-Token", HeaderValue::from_str(&token).unwrap());
+        let original_source = std::fs::canonicalize(&path).unwrap();
+        let original = std::fs::metadata(&original_source).unwrap();
+        let id = catalog_api::stable_id(
+            library.to_str().unwrap(),
+            "Sample.mp4",
+        );
+        let state = Arc::new(AppState::with_auth_dir(
+            "server".to_owned(),
+            state_dir.clone(),
+        ));
+        let authorize = || {
+            reauthorize_publication(
+                &state,
+                &headers,
+                &token,
+                &id,
+                "video",
+                &original_source,
+                original.len(),
+                original.modified().ok(),
+            )
+        };
+        assert_eq!(authorize().await, Ok(()));
+
+        // Pause a request in the same one-worker admission gate as the HLS
+        // encoder. Revoking its library grant while queued must survive the
+        // gate transition as a denial, not a stale published manifest.
+        let active = state.hls_registry().jobs.try_acquire().unwrap();
+        let waiting_state = state.clone();
+        let pending = tokio::spawn(async move {
+            let _permit = waiting_state.hls_registry().acquire_generation().await?;
+            reauthorize_publication(
+                &waiting_state,
+                &headers,
+                &token,
+                &id,
+                "video",
+                &original_source,
+                original.len(),
+                original.modified().ok(),
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while state.hls_registry().waiters.available_permits() == 4 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+        drop(active);
+        assert_eq!(pending.await.unwrap(), Err(StatusCode::NOT_FOUND));
+
+        auth::grant_library(&state_dir, "viewer", &library).unwrap();
+        // A separate valid token is not a substitute for the old one, and
+        // restoring the grant never revalidates a revoked login.
+        let fresh = auth::authenticate(
+            &state_dir,
+            "viewer",
+            "hls-reauthorize-viewer-password",
+            "server",
+        )
+        .unwrap()
+        .unwrap();
+        let mut fresh_headers = HeaderMap::new();
+        fresh_headers.insert(
+            "X-Emby-Token",
+            HeaderValue::from_str(&fresh.access_token).unwrap(),
+        );
+        let source = std::fs::canonicalize(&path).unwrap();
+        let expected = std::fs::metadata(&source).unwrap();
+        let fresh_id = catalog_api::stable_id(library.to_str().unwrap(), "Sample.mp4");
+        assert_eq!(
+            reauthorize_publication(
+                &state,
+                &fresh_headers,
+                &fresh.access_token,
+                &fresh_id,
+                "video",
+                &source,
+                expected.len(),
+                expected.modified().ok(),
+            )
+            .await,
+            Ok(())
+        );
+        std::fs::write(&path, b"replaced after HLS encoding was admitted").unwrap();
+        assert_eq!(
+            reauthorize_publication(
+                &state,
+                &fresh_headers,
+                &fresh.access_token,
+                &fresh_id,
+                "video",
+                &source,
+                expected.len(),
+                expected.modified().ok(),
+            )
+            .await,
+            Err(StatusCode::NOT_FOUND)
+        );
+        auth::revoke(&state_dir, &fresh.access_token).unwrap();
+        assert_eq!(
+            reauthorize_publication(
+                &state,
+                &fresh_headers,
+                &fresh.access_token,
+                &fresh_id,
+                "video",
+                &source,
+                expected.len(),
+                expected.modified().ok(),
+            )
+            .await,
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
     #[test]
     fn published_bundles_are_token_scoped_bounded_and_cleaned_after_last_reader() {
         let temp = tempfile::tempdir().unwrap();
