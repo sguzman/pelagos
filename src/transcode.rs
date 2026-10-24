@@ -208,6 +208,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn actual_ffmpeg_emits_probeable_aac_mpegts_when_ci_requires_it() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("silent.wav");
+        // One second of valid 8-kHz, signed 16-bit mono PCM.
+        let samples = vec![0_u8; 16_000];
+        let mut wav = Vec::with_capacity(44 + samples.len());
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36_u32 + samples.len() as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&8_000_u32.to_le_bytes());
+        wav.extend_from_slice(&16_000_u32.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(samples.len() as u32).to_le_bytes());
+        wav.extend_from_slice(&samples);
+        stdfs::write(&source, wav).unwrap();
+        let output = temp.path().join("audio.ts");
+        let n = transcode_mpegts(
+            Path::new("ffmpeg"),
+            &source,
+            &output,
+            Duration::from_secs(20),
+            2 * 1024 * 1024,
+        )
+        .await
+        .unwrap();
+        let transport = stdfs::read(&output).unwrap();
+        assert_eq!(transport.len() as u64, n);
+        assert!(n >= 188);
+        assert_eq!(transport[0], 0x47);
+        assert_eq!(transport.len() % 188, 0);
+        let inspected = Command::new("ffprobe")
+            .args([
+                "-v", "error", "-select_streams", "a",
+                "-show_entries", "stream=codec_name",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+            ])
+            .arg(&output)
+            .output()
+            .await
+            .unwrap();
+        assert!(inspected.status.success());
+        assert!(String::from_utf8_lossy(&inspected.stdout).contains("aac"));
+    }
+
+    #[tokio::test]
     async fn zero_deadline_or_byte_limit_is_rejected_before_output_creation() {
         let (_temp, executable, source, output) = fixture("printf 'not reached'");
         for (deadline, cap) in [
