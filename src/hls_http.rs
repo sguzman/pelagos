@@ -698,10 +698,7 @@ mod tests {
         headers.insert("X-Emby-Token", HeaderValue::from_str(&token).unwrap());
         let original_source = std::fs::canonicalize(&path).unwrap();
         let original = std::fs::metadata(&original_source).unwrap();
-        let id = catalog_api::stable_id(
-            library.to_str().unwrap(),
-            "Sample.mp4",
-        );
+        let id = catalog_api::stable_id(library.to_str().unwrap(), "Sample.mp4");
         let state = Arc::new(AppState::with_auth_dir(
             "server".to_owned(),
             state_dir.clone(),
