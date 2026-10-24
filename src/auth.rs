@@ -261,6 +261,68 @@ pub fn reset_ordinary_user_password(
     Ok(PasswordReset::Updated)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OwnPasswordChange {
+    Updated,
+    InvalidCurrentPassword,
+    StaleSession,
+}
+
+/// Current-password-verified self-service change. Keep the requesting
+/// session, as the pinned Jellyfin endpoint does, but revoke every other
+/// session atomically with replacing the Argon2 password hash.
+///
+/// Recheck the caller token and account inside this write transaction:
+/// prior HTTP authentication alone is insufficient after concurrent
+/// account disabling or administrator password resets.
+pub fn change_own_password(
+    state_dir: &Path,
+    user_id: &str,
+    current_token: &str,
+    current_password: &str,
+    new_password: &str,
+) -> Result<OwnPasswordChange> {
+    validate_password(new_password)?;
+    if current_token.len() != 64 || !current_token.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Ok(OwnPasswordChange::StaleSession);
+    }
+    let digest = digest_token(current_token);
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let stored_hash = tx
+        .query_row(
+            "SELECT u.password_hash
+             FROM pelagos_users u
+             JOIN pelagos_tokens t ON t.user_id=u.id
+             WHERE t.digest=?1 AND u.id=?2 AND u.disabled=0",
+            params![digest.as_slice(), user_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    let Some(stored_hash) = stored_hash else {
+        return Ok(OwnPasswordChange::StaleSession);
+    };
+    let parsed = PasswordHash::new(&stored_hash)
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
+    if Argon2::default()
+        .verify_password(current_password.as_bytes(), &parsed)
+        .is_err()
+    {
+        return Ok(OwnPasswordChange::InvalidCurrentPassword);
+    }
+    let hashed = password_hash(new_password)?;
+    tx.execute(
+        "UPDATE pelagos_users SET password_hash=?1 WHERE id=?2",
+        params![hashed, user_id],
+    )?;
+    tx.execute(
+        "DELETE FROM pelagos_tokens WHERE user_id=?1 AND digest<>?2",
+        params![user_id, digest.as_slice()],
+    )?;
+    tx.commit()?;
+    Ok(OwnPasswordChange::Updated)
+}
+
 /// Read one account without ever projecting password material.
 pub fn find_user(state_dir: &Path, user_id: &str, server_id: &str) -> Result<Option<User>> {
     let db = database(state_dir)?;
