@@ -792,6 +792,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T136",
+              "emoji": "👤",
+              "name": "Administrator-only password-backed Jellyfin account creation API",
+              "checks": [
+                {
+                  "title": "Implement authenticated administrator-only pinned POST /Users/New accepting strict Name/Password body, creating non-admin users with Argon2 password hashes and scoped User DTO subset",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs create_account; src/auth.rs create_user; pinned Jellyfin v12.3 UserController.CreateUserByName and CreateUserByName DTO"
+                },
+                {
+                  "title": "Rust CI verifies anonymous/user denial, privileged creation, password privacy, duplicate case-insensitive names, invalid and unknown privilege fields, restart and new-user login",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40043498922: complete Rust HTTP tests, formatting, Clippy, pinned controller/contract and evidence ledger checks passed"
+                },
+                {
+                  "title": "Full Jellyfin UserDto fields, passwordless account lifecycle, user update/deletion/admin controls and unmodified client interoperability",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

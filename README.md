@@ -20,9 +20,9 @@
 
 ## 📊 Development status
 
-`███░░░░░░░ 34%` across 150 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`███░░░░░░░ 34%` across 151 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
-**Latest passing CI:** [run 40043005135](https://github.com/sguzman/pelagos/actions/runs/40043005135) — atomic custom-name library registration, permission isolation, duplicate root/label rejection, Rust HTTP suites, Clippy and pinned contract checks.
+**Latest passing CI:** [run 40043498922](https://github.com/sguzman/pelagos/actions/runs/40043498922) — administrator-only password-backed Users/New, no password exposure, durable account login, full Rust tests and pinned source gates.
 
 ## 🚀 Current starter
 
@@ -96,6 +96,8 @@ Pelagos now also serves a pinned, administrator-only **read-only** `GET /Library
 Pelagos now supports a narrow, **genuine indexed-local-media** subset of pinned `GET /Items/{itemId}/ThemeSongs`, `/ThemeVideos` and `/ThemeMedia`. For authorized movie folders or recognized series, direct audio named `theme`, audio inside `theme-music`, and videos inside `backdrops` are returned as media DTOs with `ExtraType=ThemeSong` or `ThemeVideo`; returned IDs are synthetic-tested against direct-play routes. `SortName` ascending/descending and scoped `inheritFromParent=true` are recognized, with song and video fallback resolved independently through the indexed parent tree. Unsupported sorting remains an explicit 501. A music track in the collection root is not silently attached to unrelated movies. No metadata provider, arbitrary extras rule, complete parent traversal, or unmodified client acceptance is claimed. ([CI 40037734907](https://github.com/sguzman/pelagos/actions/runs/40037734907)).
 
 Pelagos supports a restricted administrator-only `POST /Library/Refresh`. It synchronously rescans **only roots previously registered in Pelagos**, commits all library updates within one SQLite transaction, refuses missing/redirected roots with 503 without deleting existing records, and never writes to media. Unlike upstream Jellyfin v12.3, which schedules a scan, the native subset returns 204 **after** the scan completes. Async task lifecycle, real-client acceptance and scale/concurrency gates remain open ([CI 40039692258](https://github.com/sguzman/pelagos/actions/runs/40039692258)).
+
+A pinned **administrator-only** `POST /Users/New` subset now creates password-backed ordinary Pelagos accounts using the existing Argon2 credential store. It requires the CLI-bootstrap administrator, strictly accepts `Name` and `Password`, rejects privilege-control fields, and never returns the password. The response is a **limited Pelagos User DTO**, not Jellyfin's full `UserDto`; passwordless accounts, user updates/deletion and real-client acceptance remain open ([CI 40043498922](https://github.com/sguzman/pelagos/actions/runs/40043498922)).
 
 ## 🦀 Architecture and independence
 

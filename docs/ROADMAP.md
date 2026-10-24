@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `███░░░░░░░ 34%` across 150 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `███░░░░░░░ 34%` across 151 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -85,7 +85,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 43%`
+## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 44%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `████░░░░░░ 40%`
+### 👥 P4 — Authentication and user state — `████░░░░░░ 43%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -166,6 +166,10 @@
   - [x] Implement persistent default-deny per-user EnableContentDownloading state, separate download CLI grant/revoke operations and permission-aware authenticated download requests — src/auth.rs; src/main.rs; src/streaming.rs; pinned Jellyfin v12.3 Policies.Download and PermissionKind.EnableContentDownloading
   - [x] Rust CI validates ordinary-account grant/revoke on active sessions, restart persistence, user-policy DTO, separate root authorization and original media downloads — GitHub Actions 40033786005: complete Rust integration/unit suites, Clippy, formatting, roadmap and pinned source/route checks passed
   - [ ] All pinned Jellyfin CanDownload user/item-policy cases and unmodified clients pass differential and production acceptance
+- 👤 **T136 — Administrator-only password-backed Jellyfin account creation API** — `███████░░░ 67%`
+  - [x] Implement authenticated administrator-only pinned POST /Users/New accepting strict Name/Password body, creating non-admin users with Argon2 password hashes and scoped User DTO subset — src/auth_api.rs create_account; src/auth.rs create_user; pinned Jellyfin v12.3 UserController.CreateUserByName and CreateUserByName DTO
+  - [x] Rust CI verifies anonymous/user denial, privileged creation, password privacy, duplicate case-insensitive names, invalid and unknown privilege fields, restart and new-user login — GitHub Actions 40043498922: complete Rust HTTP tests, formatting, Clippy, pinned controller/contract and evidence ledger checks passed
+  - [ ] Full Jellyfin UserDto fields, passwordless account lifecycle, user update/deletion/admin controls and unmodified client interoperability
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
