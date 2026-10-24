@@ -146,6 +146,16 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     )
     .await;
     assert_eq!(filtered["TotalRecordCount"], 2);
+    assert_eq!(
+        call(
+            &router,
+            "/Devices?userId=invalid-user-id",
+            Some(&admin.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
     let unknown = json_body(
         call(
             &router,
