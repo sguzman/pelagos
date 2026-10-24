@@ -517,17 +517,8 @@ async fn generate_hls_playlist(
     }
     // Advertise the highest measured segment bandwidth. This is a single
     // verified VOD rendition, not a multi-bitrate ABR ladder.
-    let peak_bandwidth = artifact
-        .segments
-        .iter()
-        .map(|segment| {
-            (segment.transport_bytes as f64 * 8.0 / segment.duration_seconds).ceil() as u64
-        })
-        .max()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    if !(1..=1_000_000_000).contains(&peak_bandwidth) {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
+    let peak_bandwidth = hls::measured_peak_transport_bandwidth(&artifact.segments)
+        .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
     let mut media_playlist = playlist.clone();
     let segments = artifact
         .segment_paths
