@@ -153,7 +153,11 @@ fn create_private_directory(path: &Path) -> io::Result<()> {
 
 fn playlist_response(playlist: &str) -> Response {
     let mut response = Response::new(Body::from(playlist.to_owned()));
-    set_private_headers(&mut response, "application/vnd.apple.mpegurl", playlist.len());
+    set_private_headers(
+        &mut response,
+        "application/vnd.apple.mpegurl",
+        playlist.len(),
+    );
     response
 }
 
@@ -237,7 +241,13 @@ async fn generate_hls_playlist(
     let source_modified = metadata.modified().ok();
     let registry = state.hls_registry();
     if let Some(existing) = registry.cached(
-        &item, expected_kind, &token, &source, source_size, source_modified, target_seconds,
+        &item,
+        expected_kind,
+        &token,
+        &source,
+        source_size,
+        source_modified,
+        target_seconds,
     ) {
         return Ok(playlist_response(if master {
             &existing.master_playlist
@@ -253,7 +263,13 @@ async fn generate_hls_playlist(
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
     if let Some(existing) = registry.cached(
-        &item, expected_kind, &token, &source, source_size, source_modified, target_seconds,
+        &item,
+        expected_kind,
+        &token,
+        &source,
+        source_size,
+        source_modified,
+        target_seconds,
     ) {
         return Ok(playlist_response(if master {
             &existing.master_playlist
