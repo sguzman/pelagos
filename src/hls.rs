@@ -385,18 +385,18 @@ async fn generate_segmented_vod_with_quality(
             ));
         }
         let path = output_dir.join(format!("segment{index:05}.ts"));
-        let size = match quality {
-            Some(target) => {
-                controller
-                    .try_run_window_with_quality(source, &path, start, duration, target)
-                    .await?
-            }
-            None => {
-                controller
-                    .try_run_window(source, &path, start, duration)
-                    .await?
-            }
-        };
+        let budget = MAX_SEGMENTED_BYTES.checked_sub(total_bytes).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "HLS segment budget exhausted")
+        })?;
+        if budget == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HLS segment budget exhausted",
+            ));
+        }
+        let size = controller
+            .try_run_window_capped(source, &path, start, duration, budget, quality)
+            .await?;
         total_bytes = total_bytes.checked_add(size).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
         })?;
