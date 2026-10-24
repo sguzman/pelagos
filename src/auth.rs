@@ -936,7 +936,7 @@ fn query_registered_devices(
          LEFT JOIN pelagos_session_capability_extras e ON e.session_id=s.id
          WHERE (?1 IS NULL OR d.last_user_id=?1)
            AND (?2 IS NULL OR d.id=?2)
-         ORDER BY d.id",
+         ORDER BY d.last_authenticated_unix DESC,d.id",
     )?;
     let rows = query.query_map(params![user_filter, device_filter], |row| {
         let profile: Option<String> = row.get(12)?;
