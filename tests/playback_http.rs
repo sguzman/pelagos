@@ -545,6 +545,18 @@ async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
         ),
         (
             serde_json::json!({
+                "DirectPlayProfiles":[{"Type":0,"AudioCodec":"flac"}]
+            }),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({
+                "DirectPlayProfiles":[{"AudioCodec":"flac"}]
+            }),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({
                 "DirectPlayProfiles":[{"Type":"Audio","Container":"mp3","AudioCodec":"flac"}]
             }),
             StatusCode::NOT_IMPLEMENTED,
