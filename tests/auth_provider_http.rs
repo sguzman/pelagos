@@ -35,18 +35,31 @@ async fn authentication_provider_discovery_is_elevated_and_reports_only_real_pro
     let state = fixture.path().join("state");
     auth::create_user(&state, "admin", "provider-discovery-admin-password").unwrap();
     auth::create_user(&state, "viewer", "provider-discovery-viewer-password").unwrap();
-    let admin = auth::authenticate(&state, "admin", "provider-discovery-admin-password", "server")
-        .unwrap()
-        .unwrap();
-    let viewer = auth::authenticate(&state, "viewer", "provider-discovery-viewer-password", "server")
-        .unwrap()
-        .unwrap();
+    let admin = auth::authenticate(
+        &state,
+        "admin",
+        "provider-discovery-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
+    let viewer = auth::authenticate(
+        &state,
+        "viewer",
+        "provider-discovery-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap();
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
     )));
     for route in ["/Auth/Providers", "/Auth/PasswordResetProviders"] {
-        assert_eq!(get(&router, route, None).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            get(&router, route, None).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
         assert_eq!(
             get(&router, route, Some(&viewer.access_token))
                 .await
@@ -54,16 +67,17 @@ async fn authentication_provider_discovery_is_elevated_and_reports_only_real_pro
             StatusCode::FORBIDDEN
         );
     }
-    let local = result_json(
-        get(&router, "/Auth/Providers", Some(&admin.access_token)).await,
-    )
-    .await;
+    let local = result_json(get(&router, "/Auth/Providers", Some(&admin.access_token)).await).await;
     assert_eq!(
         local,
         json!([{"Name":"Default","Id":"pelagos.auth.local.argon2id"}])
     );
     assert!(!local.to_string().contains(&admin.access_token));
-    assert!(!local.to_string().contains("Jellyfin.Server.Implementations"));
+    assert!(
+        !local
+            .to_string()
+            .contains("Jellyfin.Server.Implementations")
+    );
     let reset = result_json(
         get(
             &router,
