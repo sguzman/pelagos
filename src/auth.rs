@@ -842,24 +842,30 @@ pub enum DeviceSessionRevocation {
 /// invalidated through token deletion and cascading session cleanup.
 pub fn revoke_registered_device_sessions(
     state_dir: &Path,
-    device_id: &str,
+    device_ids: &[String],
 ) -> Result<DeviceSessionRevocation> {
     let mut db = database(state_dir)?;
     let tx = db.transaction()?;
-    let known: bool = tx.query_row(
-        "SELECT EXISTS(SELECT 1 FROM pelagos_devices WHERE id=?1)",
-        params![device_id],
-        |row| row.get(0),
-    )?;
-    if !known {
-        return Ok(DeviceSessionRevocation::NotFound);
+    // Check every ID before changing any token. A bad member of a
+    // multi-device batch must never cause partial session revocation.
+    for id in device_ids {
+        let known: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pelagos_devices WHERE id=?1)",
+            params![id],
+            |row| row.get(0),
+        )?;
+        if !known {
+            return Ok(DeviceSessionRevocation::NotFound);
+        }
     }
-    tx.execute(
-        "DELETE FROM pelagos_tokens WHERE digest IN (
-             SELECT s.digest FROM pelagos_sessions s WHERE s.device_id=?1
-         )",
-        params![device_id],
-    )?;
+    for id in device_ids {
+        tx.execute(
+            "DELETE FROM pelagos_tokens WHERE digest IN (
+                 SELECT s.digest FROM pelagos_sessions s WHERE s.device_id=?1
+             )",
+            params![id],
+        )?;
+    }
     tx.commit()?;
     Ok(DeviceSessionRevocation::Revoked)
 }

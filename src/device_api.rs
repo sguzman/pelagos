@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{Query, RawQuery, State},
     http::{HeaderMap, StatusCode},
     routing::get,
 };
@@ -102,23 +102,35 @@ async fn device_info(
     Ok(Json(device.ok_or(StatusCode::NOT_FOUND)?))
 }
 
-/** Revokes all access tokens attached to one recorded device ID.
- * The pinned upstream endpoint can revoke an array of IDs; this subset
- * accepts exactly one and refuses unknown devices rather than treating
- * the operation as a successful deletion of unseen state.
- */
+/// Revoke matching device sessions for up to 16 distinct client IDs.
+/// This is the pinned DELETE /Devices?id=...&id=... array subset.
+/// Percent-encoded query values are decoded before validation.
 async fn delete_device(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Query(query): Query<DeviceByIdQuery>,
+    RawQuery(raw): RawQuery,
 ) -> Result<StatusCode, StatusCode> {
     let dir = administrator_state(state, headers).await?;
-    if query.id.is_empty() || query.id.len() > 256 {
+    let raw = raw.unwrap_or_default();
+    let mut device_ids = Vec::new();
+    for (key, id) in form_urlencoded::parse(raw.as_bytes()) {
+        if key != "id"
+            || id.is_empty()
+            || id.len() > 256
+            || id.chars().any(char::is_control)
+            || device_ids.len() >= 16
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if !device_ids.iter().any(|known: &String| known == id.as_ref()) {
+            device_ids.push(id.into_owned());
+        }
+    }
+    if device_ids.is_empty() {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let device_id = query.id;
     let result = tokio::task::spawn_blocking(move || {
-        auth::revoke_registered_device_sessions(&dir, &device_id)
+        auth::revoke_registered_device_sessions(&dir, &device_ids)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
