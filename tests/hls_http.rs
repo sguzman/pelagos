@@ -1094,3 +1094,120 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
             .exists()
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    let library = fixture.path().join("Movies");
+    let state_dir = fixture.path().join("state");
+    std::fs::create_dir_all(&library).unwrap();
+    let source = library.join("Concurrent.avi");
+    let encoded = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=30:duration=2.7",
+            "-c:v",
+            "mpeg4",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        encoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&encoded.stderr)
+    );
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "adaptive-concurrency-admin-password").unwrap();
+    auth::create_user(&state_dir, "alice", "adaptive-concurrency-alice-password").unwrap();
+    auth::create_user(&state_dir, "bob", "adaptive-concurrency-bob-password").unwrap();
+    for username in ["alice", "bob"] {
+        auth::grant_library(&state_dir, username, &library).unwrap();
+    }
+    let admin = auth::authenticate(&state_dir, "admin", "adaptive-concurrency-admin-password", "server")
+        .unwrap().unwrap().access_token;
+    let alice = auth::authenticate(&state_dir, "alice", "adaptive-concurrency-alice-password", "server")
+        .unwrap().unwrap().access_token;
+    let bob = auth::authenticate(&state_dir, "bob", "adaptive-concurrency-bob-password", "server")
+        .unwrap().unwrap().access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir.clone(),
+    )));
+    let items = request(&app, "GET", "/Items", Some(&admin)).await;
+    let listing: Value =
+        serde_json::from_slice(&to_bytes(items.into_body(), 65_536).await.unwrap()).unwrap();
+    let item = listing["Items"][0]["Id"].as_str().unwrap();
+    let route = format!("/Videos/{item}/master.m3u8?segmentLength=2&renditions=2");
+    // Two distinct valid sessions join the one-worker queue. They must
+    // produce separate cached publications, not share private transport.
+    let (alice_response, bob_response) = tokio::join!(
+        request(&app, "GET", &route, Some(&alice)),
+        request(&app, "GET", &route, Some(&bob))
+    );
+    assert_eq!(alice_response.status(), StatusCode::OK);
+    assert_eq!(bob_response.status(), StatusCode::OK);
+    let alice_master = text_body(alice_response).await;
+    let bob_master = text_body(bob_response).await;
+    assert_ne!(alice_master, bob_master);
+    assert_eq!(alice_master.matches("#EXT-X-STREAM-INF:").count(), 2);
+    assert_eq!(bob_master.matches("#EXT-X-STREAM-INF:").count(), 2);
+    for (owner, other, master) in [
+        (&alice, &bob, &alice_master),
+        (&bob, &alice, &bob_master),
+    ] {
+        assert!(!master.contains(owner));
+        assert!(!master.contains(other));
+        let variants = master.lines()
+            .filter(|line| line.starts_with("hls1/"))
+            .collect::<Vec<_>>();
+        assert_eq!(variants.len(), 2);
+        let publication_id = variants[0].split('/').nth(1).unwrap();
+        // Simulate switching the HTTP rendition at the next segment
+        // boundary. Decode continuity is deliberately NOT inferred here.
+        for (variant_index, segment_index) in [(0, 0), (1, 1), (0, 1), (1, 0)] {
+            let media_path = format!("/Videos/{item}/{}", variants[variant_index]);
+            assert_eq!(
+                request(&app, "GET", &media_path, Some(other)).await.status(),
+                StatusCode::NOT_FOUND
+            );
+            let media = request(&app, "GET", &media_path, Some(owner)).await;
+            assert_eq!(media.status(), StatusCode::OK);
+            let playlist = text_body(media).await;
+            assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+            let segment_path = format!(
+                "/Videos/{item}/hls1/{publication_id}/variant{variant_index:02}/{segment_index}.ts"
+            );
+            assert_eq!(
+                request(&app, "GET", &segment_path, Some(other)).await.status(),
+                StatusCode::NOT_FOUND
+            );
+            let transport = request(&app, "GET", &segment_path, Some(owner)).await;
+            assert_eq!(transport.status(), StatusCode::OK);
+            let bytes = to_bytes(transport.into_body(), 8 * 1024 * 1024)
+                .await
+                .unwrap();
+            assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
+            assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+        }
+    }
+    assert_eq!(
+        text_body(request(&app, "GET", &route, Some(&alice)).await).await,
+        alice_master
+    );
+    assert_eq!(
+        text_body(request(&app, "GET", &route, Some(&bob)).await).await,
+        bob_master
+    );
+}
