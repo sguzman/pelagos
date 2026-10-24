@@ -385,9 +385,11 @@ async fn generate_segmented_vod_with_quality(
             ));
         }
         let path = output_dir.join(format!("segment{index:05}.ts"));
-        let budget = MAX_SEGMENTED_BYTES.checked_sub(total_bytes).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "HLS segment budget exhausted")
-        })?;
+        let budget = MAX_SEGMENTED_BYTES
+            .checked_sub(total_bytes)
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "HLS segment budget exhausted")
+            })?;
         if budget == 0 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
