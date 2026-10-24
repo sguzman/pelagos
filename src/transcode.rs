@@ -77,6 +77,20 @@ impl TranscodeController {
 
     pub async fn run(&self, source: &Path, output: &Path) -> io::Result<u64> {
         let _permit = self.permits.acquire().await.map_err(io::Error::other)?;
+        self.transcode(source, output).await
+    }
+
+    /// Admission-controlled alternative for request handlers. Excess jobs
+    /// receive WouldBlock immediately; no queued future, output file or child
+    /// process is created. Permits are released even if the task is aborted.
+    pub async fn try_run(&self, source: &Path, output: &Path) -> io::Result<u64> {
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(io::ErrorKind::WouldBlock, "FFmpeg worker capacity exhausted")
+        })?;
+        self.transcode(source, output).await
+    }
+
+    async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
             source,
@@ -374,6 +388,34 @@ mod tests {
             TranscodeController::new(PathBuf::from("ffmpeg"), 0, Duration::from_secs(5), 64)
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn try_run_rejects_over_capacity_without_file_or_child_and_recovers() {
+        let (_temp, executable, source, output) = fixture("sleep 1; printf 'done'");
+        let controller =
+            TranscodeController::new(executable, 1, Duration::from_secs(4), 64).unwrap();
+        let first_source = source.clone();
+        let first_output = output.clone();
+        let first_controller = controller.clone();
+        let running =
+            tokio::spawn(async move { first_controller.run(&first_source, &first_output).await });
+        time::timeout(Duration::from_secs(3), async {
+            while controller.active_jobs() == 0 {
+                time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let busy_output = output.with_file_name("busy.ts");
+        let busy = controller.try_run(&source, &busy_output).await.unwrap_err();
+        assert_eq!(busy.kind(), io::ErrorKind::WouldBlock);
+        assert!(!busy_output.exists());
+        assert_eq!(running.await.unwrap().unwrap(), 4);
+        assert_eq!(controller.active_jobs(), 0);
+        assert_eq!(controller.try_run(&source, &busy_output).await.unwrap(), 4);
+        assert_eq!(stdfs::read(&busy_output).unwrap(), b"done");
+        assert_eq!(controller.active_jobs(), 0);
     }
 
     #[tokio::test]
