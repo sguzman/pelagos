@@ -248,9 +248,14 @@ mod tests {
         assert_eq!(transport.len() % 188, 0);
         let inspected = Command::new("ffprobe")
             .args([
-                "-v", "error", "-select_streams", "a",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "-v",
+                "error",
+                "-select_streams",
+                "a",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
             ])
             .arg(&output)
             .output()
