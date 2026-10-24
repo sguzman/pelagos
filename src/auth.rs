@@ -922,13 +922,14 @@ pub enum DeviceCustomNameUpdate {
 pub fn rename_registered_device(
     state_dir: &Path,
     device_id: &str,
-    custom_name: &str,
+    custom_name: Option<&str>,
 ) -> Result<DeviceCustomNameUpdate> {
-    if custom_name.is_empty()
-        || custom_name.len() > 128
-        || custom_name.trim() != custom_name
-        || custom_name.chars().any(char::is_control)
-    {
+    if custom_name.is_some_and(|name| {
+        name.is_empty()
+            || name.len() > 128
+            || name.trim() != name
+            || name.chars().any(char::is_control)
+    }) {
         return Err("invalid custom device name".into());
     }
     let db = database(state_dir)?;

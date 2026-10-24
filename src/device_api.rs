@@ -144,7 +144,9 @@ async fn delete_device(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase", deny_unknown_fields)]
 struct DeviceOptionsPatch {
-    custom_name: String,
+    // Value deliberately distinguishes required JSON null from a missing
+    // CustomName field. Only a string or explicit null is accepted.
+    custom_name: serde_json::Value,
 }
 
 async fn device_options(
@@ -176,15 +178,20 @@ async fn update_device_options(
     if query.id.is_empty() || query.id.len() > 256 {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if body.custom_name.is_empty()
-        || body.custom_name.len() > 128
-        || body.custom_name.trim() != body.custom_name
-        || body.custom_name.chars().any(char::is_control)
-    {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    let custom_name = match &body.custom_name {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(value) if value.is_empty() => None,
+        serde_json::Value::String(value)
+            if value.len() <= 128
+                && value.trim() == value
+                && !value.chars().any(char::is_control) =>
+        {
+            Some(value.to_owned())
+        }
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
     let outcome = tokio::task::spawn_blocking(move || {
-        auth::rename_registered_device(&dir, &query.id, &body.custom_name)
+        auth::rename_registered_device(&dir, &query.id, custom_name.as_deref())
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
