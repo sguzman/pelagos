@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 38%` across 169 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 38%` across 170 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -423,7 +423,7 @@
   - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
   - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 41%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 42%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
@@ -506,7 +506,7 @@
   - [x] Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override — GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed
   - [ ] Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance
 
-### ⚙️ P10 — Transcoding and GPU — `███░░░░░░░ 27%`
+### ⚙️ P10 — Transcoding and GPU — `███░░░░░░░ 34%`
 
 - 🧱 **T310 — FFmpeg job controller** — `███████░░░ 67%`
   - [x] Implement process supervision, concurrency, cancellation and cleanup — src/transcode.rs TranscodeController, transcode_mpegts, try_run, bounded FFmpeg stdout/stderr, kill_on_drop, PartialOutput cancellation cleanup and atomic create_new target; fixed CPU-first H.264/AAC MPEG-TS command
@@ -528,6 +528,10 @@
   - [x] Implement validated CPU-first FFmpeg H.264/AAC time-window MPEG-TS segments, bounded independently probed multi-segment VOD media playlists with explicit transport discontinuities, sorted measured-bandwidth 2–4 rendition adaptive master playlists, byte/deadline/admission limits and cancellation-safe private cleanup — src/transcode.rs TranscodeController/try_run_window/try_run_window_with_quality; src/hls.rs render_vod_media_playlist_inner/generate_segmented_vod/generate_adaptive_segmented_vod/render_vod_master_playlist; private artifact only, pinned Jellyfin v12.3 HLS service integration remains separate
   - [x] Native CI verifies real AAC and H.264 FFmpeg segments individually decode, assembled VOD FFprobe demuxes, bounded measured rendition ordering, TS packet integrity, clock-reset tags, invalid windows/manifest rejection, atomic rollback and aborted job cleanup — GitHub Actions 40119907876, 40120255492, 40120684358 and 40120903534 — full Rust unit/HTTP suite, actual Ubuntu FFmpeg/FFprobe audio/video multi-window HLS, rustfmt, clippy -D warnings, pinned source/API matrices and roadmap gates passed
   - [ ] Production multi-hour segment timelines, authenticated Jellyfin HLS/DASH HTTP routes, true adaptive rendition switching, unmodified Smart TV/mobile client acceptance and transcoder lifecycle parity
+- 📺 **T340 — Authenticated session-scoped HLS VOD HTTP manifest and transport delivery** — `███████░░░ 67%`
+  - [x] Implement pinned-shaped GET /Videos/{itemId}/main.m3u8 and GET/HEAD /Videos/{itemId}/hls1/{playlistId}/{segmentId}.ts with bounded FFmpeg VOD artifacts, private token-digested publication ownership, per-request library authorization, admission/cache limits and cleanup — src/hls_http.rs, src/app.rs, src/playback.rs, src/hls.rs and TranscodeController; Jellyfin v12.3 DynamicHlsController video main and hls1 segment routes; bounded segment builder and max-three private publication registry
+  - [x] Native CI verifies real FFmpeg/FFprobe MPEG-TS HTTP response, playlist names, GET/HEAD byte lengths, anonymous/user/sibling token denial, library revocation, malformed requests, private output release on shutdown, cache eviction and final-reader deletion — GitHub Actions 40123205931 and 40123387022 — complete Rust unit/HTTP tests with real FFmpeg/FFprobe, rustfmt, Clippy, generated roadmap and pinned source/controller matrices passed
+  - [ ] Full Jellyfin main/master HLS query handling, adaptive/long VOD scheduling, seamless stream timebase, real client token propagation and unmodified Smart TV/mobile acceptance
 
 ### 💬 P11 — Subtitles and ancillary streams — `░░░░░░░░░░ 0%`
 

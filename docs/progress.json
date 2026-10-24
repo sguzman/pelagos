@@ -2652,6 +2652,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T340",
+              "emoji": "📺",
+              "name": "Authenticated session-scoped HLS VOD HTTP manifest and transport delivery",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement pinned-shaped GET /Videos/{itemId}/main.m3u8 and GET/HEAD /Videos/{itemId}/hls1/{playlistId}/{segmentId}.ts with bounded FFmpeg VOD artifacts, private token-digested publication ownership, per-request library authorization, admission/cache limits and cleanup",
+                  "passed": true,
+                  "evidence": "src/hls_http.rs, src/app.rs, src/playback.rs, src/hls.rs and TranscodeController; Jellyfin v12.3 DynamicHlsController video main and hls1 segment routes; bounded segment builder and max-three private publication registry"
+                },
+                {
+                  "title": "Native CI verifies real FFmpeg/FFprobe MPEG-TS HTTP response, playlist names, GET/HEAD byte lengths, anonymous/user/sibling token denial, library revocation, malformed requests, private output release on shutdown, cache eviction and final-reader deletion",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40123205931 and 40123387022 — complete Rust unit/HTTP tests with real FFmpeg/FFprobe, rustfmt, Clippy, generated roadmap and pinned source/controller matrices passed"
+                },
+                {
+                  "title": "Full Jellyfin main/master HLS query handling, adaptive/long VOD scheduling, seamless stream timebase, real client token propagation and unmodified Smart TV/mobile acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         },

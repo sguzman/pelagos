@@ -1,7 +1,8 @@
 //! Bounded private HLS VOD artifacts: verified single/multi MPEG-TS segments
 //! and measured adaptive rendition playlists. Independent FFmpeg windows
-//! declare clock discontinuities. No authenticated Jellyfin HLS/DASH routes,
-//! full-length scheduling or unmodified TV-client compatibility are claimed.
+//! declare clock discontinuities. A separate bounded authenticated video
+//! HLS HTTP subset now exists; full Jellyfin HLS/DASH playback and unmodified
+//! TV-client compatibility are not claimed.
 use std::{
     io,
     path::{Path, PathBuf},
@@ -265,7 +266,8 @@ async fn generate_single_segment_vod_with_quality(
 
 /// A bounded, independently encoded series of MPEG-TS VOD segments.
 /// The published playlist references only the generated relative filenames.
-/// Consumers own cleanup; there is no public HTTP HLS route in this subset.
+/// The caller owns cleanup. A separate authenticated video HTTP subset may
+/// publish this artifact without claiming full Jellyfin dynamic HLS parity.
 #[derive(Debug, Clone)]
 pub struct HlsSegmentedArtifact {
     pub playlist_path: PathBuf,
@@ -291,7 +293,8 @@ const MAX_SEGMENTED_BYTES: u64 = 128 * 1024 * 1024;
 /// decoder boundary, then independently probed and checked as MPEG-TS.
 /// All partial files disappear after any error or cancelled Rust future.
 ///
-/// This is a private VOD artifact, NOT a client-facing HLS scheduler/route.
+/// A separate bounded HTTP adapter can publish this private artifact;
+/// this builder is not a complete client-facing HLS scheduler.
 pub async fn generate_segmented_vod(
     controller: &TranscodeController,
     ffprobe: &Path,
