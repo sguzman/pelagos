@@ -879,6 +879,32 @@ mod tests {
             );
             assert!(!dir.exists());
         }
+        // The caller's clock cannot seek before start, past EOF, or to
+        // nonfinite positions; invalid offsets must not create a bundle.
+        for (suffix, seek) in [
+            ("negative", -1.0),
+            ("past-end", 4.1),
+            ("at-end", 4.0),
+            ("nan", f64::NAN),
+            ("infinite", f64::INFINITY),
+        ] {
+            let output = temp.path().join(format!("invalid-seek-{suffix}"));
+            assert_eq!(
+                generate_segmented_vod_from(
+                    &runner,
+                    &fail_second,
+                    &source,
+                    &output,
+                    2,
+                    seek,
+                )
+                .await
+                .unwrap_err()
+                .kind(),
+                io::ErrorKind::InvalidInput
+            );
+            assert!(!output.exists());
+        }
         let bundle_dir = temp.path().join("rollback");
         assert!(
             generate_segmented_vod(&runner, &fail_second, &source, &bundle_dir, 2)
