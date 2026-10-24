@@ -273,10 +273,7 @@ async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomic
     )
     .await;
     assert_eq!(info["Capabilities"]["DeviceProfile"], profile);
-    let sessions = body(
-        call(&router, "GET", "/Sessions", Some(&viewer.access_token)).await,
-    )
-    .await;
+    let sessions = body(call(&router, "GET", "/Sessions", Some(&viewer.access_token)).await).await;
     assert_eq!(sessions[0]["Capabilities"]["DeviceProfile"], profile);
     assert_eq!(
         sessions[0]["Capabilities"]["AppStoreUrl"],
