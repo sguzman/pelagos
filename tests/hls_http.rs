@@ -275,3 +275,97 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
             .exists()
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    let library = fixture.path().join("Music");
+    let state_dir = fixture.path().join("state");
+    std::fs::create_dir_all(&library).unwrap();
+    let source = library.join("Tone.wav");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=2.6",
+            "-c:a", "pcm_s16le", "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(created.status.success(), "{}", String::from_utf8_lossy(&created.stderr));
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "audio-hls-admin-password").unwrap();
+    auth::create_user(&state_dir, "listener", "audio-hls-listener-password").unwrap();
+    let admin = auth::authenticate(
+        &state_dir, "admin", "audio-hls-admin-password", "server",
+    ).unwrap().unwrap().access_token;
+    let listener = auth::authenticate(
+        &state_dir, "listener", "audio-hls-listener-password", "server",
+    ).unwrap().unwrap().access_token;
+    let sibling = auth::authenticate(
+        &state_dir, "listener", "audio-hls-listener-password", "server",
+    ).unwrap().unwrap().access_token;
+    auth::grant_library(&state_dir, "listener", &library).unwrap();
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(), state_dir.clone(),
+    )));
+    let items = request(&app, "GET", "/Items", Some(&admin)).await;
+    let values: Value = serde_json::from_slice(
+        &to_bytes(items.into_body(), 65_536).await.unwrap()
+    ).unwrap();
+    let id = values["Items"][0]["Id"].as_str().unwrap();
+    let master_route = format!("/Audio/{id}/master.m3u8?segmentLength=2");
+    assert_eq!(request(&app, "GET", &master_route, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        request(&app, "GET", &format!("/Videos/{id}/master.m3u8"), Some(&listener))
+            .await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let master_response = request(&app, "GET", &master_route, Some(&listener)).await;
+    assert_eq!(master_response.status(), StatusCode::OK);
+    let master = text_body(master_response).await;
+    assert!(master.contains("#EXT-X-STREAM-INF:BANDWIDTH="));
+    let media_name = master.lines().find(|line| line.starts_with("hls1/")).unwrap();
+    let media_url = format!("/Audio/{id}/{media_name}");
+    let media_response = request(&app, "GET", &media_url, Some(&listener)).await;
+    assert_eq!(media_response.status(), StatusCode::OK);
+    let playlist = text_body(media_response).await;
+    assert!(playlist.contains("#EXT-X-ENDLIST"));
+    assert!(playlist.contains("\n0.ts\n") && playlist.contains("\n1.ts\n"));
+    assert_eq!(
+        request(&app, "GET", &media_url, Some(&sibling)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let first = format!("{}0.ts", media_url.strip_suffix("index.m3u8").unwrap());
+    let segment = request(&app, "GET", &first, Some(&listener)).await;
+    assert_eq!(segment.status(), StatusCode::OK);
+    assert_eq!(segment.headers()[header::CONTENT_TYPE], "video/mp2t");
+    let bytes = to_bytes(segment.into_body(), 4 * 1024 * 1024).await.unwrap();
+    assert!(bytes.len() > 188 && bytes.len() % 188 == 0);
+    assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+    assert_eq!(
+        request(&app, "GET", &format!("/Videos/{id}/{media_name}"), Some(&listener))
+            .await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let main = request(
+        &app, "GET", &format!("/Audio/{id}/main.m3u8?segmentLength=2"),
+        Some(&listener),
+    ).await;
+    assert_eq!(main.status(), StatusCode::OK);
+    let main_text = text_body(main).await;
+    assert!(main_text.lines().any(|line| line.starts_with("hls1/")));
+    auth::revoke_library(&state_dir, "listener", &library).unwrap();
+    assert_eq!(request(&app, "GET", &first, Some(&listener)).await.status(), StatusCode::NOT_FOUND);
+    auth::grant_library(&state_dir, "listener", &library).unwrap();
+    assert_eq!(request(&app, "HEAD", &first, Some(&listener)).await.status(), StatusCode::OK);
+    auth::revoke(&state_dir, &listener).unwrap();
+    assert_eq!(request(&app, "GET", &first, Some(&listener)).await.status(), StatusCode::UNAUTHORIZED);
+    drop(app);
+    let id = media_name.split('/').nth(1).unwrap();
+    assert!(!std::env::temp_dir().join(format!("pelagos-hls-{id}")).exists());
+}
