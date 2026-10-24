@@ -890,17 +890,10 @@ mod tests {
         ] {
             let output = temp.path().join(format!("invalid-seek-{suffix}"));
             assert_eq!(
-                generate_segmented_vod_from(
-                    &runner,
-                    &fail_second,
-                    &source,
-                    &output,
-                    2,
-                    seek,
-                )
-                .await
-                .unwrap_err()
-                .kind(),
+                generate_segmented_vod_from(&runner, &fail_second, &source, &output, 2, seek,)
+                    .await
+                    .unwrap_err()
+                    .kind(),
                 io::ErrorKind::InvalidInput
             );
             assert!(!output.exists());
