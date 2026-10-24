@@ -587,7 +587,9 @@ fn parse_reported_capabilities(
         || entries.iter().any(|entry| {
             entry.is_empty()
                 || entry.len() > 64
-                || !entry.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                || !entry
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
         })
     {
         return Err(StatusCode::BAD_REQUEST);
@@ -604,7 +606,11 @@ async fn report_session_capabilities(
     Query(query): Query<SessionCapabilitiesQuery>,
 ) -> Result<StatusCode, StatusCode> {
     let (_, token) = authenticated(state.clone(), headers).await?;
-    if query.id.as_deref().is_some_and(|id| id.is_empty() || id.len() > 64) {
+    if query
+        .id
+        .as_deref()
+        .is_some_and(|id| id.is_empty() || id.len() > 64)
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     let report = auth::SessionCapabilitiesReport {
