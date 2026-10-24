@@ -2660,14 +2660,14 @@
               "progress": 67,
               "checks": [
                 {
-                  "title": "Implement authenticated audio/video Jellyfin-shaped HLS master/media/segment GET/HEAD, token- and revision-scoped cache keys including validated startTimeTicks, strong per-segment ETags, If-Range safe resume and 200/206/416 single-byte ranges",
+                  "title": "Implement authenticated audio/video HLS master/media/segment GET/HEAD, token-scoped revision/seek cache, strong If-Range ETags and 200/206/416, with at most one FFmpeg encoder and four bounded cancel-safe coalescing waiters",
                   "passed": true,
-                  "evidence": "src/hls_http.rs HlsRegistry/CacheLookup/generate_hls_playlist/serve_segment/ETAG/IF_RANGE, src/hls.rs generate_segmented_vod_from, src/streaming.rs parse_range; pinned Jellyfin v12.3 DynamicHlsController's StartTimeTicks query; three private published VOD maximum"
+                  "evidence": "src/hls_http.rs HlsRegistry/CacheLookup/generate_hls_playlist/serve_segment/ETAG/IF_RANGE, src/hls.rs generate_segmented_vod_from, src/streaming.rs parse_range; pinned Jellyfin v12.3 DynamicHlsController's StartTimeTicks query; three private published VOD maximum; src/hls_http.rs HlsRegistry::acquire_generation serializes FFmpeg work and rejoins exact published CacheLookup after permit admission"
                 },
                 {
-                  "title": "Native CI verifies FFmpeg/FFprobe video/audio HLS seeked manifests and MPEG-TS packets, same-offset master/media cache reuse, source/token/ACL isolation, ETags, weak/stale If-Range fallback, byte-range GET/HEAD, invalid seeks and revocation cleanup",
+                  "title": "Full HTTP/unit CI confirms MPEG-TS audio/video seeks, range validators, current-token ACLs, cache invalidation, simultaneous main/master requests sharing a publication without 429, queue overflow and cancellation cleanup",
                   "passed": true,
-                  "evidence": "GitHub Actions 40125584569 (200/206/416 ranges), 40126093549 and 40126223461 (video/audio strong ETag and If-Range), 40126691873 (seeked video), 40126860115 (sought TS transport), 40126943265 (sought audio); all full Rust tests, rustfmt, Clippy and pinned roadmap/source gates passed"
+                  "evidence": "GitHub Actions 40125584569 (200/206/416 ranges), 40126093549 and 40126223461 (video/audio strong ETag and If-Range), 40126691873 (seeked video), 40126860115 (sought TS transport), 40126943265 (sought audio); all full Rust tests, rustfmt, Clippy and pinned roadmap/source gates passed; CI 40127584131 verifies bounded generation admission and cancellation, CI 40127607569 verifies concurrent main/master publication reuse with FFmpeg"
                 },
                 {
                   "title": "Full upstream HLS negotiation and codec options, multi-rendition HTTP ABR/DASH, multi-hour live/long VOD scheduler, consistent timeline, real-client token forwarding and unmodified Jellyfin TV/mobile playback acceptance",
