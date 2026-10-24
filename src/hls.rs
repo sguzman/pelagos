@@ -180,6 +180,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn malformed_packet_count_or_absent_streams_cannot_publish_manifest() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("input.wav");
+        stdfs::write(&input, b"synthetic").unwrap();
+        let bad_packets = executable(temp.path(), "fake-ffmpeg", "head -c 190 /dev/zero");
+        let good_probe = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"2.5"},"streams":[{"codec_name":"aac"}]}'"#,
+        );
+        let c = TranscodeController::new(
+            bad_packets,
+            1,
+            Duration::from_secs(2),
+            1024,
+        )
+        .unwrap();
+        let bad_dir = temp.path().join("malformed");
+        assert_eq!(
+            generate_single_segment_vod(&c, &good_probe, &input, &bad_dir)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert!(!bad_dir.exists());
+
+        let good_packets = executable(temp.path(), "good-ffmpeg", "head -c 376 /dev/zero");
+        let no_streams = executable(
+            temp.path(),
+            "empty-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"2.5"},"streams":[]}'"#,
+        );
+        let c = TranscodeController::new(
+            good_packets,
+            1,
+            Duration::from_secs(2),
+            1024,
+        )
+        .unwrap();
+        let empty_dir = temp.path().join("no-streams");
+        assert_eq!(
+            generate_single_segment_vod(&c, &no_streams, &input, &empty_dir)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert!(!empty_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn aborted_bundle_job_removes_private_directory_before_completion() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("input.wav");
+        stdfs::write(&input, b"synthetic").unwrap();
+        let long_running = executable(temp.path(), "sleep-ffmpeg", "exec sleep 2");
+        let fake_probe = executable(temp.path(), "fake-ffprobe", "exit 1");
+        let controller = TranscodeController::new(
+            long_running,
+            1,
+            Duration::from_secs(5),
+            1024,
+        )
+        .unwrap();
+        let dir = temp.path().join("cancelled");
+        let job_dir = dir.clone();
+        let job = tokio::spawn(async move {
+            generate_single_segment_vod(&controller, &fake_probe, &input, &job_dir).await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !dir.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        job.abort();
+        assert!(job.await.is_err());
+        assert!(!dir.exists());
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_hls_vod_bundle_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
