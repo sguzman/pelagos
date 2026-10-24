@@ -458,6 +458,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn adaptive_bundle_orders_measured_variants_and_rejects_empty_ladders() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.wav");
+        stdfs::write(&source, b"fixture").unwrap();
+        let ffmpeg = executable(
+            temp.path(),
+            "fake-ffmpeg",
+            "for arg in \"$@\"; do if [ \"$arg\" = \"64k\" ]; then head -c 376 /dev/zero; exit 0; fi; done; head -c 752 /dev/zero",
+        );
+        let ffprobe = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_name":"aac"}]}'"#,
+        );
+        let controller =
+            TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
+        let profiles = [
+            MpegTsQuality { video_kbps: 1500, audio_kbps: 128 },
+            MpegTsQuality { video_kbps: 300, audio_kbps: 64 },
+        ];
+        let dir = temp.path().join("adaptive");
+        let result =
+            generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
+                .await
+                .unwrap();
+        assert_eq!(result.variants.len(), 2);
+        assert_eq!(result.renditions.len(), 2);
+        assert_eq!(result.variants[0].bandwidth, 1504);
+        assert_eq!(result.variants[1].bandwidth, 3008);
+        assert_eq!(result.variants[0].playlist_name, "variant00/index.m3u8");
+        assert_eq!(result.variants[1].playlist_name, "variant01/index.m3u8");
+        assert_eq!(stdfs::metadata(&result.renditions[0].segment_path).unwrap().len(), 376);
+        assert_eq!(stdfs::metadata(&result.renditions[1].segment_path).unwrap().len(), 752);
+        assert!(!dir.join("candidate00").exists());
+        assert!(!dir.join("candidate01").exists());
+        let master = stdfs::read_to_string(&result.master_path).unwrap();
+        assert!(master.contains("BANDWIDTH=1504\nvariant00/index.m3u8\n"));
+        assert!(master.contains("BANDWIDTH=3008\nvariant01/index.m3u8\n"));
+        assert_eq!(
+            generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(
+            generate_adaptive_vod(
+                &controller,
+                &ffprobe,
+                &source,
+                &temp.path().join("missing-profiles"),
+                &profiles[..1],
+            )
+            .await
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidInput
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_adaptive_rendition_rolls_back_previously_written_segments() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.wav");
+        stdfs::write(&source, b"fixture").unwrap();
+        let ffmpeg = executable(temp.path(), "fake-ffmpeg", "head -c 376 /dev/zero");
+        let ffprobe = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_name":"aac"}]}'"#,
+        );
+        let controller =
+            TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
+        let profiles = [
+            MpegTsQuality { video_kbps: 500, audio_kbps: 64 },
+            MpegTsQuality { video_kbps: 500, audio_kbps: 1 },
+        ];
+        let dir = temp.path().join("rollback");
+        assert_eq!(
+            generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!dir.exists());
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_hls_vod_bundle_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
