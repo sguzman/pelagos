@@ -233,7 +233,10 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert_eq!(stale.headers()[header::ETAG], etag);
     assert!(stale.headers().get(header::CONTENT_RANGE).is_none());
     assert_eq!(
-        to_bytes(stale.into_body(), 4 * 1024 * 1024).await.unwrap().len(),
+        to_bytes(stale.into_body(), 4 * 1024 * 1024)
+            .await
+            .unwrap()
+            .len(),
         bytes.len()
     );
     let stale_head = request_if_range(
@@ -254,7 +257,12 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
             .unwrap(),
         bytes.len()
     );
-    assert!(to_bytes(stale_head.into_body(), 4096).await.unwrap().is_empty());
+    assert!(
+        to_bytes(stale_head.into_body(), 4096)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     assert_eq!(
         partial.headers()[header::CONTENT_RANGE],
@@ -569,7 +577,10 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     assert_eq!(stale.status(), StatusCode::OK);
     assert!(stale.headers().get(header::CONTENT_RANGE).is_none());
     assert_eq!(
-        to_bytes(stale.into_body(), 4 * 1024 * 1024).await.unwrap().len(),
+        to_bytes(stale.into_body(), 4 * 1024 * 1024)
+            .await
+            .unwrap()
+            .len(),
         bytes.len()
     );
 
