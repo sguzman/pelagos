@@ -1,13 +1,13 @@
 //! Bounded, token-scoped Jellyfin-shaped HLS VOD HTTP subset.
 //! This does not implement dynamic HLS scheduling or Smart TV parity.
-use crate::{app::AppState, auth_api, hls, playback, transcode::TranscodeController};
+use crate::{app::AppState, auth_api, hls, playback, streaming, transcode::TranscodeController};
 use axum::{
     Router,
     body::Body,
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE},
+        header::{ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE},
     },
     response::Response,
     routing::get,
@@ -21,7 +21,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::{io::AsyncReadExt, sync::Semaphore};
+use tokio::{io::{AsyncReadExt, AsyncSeekExt}, sync::Semaphore};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -407,7 +407,7 @@ async fn serve_segment(
     if *size == 0 || *size > MAX_SEGMENT_BYTES {
         return Err(StatusCode::NOT_FOUND);
     }
-    let file = tokio::fs::File::open(path)
+    let mut file = tokio::fs::File::open(path)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     if file
@@ -419,14 +419,59 @@ async fn serve_segment(
     {
         return Err(StatusCode::NOT_FOUND);
     }
-    let length = usize::try_from(*size).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let byte_range = if let Some(value) = headers.get(RANGE) {
+        match value
+            .to_str()
+            .ok()
+            .and_then(|value| streaming::parse_range(value, *size))
+        {
+            Some(range) => Some(range),
+            None => {
+                let mut response = Response::new(Body::empty());
+                *response.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
+                set_private_headers(&mut response, "video/mp2t", 0);
+                response
+                    .headers_mut()
+                    .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+                response.headers_mut().insert(
+                    CONTENT_RANGE,
+                    HeaderValue::from_str(&format!("bytes */{size}"))
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+                );
+                return Ok(response);
+            }
+        }
+    } else {
+        None
+    };
+    let start = byte_range.as_ref().map_or(0, |range| range.start);
+    let end = byte_range.as_ref().map_or(*size - 1, |range| range.end);
+    let length = end - start + 1;
+    if start > 0 {
+        file.seek(std::io::SeekFrom::Start(start))
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
     let body = if head_only {
         Body::empty()
     } else {
-        Body::from_stream(ReaderStream::new(file.take(*size)))
+        Body::from_stream(ReaderStream::new(file.take(length)))
     };
     let mut response = Response::new(body);
-    set_private_headers(&mut response, "video/mp2t", length);
+    let response_length =
+        usize::try_from(length).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    set_private_headers(&mut response, "video/mp2t", response_length);
+    response
+        .headers_mut()
+        .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    if byte_range.is_some() {
+        *response.status_mut() = StatusCode::PARTIAL_CONTENT;
+        response.headers_mut().insert(
+            CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {start}-{end}/{size}"))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+    }
     Ok(response)
 }
 

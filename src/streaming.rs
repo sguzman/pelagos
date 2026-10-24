@@ -72,12 +72,12 @@ fn media_type(path: &Path) -> &'static str {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct ByteRange {
-    start: u64,
-    end: u64,
+pub(crate) struct ByteRange {
+    pub(crate) start: u64,
+    pub(crate) end: u64,
 }
 
-fn parse_range(value: &str, size: u64) -> Option<ByteRange> {
+pub(crate) fn parse_range(value: &str, size: u64) -> Option<ByteRange> {
     if size == 0 {
         return None;
     }
