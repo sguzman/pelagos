@@ -62,19 +62,26 @@ async fn devices(
     Query(query): Query<DeviceListQuery>,
 ) -> Result<Json<DeviceResults>, StatusCode> {
     let dir = administrator_state(state, headers).await?;
-    if query
+    let requested_user = query
         .user_id
         .as_deref()
-        .is_some_and(|id| uuid::Uuid::parse_str(id).is_err())
-    {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+        .map(uuid::Uuid::parse_str)
+        .transpose()
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .map(|id| id.to_string());
+    let server_id = state.server_id().to_owned();
     let devices = tokio::task::spawn_blocking(move || {
-        auth::list_registered_devices(&dir, query.user_id.as_deref())
+        if let Some(id) = requested_user.as_deref() {
+            if auth::find_user(&dir, id, &server_id)?.is_none() {
+                return Ok(None);
+            }
+        }
+        auth::list_registered_devices(&dir, requested_user.as_deref()).map(Some)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
     let count = devices.len();
     Ok(Json(DeviceResults {
         items: devices,
