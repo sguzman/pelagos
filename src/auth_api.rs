@@ -34,6 +34,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Password", post(admin_reset_password))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
+        .route("/Sessions/Capabilities", post(report_session_capabilities))
         // Public account listing intentionally discloses no usernames yet.
         .route("/Users/Public", get(public_users))
         .route("/QuickConnect/Enabled", get(quick_connect_enabled))
@@ -558,6 +559,72 @@ async fn logout(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SessionCapabilitiesQuery {
+    id: Option<String>,
+    playable_media_types: Option<String>,
+    supported_commands: Option<String>,
+    supports_media_control: Option<bool>,
+    supports_persistent_identifier: Option<bool>,
+}
+
+fn parse_reported_capabilities(
+    raw: Option<String>,
+    max_entries: usize,
+) -> Result<Vec<String>, StatusCode> {
+    let value = raw.unwrap_or_default();
+    if value.len() > 4096 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if value.is_empty() {
+        return Ok(Vec::new());
+    }
+    let entries: Vec<String> = value.split(',').map(str::trim).map(str::to_owned).collect();
+    if entries.len() > max_entries
+        || entries.iter().any(|entry| {
+            entry.is_empty()
+                || entry.len() > 64
+                || !entry.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+        })
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(entries)
+}
+
+/// Bounded pinned Jellyfin POST /Sessions/Capabilities. Clients may report
+/// metadata about their own session, never another user's session. Reporting
+/// a remote-control command does not implement a server-side command route.
+async fn report_session_capabilities(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<SessionCapabilitiesQuery>,
+) -> Result<StatusCode, StatusCode> {
+    let (_, token) = authenticated(state.clone(), headers).await?;
+    if query.id.as_deref().is_some_and(|id| id.is_empty() || id.len() > 64) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let report = auth::SessionCapabilitiesReport {
+        playable_media_types: parse_reported_capabilities(query.playable_media_types, 16)?,
+        supported_commands: parse_reported_capabilities(query.supported_commands, 64)?,
+        supports_media_control: query.supports_media_control.unwrap_or(false),
+        supports_persistent_identifier: query.supports_persistent_identifier.unwrap_or(true),
+    };
+    let dir = state_dir(&state)?;
+    let result = tokio::task::spawn_blocking(move || {
+        auth::set_session_capabilities(&dir, &token, query.id.as_deref(), &report)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    match result {
+        auth::SessionCapabilityUpdate::Updated => Ok(StatusCode::NO_CONTENT),
+        auth::SessionCapabilityUpdate::StaleSession => Err(StatusCode::UNAUTHORIZED),
+        auth::SessionCapabilityUpdate::OtherSession => Err(StatusCode::FORBIDDEN),
+    }
 }
 
 #[derive(Debug, Default, Deserialize)]
