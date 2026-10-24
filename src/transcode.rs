@@ -85,7 +85,10 @@ impl TranscodeController {
     /// process is created. Permits are released even if the task is aborted.
     pub async fn try_run(&self, source: &Path, output: &Path) -> io::Result<u64> {
         let _permit = self.permits.try_acquire().map_err(|_| {
-            io::Error::new(io::ErrorKind::WouldBlock, "FFmpeg worker capacity exhausted")
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
         })?;
         self.transcode(source, output).await
     }
