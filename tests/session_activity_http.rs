@@ -55,7 +55,14 @@ async fn last_activity_filter_is_based_on_valid_authenticated_requests() {
     )
     .unwrap()
     .unwrap();
-    assert!(viewer.session_info.last_activity_date.as_ref().unwrap().ends_with('Z'));
+    assert!(
+        viewer
+            .session_info
+            .last_activity_date
+            .as_ref()
+            .unwrap()
+            .ends_with('Z')
+    );
     let router = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state.clone(),
@@ -83,7 +90,12 @@ async fn last_activity_filter_is_based_on_valid_authenticated_requests() {
     )
     .await;
     assert_eq!(unfiltered.as_array().unwrap().len(), 1);
-    assert!(unfiltered[0]["LastActivityDate"].as_str().unwrap().ends_with('Z'));
+    assert!(
+        unfiltered[0]["LastActivityDate"]
+            .as_str()
+            .unwrap()
+            .ends_with('Z')
+    );
 
     // A real authenticated call moves last-seen forward.
     assert_eq!(
@@ -99,7 +111,10 @@ async fn last_activity_filter_is_based_on_valid_authenticated_requests() {
     assert_eq!(recent[0]["HasCustomDeviceName"], false);
     let current_date = recent[0]["LastActivityDate"].as_str().unwrap();
     assert!(current_date.ends_with('Z'));
-    assert_ne!(current_date, unfiltered[0]["LastActivityDate"].as_str().unwrap());
+    assert_ne!(
+        current_date,
+        unfiltered[0]["LastActivityDate"].as_str().unwrap()
+    );
 
     auth::rename_registered_device(&state, "tv-session-activity", Some("Den")).unwrap();
     let renamed = json_body(request(&router, path, &admin.access_token).await).await;
