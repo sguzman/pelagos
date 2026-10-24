@@ -2660,14 +2660,14 @@
               "progress": 67,
               "checks": [
                 {
-                  "title": "Implement pinned-shaped GET /Videos and /Audio/{itemId}/main.m3u8 and /master.m3u8 plus protected hls1 playlist/segment GET/HEAD, private FFmpeg VOD publications, measured-bandwidth single-rendition masters, token and per-library ACL isolation, revision-aware cache reuse and bounded eviction",
+                  "title": "Implement token-scoped Jellyfin-shaped /Videos and /Audio main/master HLS and hls1 transport, completed FFmpeg MPEG-TS, current per-library ACL and source revision checks, bounded publication reuse and GET/HEAD segment single byte ranges (206/416)",
                   "passed": true,
-                  "evidence": "src/hls_http.rs HlsRegistry/CacheLookup/generate_hls_playlist/serve_segment; src/app.rs, src/hls.rs, TranscodeController; pinned Jellyfin v12.3 DynamicHlsController route shapes; private max-three token-scoped publications"
+                  "evidence": "src/hls_http.rs HlsRegistry/CacheLookup/generate_hls_playlist/serve_segment; src/streaming.rs parse_range shared bounded parser; pinned Jellyfin v12.3 DynamicHlsController route shapes; private max-three completed publications"
                 },
                 {
-                  "title": "Native CI verifies actual FFmpeg/FFprobe audio/video MPEG-TS, master-to-media-to-segment navigation, token separation, secure HTTP lengths, manifest reuse rather than repeated FFmpeg jobs, cache source/kind/target isolation, revision-based stale-media denial, revocation, cache eviction and cleanup",
+                  "title": "Native HTTP CI verifies real audio/video FFmpeg MPEG-TS, single-rendition master/playlist/segment navigation, token and ACL isolation, revision-based cache invalidation, GET/HEAD manifests, 200/206/416 ranges, content lengths, source confinement, cleanup and generated roadmap",
                   "passed": true,
-                  "evidence": "GitHub Actions 40123205931, 40123387022, 40124019769, 40124299608, 40124593538 and 40124892915 — full Rust unit/HTTP suite with real FFmpeg, rustfmt, Clippy, pinned source/controller matrices and roadmap checks passed"
+                  "evidence": "GitHub Actions 40123205931, 40123387022, 40124019769, 40124299608, 40124593538, 40124892915, 40125082999 and 40125584569 — native fmt, Clippy -D warnings, full Rust/HTTP with FFmpeg+FFprobe, pinned source and roadmap checks passed"
                 },
                 {
                   "title": "Full upstream HLS negotiation and codec options, multi-rendition HTTP ABR/DASH, multi-hour live/long VOD scheduler, consistent timeline, real-client token forwarding and unmodified Jellyfin TV/mobile playback acceptance",
