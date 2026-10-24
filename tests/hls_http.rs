@@ -1315,10 +1315,15 @@ async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switc
     auth::create_user(&state_dir, "admin", "adaptive-audio-admin-password").unwrap();
     auth::create_user(&state_dir, "listener", "adaptive-audio-listener-password").unwrap();
     auth::grant_library(&state_dir, "listener", &library).unwrap();
-    let admin = auth::authenticate(&state_dir, "admin", "adaptive-audio-admin-password", "server")
-        .unwrap()
-        .unwrap()
-        .access_token;
+    let admin = auth::authenticate(
+        &state_dir,
+        "admin",
+        "adaptive-audio-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
     let listener = auth::authenticate(
         &state_dir,
         "listener",
@@ -1450,9 +1455,7 @@ async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switc
     auth::revoke_library(&state_dir, "listener", &library).unwrap();
     let first = format!("/Audio/{item}/{}", variants[0]);
     assert_eq!(
-        request(&app, "GET", &first, Some(&listener))
-            .await
-            .status(),
+        request(&app, "GET", &first, Some(&listener)).await.status(),
         StatusCode::NOT_FOUND
     );
 }
