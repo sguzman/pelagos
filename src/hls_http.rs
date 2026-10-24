@@ -317,7 +317,7 @@ async fn generate_hls_playlist(
     if !(1..=4).contains(&rendition_count) {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if rendition_count > 1 && (!master || expected_kind != "video") {
+    if rendition_count > 1 && !master {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
@@ -370,10 +370,10 @@ async fn generate_hls_playlist(
         armed: true,
     };
     if rendition_count > 1 {
-        // This opt-in prototype is limited to pre-encoded, short, private
-        // video VOD. The builder measures every output; never fabricate
-        // distinct bitrate variants from duplicated encoded bytes.
-        const PROFILES: [MpegTsQuality; 4] = [
+        // Short, private audio-only and video VOD. Every variant is encoded
+        // independently and measured; no nominal duplicate bitrates are
+        // published as a ladder.
+        const VIDEO_PROFILES: [MpegTsQuality; 4] = [
             MpegTsQuality {
                 video_kbps: 400,
                 audio_kbps: 96,
@@ -391,6 +391,29 @@ async fn generate_hls_playlist(
                 audio_kbps: 192,
             },
         ];
+        const AUDIO_PROFILES: [MpegTsQuality; 4] = [
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 48,
+            },
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 96,
+            },
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 160,
+            },
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 256,
+            },
+        ];
+        let profiles = if expected_kind == "audio" {
+            &AUDIO_PROFILES
+        } else {
+            &VIDEO_PROFILES
+        };
         let adaptive = hls::generate_adaptive_segmented_vod_from(
             &registry.controller,
             state.probe_executable(),
@@ -398,7 +421,7 @@ async fn generate_hls_playlist(
             &private_root.join("bundle"),
             target_seconds,
             start_time_ticks as f64 / 10_000_000.0,
-            &PROFILES[..usize::from(rendition_count)],
+            &profiles[..usize::from(rendition_count)],
         )
         .await
         .map_err(|err| match err.kind() {
@@ -784,6 +807,40 @@ async fn head_video_variant_segment(
     .await
 }
 
+async fn audio_variant_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, variant, name)): RoutePath<(String, String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(
+        state,
+        item,
+        playlist,
+        format!("{variant}/{name}"),
+        headers,
+        "audio",
+        false,
+    )
+    .await
+}
+
+async fn head_audio_variant_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, variant, name)): RoutePath<(String, String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(
+        state,
+        item,
+        playlist,
+        format!("{variant}/{name}"),
+        headers,
+        "audio",
+        true,
+    )
+    .await
+}
+
 async fn audio_segment(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
@@ -817,6 +874,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Audio/{item_id}/hls1/{playlist_id}/{segment_name}",
             get(audio_segment).head(head_audio_segment),
+        )
+        .route(
+            "/Audio/{item_id}/hls1/{playlist_id}/{variant_id}/{segment_name}",
+            get(audio_variant_segment).head(head_audio_variant_segment),
         )
 }
 
