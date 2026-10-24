@@ -38,6 +38,16 @@ pub struct HlsSegment {
 /// This function does not perform segment muxing; callers must independently
 /// verify that all supplied TS segments begin at usable decoder boundaries.
 pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> {
+    render_vod_media_playlist_inner(segments, false)
+}
+
+/// Independently re-encoded FFmpeg windows restart MPEG-TS program timestamps.
+/// Signal that reset before each next segment so the player can recover the
+/// stream timeline without assuming one continuous PTS sequence.
+fn render_vod_media_playlist_inner(
+    segments: &[HlsSegment],
+    independent_windows: bool,
+) -> io::Result<String> {
     if segments.is_empty() || segments.len() > MAX_VOD_SEGMENTS {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -71,6 +81,9 @@ pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> 
         max_duration.ceil() as u32
     );
     for (index, segment) in segments.iter().enumerate() {
+        if independent_windows && index > 0 {
+            playlist.push_str("#EXT-X-DISCONTINUITY\n");
+        }
         playlist.push_str(&format!(
             "#EXTINF:{:.3},\nsegment{index:05}.ts\n",
             segment.duration_seconds
@@ -427,7 +440,7 @@ async fn generate_segmented_vod_with_quality(
         });
         segment_paths.push(path);
     }
-    let manifest = render_vod_media_playlist(&segments)?;
+    let manifest = render_vod_media_playlist_inner(&segments, true)?;
     let playlist_path = output_dir.join(PLAYLIST_NAME);
     let mut out = OpenOptions::new()
         .create_new(true)
