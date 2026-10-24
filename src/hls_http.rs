@@ -222,10 +222,8 @@ async fn generate_video_playlist(
                 &format!("segment{index:05}.ts"),
                 &format!("hls1/{id}/{index}.ts"),
             );
-            media_playlist = media_playlist.replace(
-                &format!("segment{index:05}.ts"),
-                &format!("{index}.ts"),
-            );
+            media_playlist =
+                media_playlist.replace(&format!("segment{index:05}.ts"), &format!("{index}.ts"));
             (path.clone(), artifact.segments[index].transport_bytes)
         })
         .collect();
@@ -248,11 +246,7 @@ async fn generate_video_playlist(
     cleanup.armed = false;
     registry.publish(publication);
     let mut response = Response::new(Body::from(reply.clone()));
-    set_private_headers(
-        &mut response,
-        "application/vnd.apple.mpegurl",
-        reply.len(),
-    );
+    set_private_headers(&mut response, "application/vnd.apple.mpegurl", reply.len());
     Ok(response)
 }
 
