@@ -1184,7 +1184,11 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     assert_ne!(alice_master, bob_master);
     assert_eq!(alice_master.matches("#EXT-X-STREAM-INF:").count(), 2);
     assert_eq!(bob_master.matches("#EXT-X-STREAM-INF:").count(), 2);
-    for (owner, other, master) in [(&alice, &bob, &alice_master), (&bob, &alice, &bob_master)] {
+    for (client_index, (owner, other, master)) in
+        [(&alice, &bob, &alice_master), (&bob, &alice, &bob_master)]
+            .into_iter()
+            .enumerate()
+    {
         assert!(!master.contains(owner));
         assert!(!master.contains(other));
         let variants = master
@@ -1194,7 +1198,10 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
         assert_eq!(variants.len(), 2);
         let publication_id = variants[0].split('/').nth(1).unwrap();
         // Simulate switching the HTTP rendition at the next segment
-        // boundary. Decode continuity is deliberately NOT inferred here.
+        // boundary, then pass those actual HTTP transport bytes through
+        // FFmpeg's HLS demuxer and video decoder.
+        let switch_dir = fixture.path().join(format!("switch-{client_index}"));
+        std::fs::create_dir(&switch_dir).unwrap();
         for (variant_index, segment_index) in [(0, 0), (1, 1), (0, 1), (1, 0)] {
             let media_path = format!("/Videos/{item}/{}", variants[variant_index]);
             assert_eq!(
@@ -1223,7 +1230,36 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
                 .unwrap();
             assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
             assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+            if variant_index == segment_index {
+                std::fs::write(switch_dir.join(format!("window{segment_index}.ts")), &bytes)
+                    .unwrap();
+            }
         }
+        // These windows came from different encoded bitrates. FFmpeg must
+        // decode meaningful video frames through an explicit HLS timestamp
+        // discontinuity, not merely recognize their MPEG-TS packet headers.
+        let switch_playlist = switch_dir.join("switch.m3u8");
+        std::fs::write(
+            &switch_playlist,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\nwindow0.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:0.700,\nwindow1.ts\n#EXT-X-ENDLIST\n",
+        )
+        .unwrap();
+        let decoded = Command::new("ffmpeg")
+            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&switch_playlist)
+            .args(["-map", "0:v:0", "-f", "framemd5", "-"])
+            .output()
+            .unwrap();
+        assert!(
+            decoded.status.success(),
+            "switch decode failed: {}",
+            String::from_utf8_lossy(&decoded.stderr)
+        );
+        let decoded_frames = String::from_utf8_lossy(&decoded.stdout)
+            .lines()
+            .filter(|line| !line.starts_with('#') && !line.is_empty())
+            .count();
+        assert!(decoded_frames >= 20, "decoded only {decoded_frames} frames");
     }
     assert_eq!(
         text_body(request(&app, "GET", &route, Some(&alice)).await).await,
