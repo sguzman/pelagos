@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 37%` across 168 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 38%` across 168 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -423,7 +423,7 @@
   - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
   - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 37%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 40%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
@@ -506,11 +506,11 @@
   - [x] Native CI verifies fake FFprobe total bitrate/channel metadata, allowed direct play, unsupported lower bitrate and mono ceilings, invalid bounds and query-over-body override — GitHub Actions 40056232118 — complete formatting, Clippy, native Rust integration/unit tests, source/controller route matrix and evidence roadmap checks passed
   - [ ] Per-stream bitrate budget model, codec-aware transcode/remux fallback, full Jellyfin client option precedence and unmodified TV/mobile playback acceptance
 
-### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
+### ⚙️ P10 — Transcoding and GPU — `██░░░░░░░░ 17%`
 
-- 🧱 **T310 — FFmpeg job controller** — `░░░░░░░░░░ 0%`
-  - [ ] Implement process supervision, concurrency, cancellation and cleanup
-  - [ ] Automated tests and Jellyfin baseline fixture verify process supervision, concurrency, cancellation and cleanup
+- 🧱 **T310 — FFmpeg job controller** — `███████░░░ 67%`
+  - [x] Implement process supervision, concurrency, cancellation and cleanup — src/transcode.rs TranscodeController, transcode_mpegts, try_run, bounded FFmpeg stdout/stderr, kill_on_drop, PartialOutput cancellation cleanup and atomic create_new target; fixed CPU-first H.264/AAC MPEG-TS command
+  - [x] Automated tests and Jellyfin baseline fixture verify process supervision, concurrency, cancellation and cleanup — GitHub Actions 40116185681 and 40116477163 — formatting, Clippy -D warnings, all Rust target tests, real Ubuntu FFmpeg/FFprobe AAC MPEG-TS smoke, semaphore admission/overload/recovery, rollback and cancellation regressions, pinned matrix and roadmap checks passed
   - [ ] Production or real-client acceptance validates process supervision, concurrency, cancellation and cleanup
 - 📺 **T311 — HLS, DASH and transport** — `░░░░░░░░░░ 0%`
   - [ ] Implement segment manifests, adaptive profiles and timebase correctness

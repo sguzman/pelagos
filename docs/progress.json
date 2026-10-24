@@ -2556,18 +2556,20 @@
               "checks": [
                 {
                   "title": "Implement process supervision, concurrency, cancellation and cleanup",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/transcode.rs TranscodeController, transcode_mpegts, try_run, bounded FFmpeg stdout/stderr, kill_on_drop, PartialOutput cancellation cleanup and atomic create_new target; fixed CPU-first H.264/AAC MPEG-TS command"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify process supervision, concurrency, cancellation and cleanup",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "GitHub Actions 40116185681 and 40116477163 — formatting, Clippy -D warnings, all Rust target tests, real Ubuntu FFmpeg/FFprobe AAC MPEG-TS smoke, semaphore admission/overload/recovery, rollback and cancellation regressions, pinned matrix and roadmap checks passed"
                 },
                 {
                   "title": "Production or real-client acceptance validates process supervision, concurrency, cancellation and cleanup",
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 67
             },
             {
               "id": "T311",
