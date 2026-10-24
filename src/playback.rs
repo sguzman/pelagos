@@ -29,6 +29,7 @@ pub struct PlaybackRequest {
     enable_direct_play: Option<bool>,
     enable_direct_stream: Option<bool>,
     enable_transcoding: Option<bool>,
+    device_profile: Option<Value>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -256,6 +257,156 @@ fn source_from_probe(
     }
 }
 
+/// Matches Jellyfin v12.3 DirectPlayProfile Container, AudioCodec, VideoCodec
+/// and Type. Empty lists mean any codec; a leading "-" denies listed values.
+fn profile_contains(list: &str, actual: &str) -> bool {
+    if list.is_empty() {
+        return true;
+    }
+    let (negative, allowed) = match list.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, list),
+    };
+    let found = allowed
+        .split(',')
+        .any(|candidate| !candidate.is_empty() && candidate.eq_ignore_ascii_case(actual));
+    if negative { !found } else { found }
+}
+
+/// This is a conservative, bounded direct-file subset, not full DLNA
+/// negotiation. A client profile which requires unimplemented codec or
+/// container constraints is refused rather than silently ignored.
+fn profile_allows_direct_file(
+    profile: &Value,
+    source: &MediaSource,
+    report: &probe::ProbeReport,
+) -> Result<bool, StatusCode> {
+    if serde_json::to_vec(profile)
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .len()
+        > 65_536
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let object = profile.as_object().ok_or(StatusCode::BAD_REQUEST)?;
+    const ROOT_KEYS: &[&str] = &[
+        "Name", "Id", "MaxStreamingBitrate", "MaxStaticBitrate",
+        "MusicStreamingTranscodingBitrate", "MaxStaticMusicBitrate",
+        "DirectPlayProfiles", "TranscodingProfiles", "ContainerProfiles",
+        "CodecProfiles", "SubtitleProfiles",
+    ];
+    if object.keys().any(|key| !ROOT_KEYS.contains(&key.as_str())) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    for field in ["CodecProfiles", "ContainerProfiles"] {
+        if let Some(value) = object.get(field).filter(|v| !v.is_null()) {
+            let profiles = value.as_array().ok_or(StatusCode::BAD_REQUEST)?;
+            if !profiles.is_empty() {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+        }
+    }
+    for field in ["TranscodingProfiles", "SubtitleProfiles"] {
+        if let Some(value) = object.get(field).filter(|v| !v.is_null()) {
+            let profiles = value.as_array().ok_or(StatusCode::BAD_REQUEST)?;
+            if profiles.len() > 64 {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            if field == "SubtitleProfiles"
+                && !profiles.is_empty()
+                && source.media_streams.iter().any(|stream| stream.stream_type == "Subtitle")
+            {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+        }
+    }
+    // A static direct file must fit an explicitly supplied static bitrate
+    // ceiling. With no reliable measured bitrate, decline to claim support.
+    let limit_field = if source.media_streams.iter().any(|s| s.stream_type == "Video") {
+        "MaxStaticBitrate"
+    } else {
+        "MaxStaticMusicBitrate"
+    };
+    if let Some(limit) = object.get(limit_field).filter(|value| !value.is_null()) {
+        let limit = limit.as_i64().filter(|value| *value > 0)
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        let measured = report
+            .format
+            .as_ref()
+            .and_then(|format| number(&format["bit_rate"]))
+            .filter(|bitrate| *bitrate > 0)
+            .or_else(|| {
+                let mut total = 0_i64;
+                for stream in &report.streams {
+                    if !matches!(stream["codec_type"].as_str(), Some("audio" | "video")) {
+                        continue;
+                    }
+                    total = total.checked_add(number(&stream["bit_rate"]).filter(|n| *n > 0)?)?;
+                }
+                (total > 0).then_some(total)
+            });
+        if measured.is_none_or(|bitrate| bitrate > limit) {
+            return Ok(false);
+        }
+    }
+    let rules = object
+        .get("DirectPlayProfiles")
+        .and_then(Value::as_array)
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    if rules.len() > 64 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let has_video = source.media_streams.iter().any(|s| s.stream_type == "Video");
+    for rule in rules {
+        let properties = rule.as_object().ok_or(StatusCode::BAD_REQUEST)?;
+        if properties.keys().any(|key| {
+            !["Type", "Container", "AudioCodec", "VideoCodec"].contains(&key.as_str())
+        }) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let kind = properties.get("Type").and_then(Value::as_str)
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        if !matches!(kind, "Video" | "Audio" | "Photo" | "Subtitle" | "Lyric") {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let container = properties.get("Container").and_then(Value::as_str)
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        let audio = properties.get("AudioCodec").filter(|v| !v.is_null())
+             .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
+            .transpose()?;
+        let video = properties.get("VideoCodec").filter(|v| !v.is_null())
+             .map(|v| v.as_str().ok_or(StatusCode::BAD_REQUEST))
+            .transpose()?;
+        if [container, audio.unwrap_or(""), video.unwrap_or("")]
+            .iter()
+            .any(|value| value.len() > 512 || value.chars().any(char::is_control))
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if kind != if has_video { "Video" } else { "Audio" }
+            || !profile_contains(container, &source.container)
+        {
+            continue;
+        }
+        let compatible = source
+            .media_streams
+            .iter()
+            .filter(|stream| matches!(stream.stream_type.as_str(), "Audio" | "Video"))
+            .all(|stream| {
+                let matcher = if stream.stream_type == "Video" {
+                    video.unwrap_or("")
+                } else {
+                    audio.unwrap_or("")
+                };
+                stream.codec.as_deref().is_some_and(|codec| profile_contains(matcher, codec))
+            });
+        if compatible {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Lookup only authorized, indexed audio/video and resolve them within the root.
 async fn media_file(
     state: &AppState,
@@ -336,8 +487,16 @@ async fn playback_info(
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let source = source_from_probe(&item_id, kind, &file, &probed);
+    if let Some(profile) = req.device_profile.as_ref() {
+        if !profile_allows_direct_file(profile, &source, &probed)? {
+            // There is no remux or transcode fallback yet. Refuse the
+            // unmatched profile rather than advertising unsupported playback.
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
     Ok(Json(PlaybackInfo {
-        media_sources: vec![source_from_probe(&item_id, kind, &file, &probed)],
+        media_sources: vec![source],
         play_session_id: None,
         error_code: None,
     }))
