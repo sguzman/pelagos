@@ -369,7 +369,7 @@ async fn serve_segment(
         .lookup(&playlist_id, &item, expected_kind, &token)
         .ok_or(StatusCode::NOT_FOUND)?;
     // Reauthorize every segment, including library grants and confined source.
-    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
+    let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     let (source, kind) = playback::media_file(&state, item, scope).await?;
     if kind != expected_kind || source != publication.source {
         return Err(StatusCode::NOT_FOUND);
