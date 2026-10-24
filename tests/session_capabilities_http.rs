@@ -138,7 +138,7 @@ async fn report_full(
 }
 
 #[tokio::test]
-async fn full_capabilities_accept_basic_json_forms_and_reject_unknown_device_profiles() {
+async fn full_capabilities_accept_basic_json_forms_and_reject_malformed_device_profiles() {
     let fixture = tempfile::tempdir().unwrap();
     let state = fixture.path().join("state");
     auth::create_user(&state, "admin", "full-capabilities-admin-password").unwrap();
@@ -173,11 +173,11 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_unknown_device_pro
             route,
             serde_json::json!({
                 "PlayableMediaTypes":"Video",
-                "DeviceProfile":{"Name":"unsupported"}
+                "DeviceProfile":["not a profile object"]
             }),
         )
         .await,
-        StatusCode::UNPROCESSABLE_ENTITY
+        StatusCode::BAD_REQUEST
     );
     assert_eq!(
         report_full(
@@ -204,4 +204,150 @@ async fn full_capabilities_accept_basic_json_forms_and_reject_unknown_device_pro
         sessions[0]["SupportedCommands"],
         serde_json::json!(["Play", "Pause"])
     );
+}
+
+#[tokio::test]
+async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomically() {
+    let fixture = tempfile::tempdir().unwrap();
+    let state = fixture.path().join("state");
+    auth::create_user(&state, "admin", "profile-echo-admin-password").unwrap();
+    auth::create_user(&state, "viewer", "profile-echo-viewer-password").unwrap();
+    let admin = auth::authenticate(&state, "admin", "profile-echo-admin-password", "server")
+        .unwrap()
+        .unwrap();
+    let viewer = auth::authenticate_with_client(
+        &state,
+        "viewer",
+        "profile-echo-viewer-password",
+        "server",
+        auth::ClientMetadata {
+            client: Some("Jellyfin Android TV".to_owned()),
+            device_id: Some("device-profile-tv".to_owned()),
+            device_name: Some("Living Room".to_owned()),
+            application_version: Some("1.0".to_owned()),
+        },
+    )
+    .unwrap()
+    .unwrap();
+    let router = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let path = "/Sessions/Capabilities/Full";
+    let profile = serde_json::json!({
+        "Name": "Observed TV negotiation offer",
+        "MaxStreamingBitrate": 3_000_000,
+        "DirectPlayProfiles": [
+            {"Container": "mp4", "VideoCodec": "h264", "AudioCodec": "aac", "Type": "Video"}
+        ],
+        "TranscodingProfiles": [],
+        "SubtitleProfiles": []
+    });
+    let payload = serde_json::json!({
+        "PlayableMediaTypes": ["Video","Audio"],
+        "SupportedCommands": "Play,Pause",
+        "SupportsMediaControl": true,
+        "SupportsPersistentIdentifier": true,
+        "DeviceProfile": profile,
+        "AppStoreUrl": "https://example.org/app",
+        "IconUrl": "https://example.org/icon.png"
+    });
+    assert_eq!(
+        report_full(&router, Some(&viewer.access_token), path, payload.clone()).await,
+        StatusCode::NO_CONTENT
+    );
+    let info = body(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=device-profile-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(info["Capabilities"]["DeviceProfile"], profile);
+    assert_eq!(info["Capabilities"]["AppStoreUrl"], "https://example.org/app");
+    assert_eq!(info["Capabilities"]["IconUrl"], "https://example.org/icon.png");
+    assert_eq!(info["IconUrl"], "https://example.org/icon.png");
+    assert_eq!(info["AccessToken"], Value::Null);
+    assert!(!info.to_string().contains(&viewer.access_token));
+
+    let restarted = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state.clone(),
+    )));
+    let persisted = body(
+        call(
+            &restarted,
+            "GET",
+            "/Devices/Info?id=device-profile-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(persisted["Capabilities"]["DeviceProfile"], profile);
+
+    for bad in [
+        serde_json::json!({"DeviceProfile":{"Name":"x".repeat(70_000)}}),
+        serde_json::json!({"DeviceProfile":{"Name":2},"IconUrl":"javascript:alert(1)"}),
+        serde_json::json!({"DeviceProfile":"not-an-object"}),
+        serde_json::json!({"AppStoreUrl":"file:///etc/passwd"}),
+    ] {
+        assert_eq!(
+            report_full(&router, Some(&viewer.access_token), path, bad).await,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    // An invalid update cannot erase a previously successful capability report.
+    let after_bad = body(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=device-profile-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(after_bad["Capabilities"]["DeviceProfile"], profile);
+
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            "/Sessions/Capabilities?playableMediaTypes=Audio&supportsPersistentIdentifier=true",
+            Some(&viewer.access_token),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    let basic = body(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=device-profile-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(basic["Capabilities"]["DeviceProfile"], Value::Null);
+    assert_eq!(basic["Capabilities"]["AppStoreUrl"], Value::Null);
+    assert_eq!(basic["Capabilities"]["IconUrl"], Value::Null);
+    assert_eq!(basic["Capabilities"]["PlayableMediaTypes"], serde_json::json!(["Audio"]));
+    auth::revoke(&state, &viewer.access_token).unwrap();
+    let after_revoke = body(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=device-profile-tv",
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(after_revoke["Capabilities"]["DeviceProfile"], Value::Null);
 }
