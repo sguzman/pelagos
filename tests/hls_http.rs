@@ -1027,6 +1027,36 @@ async fn two_verified_video_hls_renditions_are_scoped_and_transport_accessible()
         request(&app, "GET", &first, Some(&owner)).await.status(),
         StatusCode::OK
     );
+    // Complete the bounded CPU rendition-count matrix with a real
+    // four-target encode. The oldest zero-offset cache publication may
+    // be evicted at the three-entry cache cap, but active private variant
+    // transport must remain valid for this bearer session.
+    let four_route = format!("/Videos/{id}/master.m3u8?segmentLength=2&renditions=4");
+    let four_response = request(&app, "GET", &four_route, Some(&owner)).await;
+    assert_eq!(four_response.status(), StatusCode::OK);
+    let four_master = text_body(four_response).await;
+    assert_eq!(
+        four_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
+        4
+    );
+    assert_eq!(four_master.matches(",RESOLUTION=640x360").count(), 4);
+    let fourth_path = four_master
+        .lines()
+        .find(|line| line.contains("variant03/index.m3u8"))
+        .unwrap();
+    let fourth_media = format!("/Videos/{id}/{fourth_path}");
+    assert_eq!(
+        request(&app, "GET", &fourth_media, Some(&sibling))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let fourth_response = request(&app, "GET", &fourth_media, Some(&owner)).await;
+    assert_eq!(fourth_response.status(), StatusCode::OK);
+    let fourth_body = text_body(fourth_response).await;
+    assert!(fourth_body.contains("#EXT-X-ENDLIST"));
+    assert!(fourth_body.contains("0.ts"));
+
     auth::revoke(&state_dir, &owner).unwrap();
     assert_eq!(
         request(&app, "GET", &first, Some(&owner)).await.status(),
