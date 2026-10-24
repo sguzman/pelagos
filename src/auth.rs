@@ -808,6 +808,39 @@ pub fn list_registered_devices(
     Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceSessionRevocation {
+    Revoked,
+    NotFound,
+}
+
+/// A pinned DELETE /Devices single-ID subset: a known registration
+/// remains in the device directory, but every matching live session is
+/// invalidated through token deletion and cascading session cleanup.
+pub fn revoke_registered_device_sessions(
+    state_dir: &Path,
+    device_id: &str,
+) -> Result<DeviceSessionRevocation> {
+    let mut db = database(state_dir)?;
+    let tx = db.transaction()?;
+    let known: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pelagos_devices WHERE id=?1)",
+        params![device_id],
+        |row| row.get(0),
+    )?;
+    if !known {
+        return Ok(DeviceSessionRevocation::NotFound);
+    }
+    tx.execute(
+        "DELETE FROM pelagos_tokens WHERE digest IN (
+             SELECT s.digest FROM pelagos_sessions s WHERE s.device_id=?1
+         )",
+        params![device_id],
+    )?;
+    tx.commit()?;
+    Ok(DeviceSessionRevocation::Revoked)
+}
+
 /// Persist a separate download permission. A readable library alone never
 /// authorizes downloading; the administrator role always retains its implicit
 /// local download grant. Changes apply to already-issued tokens immediately.
