@@ -2497,6 +2497,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T337",
+              "emoji": "📺",
+              "name": "Pinned DLNA direct-play profile matching for authorized static media",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement bounded v12.3 DirectPlayProfile media/container/codec matching with comma-delimited positive and negative lists, optional static bitrate ceilings, explicit PlaybackInfo device-profile request and own-session previously reported fallback, refusing unmatched or unsupported constraints",
+                  "passed": true,
+                  "evidence": "src/playback.rs profile_contains/profile_allows_direct_file/playback_info; src/auth.rs session_device_profile; pinned Jellyfin v12.3 DirectPlayProfile.cs, ContainerHelper.cs, DlnaProfileType.cs and PlaybackInfoDto.cs"
+                },
+                {
+                  "title": "Native CI verifies valid H.264/AAC MP4 and FLAC, wrong containers/codecs, profile caps, malformed profile fields, session capability report fallback and explicit request override, while declining unimplemented transcode and maintaining authorization",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40055594514, 40055741333 and 40055776201 — complete native Rust unit and HTTP tests, rustfmt, Clippy, pinned route/controller/source matrices passed"
+                },
+                {
+                  "title": "Complete Jellyfin typed device profile/codec/level/subtitle/bitrate negotiation, remux/transcode fallback and unmodified TV/mobile clients accepted",
+                  "passed": false
+                }
+              ]
             }
           ]
         },

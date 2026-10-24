@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 37%` across 166 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 37%` across 167 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -423,11 +423,11 @@
   - [x] Rust native HTTP regression verifies episode-to-series inherited song/video owners, direct-owner priority, empty ancestry, persisted catalog and existing authorization behavior — GitHub Actions 40038103381: formatting, Clippy, complete Rust suites, pinned source contracts and roadmap guards passed
   - [ ] Unmodified Jellyfin Smart TV clients and upstream differential tests validate inherited theme resolution across all metadata extras and parent configurations
 
-## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 35%`
+## 🎞️ M3 — Playback, FFmpeg and hardware acceleration — `████░░░░░░ 36%`
 
 **Gate:** Existing Jellyfin TV apps direct-play, remux, transcode and seek real media correctly.
 
-### ▶️ P9 — Streaming engine — `█████░░░░░ 51%`
+### ▶️ P9 — Streaming engine — `█████░░░░░ 52%`
 
 - 📄 **T300 — Media probing** — `░░░░░░░░░░ 0%`
   - [ ] Implement ffprobe output mapping and device profiles
@@ -497,6 +497,10 @@
   - [x] Refuse opaque, unreadable, unfulfillable or duplicate HTTP Range headers without serving full media; preserve valid single-range streaming/download behavior — src/streaming.rs; Range header parsing and invalid_range Content-Range response
   - [x] Native Rust HTTP and unit CI regressions verify malformed/non-text and duplicated Range fields for original-media requests and downloads — GitHub Actions 40034407511: complete Rust test suite, formatting, Clippy, evidence-ledger and pinned controller/source contract checks passed
   - [ ] Upstream Jellyfin differential suite and unmodified real clients accept byte-range behavior across all supported files
+- 📺 **T337 — Pinned DLNA direct-play profile matching for authorized static media** — `███████░░░ 67%`
+  - [x] Implement bounded v12.3 DirectPlayProfile media/container/codec matching with comma-delimited positive and negative lists, optional static bitrate ceilings, explicit PlaybackInfo device-profile request and own-session previously reported fallback, refusing unmatched or unsupported constraints — src/playback.rs profile_contains/profile_allows_direct_file/playback_info; src/auth.rs session_device_profile; pinned Jellyfin v12.3 DirectPlayProfile.cs, ContainerHelper.cs, DlnaProfileType.cs and PlaybackInfoDto.cs
+  - [x] Native CI verifies valid H.264/AAC MP4 and FLAC, wrong containers/codecs, profile caps, malformed profile fields, session capability report fallback and explicit request override, while declining unimplemented transcode and maintaining authorization — GitHub Actions 40055594514, 40055741333 and 40055776201 — complete native Rust unit and HTTP tests, rustfmt, Clippy, pinned route/controller/source matrices passed
+  - [ ] Complete Jellyfin typed device profile/codec/level/subtitle/bitrate negotiation, remux/transcode fallback and unmodified TV/mobile clients accepted
 
 ### ⚙️ P10 — Transcoding and GPU — `░░░░░░░░░░ 0%`
 
