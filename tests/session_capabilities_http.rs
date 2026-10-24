@@ -87,6 +87,11 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
         .find(|row| row["Id"] == second.session_info.id)
         .unwrap();
     assert_eq!(reported["SupportsMediaControl"], true);
+    assert_eq!(reported["Capabilities"]["SupportsMediaControl"], true);
+    assert_eq!(
+        reported["Capabilities"]["PlayableMediaTypes"],
+        serde_json::json!(["Audio", "Video"])
+    );
     assert_eq!(reported["SupportsRemoteControl"], false);
     assert_eq!(
         reported["PlayableMediaTypes"],
@@ -97,6 +102,7 @@ async fn capabilities_are_confined_to_the_reporting_session_and_persist() {
         serde_json::json!(["Play", "Pause"])
     );
     assert_eq!(untouched["SupportsMediaControl"], false);
+    assert_eq!(untouched["Capabilities"], Value::Null);
     assert_eq!(untouched["PlayableMediaTypes"], serde_json::json!([]));
 
     let restarted = app::router(Arc::new(AppState::with_auth_dir(
@@ -267,6 +273,12 @@ async fn full_capability_profile_is_bounded_persisted_scoped_and_replaced_atomic
     )
     .await;
     assert_eq!(info["Capabilities"]["DeviceProfile"], profile);
+    let sessions = body(
+        call(&router, "GET", "/Sessions", Some(&viewer.access_token)).await,
+    )
+    .await;
+    assert_eq!(sessions[0]["Capabilities"]["DeviceProfile"], profile);
+    assert_eq!(sessions[0]["Capabilities"]["AppStoreUrl"], "https://example.org/app");
     assert_eq!(info["Capabilities"]["AppStoreUrl"], "https://example.org/app");
     assert_eq!(info["Capabilities"]["IconUrl"], "https://example.org/icon.png");
     assert_eq!(info["IconUrl"], "https://example.org/icon.png");
