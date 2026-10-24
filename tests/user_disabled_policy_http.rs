@@ -99,7 +99,7 @@ async fn disabled_policy_subset_revokes_sessions_and_protects_administrators() {
         )
         .await
         .status(),
-        StatusCode::CONFLICT
+        StatusCode::FORBIDDEN
     );
     assert_eq!(
         call(

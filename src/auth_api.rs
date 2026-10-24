@@ -105,7 +105,7 @@ async fn update_user_policy(
     {
         auth::AccountDisabledUpdate::Updated => Ok(StatusCode::NO_CONTENT),
         auth::AccountDisabledUpdate::NotFound => Err(StatusCode::NOT_FOUND),
-        auth::AccountDisabledUpdate::AdministratorProtected => Err(StatusCode::CONFLICT),
+        auth::AccountDisabledUpdate::AdministratorProtected => Err(StatusCode::FORBIDDEN),
     }
 }
 
