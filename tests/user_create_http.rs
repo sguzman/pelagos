@@ -53,7 +53,10 @@ async fn elevated_user_creation_persists_an_ordinary_account_without_leaking_pas
     let response = post(&router, route, Some(&admin.access_token), request.clone()).await;
     assert_eq!(response.status(), StatusCode::OK);
     let raw = to_bytes(response.into_body(), 65536).await.unwrap();
-    assert!(!raw.windows("a-strong-new-password".len()).any(|part| part == b"a-strong-new-password"));
+    assert!(
+        !raw.windows("a-strong-new-password".len())
+            .any(|part| part == b"a-strong-new-password")
+    );
     let created: Value = serde_json::from_slice(&raw).unwrap();
     assert_eq!(created["Name"], "New Viewer");
     assert_eq!(created["ServerId"], "server");
@@ -153,10 +156,14 @@ async fn unsupported_passwordless_admin_fields_and_invalid_names_never_create_us
             status
         );
     }
-    assert!(auth::authenticate(&state, "No Password", "", "server")
-        .unwrap()
-        .is_none());
-    assert!(auth::authenticate(&state, "Attempt Admin", "long-enough-password", "server")
-        .unwrap()
-        .is_none());
+    assert!(
+        auth::authenticate(&state, "No Password", "", "server")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        auth::authenticate(&state, "Attempt Admin", "long-enough-password", "server")
+            .unwrap()
+            .is_none()
+    );
 }
