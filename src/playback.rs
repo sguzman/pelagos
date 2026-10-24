@@ -15,7 +15,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{app::AppState, auth_api, catalog, catalog_api, probe};
+use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe};
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
@@ -482,7 +482,7 @@ async fn playback_info(
     headers: HeaderMap,
     req: PlaybackRequest,
 ) -> Result<Json<PlaybackInfo>, StatusCode> {
-    let (user, _) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    let (user, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     if req.user_id.as_deref().is_some_and(|id| id != user.id) {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -519,7 +519,19 @@ async fn playback_info(
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     let source = source_from_probe(&item_id, kind, &file, &probed);
-    if let Some(profile) = req.device_profile.as_ref() {
+    // An explicit playback profile overrides the token's previously reported
+    // capabilities. Session profiles are never shared across users or tokens.
+    let profile = match req.device_profile {
+        Some(profile) => Some(profile),
+        None => {
+            let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+            tokio::task::spawn_blocking(move || auth::session_device_profile(&dir, &token))
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        }
+    };
+    if let Some(profile) = profile.as_ref() {
         if !profile_allows_direct_file(profile, &source, &probed)? {
             // There is no remux or transcode fallback yet. Refuse the
             // unmatched profile rather than advertising unsupported playback.
