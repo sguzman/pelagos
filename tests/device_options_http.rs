@@ -202,6 +202,83 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
     .await;
     assert_eq!(relogged_options["Id"], numeric_id);
     assert_eq!(relogged_options["CustomName"], "Den");
+    // Clearing a custom label must restore the unmodified client name,
+    // preserve the numeric option ID and leave all login tokens untouched.
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            path,
+            Some(&admin.access_token),
+            json!({"CustomName":null}),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    let cleared = response_json(
+        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+    )
+    .await;
+    assert_eq!(cleared["CustomName"], Value::Null);
+    assert_eq!(cleared["Id"], numeric_id);
+    let cleared_info = response_json(
+        call(
+            &router,
+            "GET",
+            "/Devices/Info?id=smart-tv",
+            Some(&admin.access_token),
+            json!({}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(cleared_info["Name"], "Updated client name");
+    assert_eq!(cleared_info["CustomName"], Value::Null);
+
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            path,
+            Some(&admin.access_token),
+            json!({"CustomName":"Renamed"}),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(
+            &router,
+            "POST",
+            path,
+            Some(&admin.access_token),
+            json!({"CustomName":""}),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    let cleared_again = response_json(
+        call(&restarted, "GET", path, Some(&admin.access_token), json!({})).await,
+    )
+    .await;
+    assert_eq!(cleared_again["CustomName"], Value::Null);
+    for invalid in [json!({}), json!({"CustomName":true}), json!({"CustomName":123})] {
+        let response = call(
+            &router,
+            "POST",
+            path,
+            Some(&admin.access_token),
+            invalid,
+        )
+        .await;
+        assert!(
+            response.status() == StatusCode::BAD_REQUEST
+                || response.status() == StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
     let user = auth::identify(&state, &viewer.access_token, "server")
         .unwrap()
         .unwrap();
