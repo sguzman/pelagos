@@ -514,6 +514,42 @@ async fn generate_segmented_vod_with_quality(
     })
 }
 
+/// Conservative measured HLS BANDWIDTH estimate: take the largest
+/// transport-bit rate across verified individual VOD windows, not the average
+/// bitrate of the full file. An average can understate bursts and mislead
+/// adaptive client rendition selection.
+pub fn measured_peak_transport_bandwidth(segments: &[HlsSegment]) -> io::Result<u64> {
+    if segments.is_empty() || segments.len() > MAX_ENCODED_SEGMENTS {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid HLS peak bandwidth segment count",
+        ));
+    }
+    let mut peak = 0_u64;
+    for segment in segments {
+        if !segment.duration_seconds.is_finite()
+            || !(0.001..=30.0).contains(&segment.duration_seconds)
+            || segment.transport_bytes < 188
+            || segment.transport_bytes % 188 != 0
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid HLS peak bandwidth segment",
+            ));
+        }
+        let measured =
+            (segment.transport_bytes as f64 * 8.0 / segment.duration_seconds).ceil() as u64;
+        if measured == 0 || measured > 1_000_000_000 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unbounded HLS peak segment bandwidth",
+            ));
+        }
+        peak = peak.max(measured);
+    }
+    Ok(peak)
+}
+
 /// Completed adaptive multi-segment renditions with measured bandwidths.
 /// These private artifacts also back a bounded opt-in authenticated video
 /// HLS master/variant HTTP subset, not a full Jellyfin adaptive scheduler.
@@ -613,18 +649,7 @@ pub async fn generate_adaptive_segmented_vod_from(
                 ));
             }
         }
-        let duration: f64 = rendition
-            .segments
-            .iter()
-            .map(|segment| segment.duration_seconds)
-            .sum();
-        let bandwidth = (rendition.transport_bytes as f64 * 8.0 / duration).ceil() as u64;
-        if duration <= 0.0 || bandwidth == 0 || bandwidth > 1_000_000_000 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "measured segmented rendition bandwidth is invalid",
-            ));
-        }
+        let bandwidth = measured_peak_transport_bandwidth(&rendition.segments)?;
         candidates.push((bandwidth, name, rendition));
     }
     candidates.sort_by_key(|candidate| candidate.0);
