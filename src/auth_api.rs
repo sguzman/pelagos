@@ -25,7 +25,7 @@ struct PasswordLogin {
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Users/AuthenticateByName", post(password_login))
-        .route("/Users", get(users))
+        .route("/Users", get(users).post(update_user_name_modern))
         .route("/Users/New", post(create_account))
         .route("/Users/Me", get(me))
         .route("/Users/{user_id}", get(user_by_id).post(update_user_name))
@@ -85,6 +85,26 @@ struct UserNamePatch {
     name: String,
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UpdateUserQuery {
+    user_id: Option<String>,
+}
+
+/// Modern pinned POST /Users?userId=... shares the strict Name-only
+/// mutation used by the legacy route. The absent userId defaults to
+/// the authenticated account, as it does in the upstream controller.
+async fn update_user_name_modern(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(query): Query<UpdateUserQuery>,
+    Json(patch): Json<UserNamePatch>,
+) -> Result<StatusCode, StatusCode> {
+    let (current, _) = authenticated(state.clone(), headers).await?;
+    let user_id = query.user_id.unwrap_or_else(|| current.id.clone());
+    update_user_name_inner(state, current, user_id, patch).await
+}
+
 async fn update_user_name(
     State(state): State<Arc<AppState>>,
     RoutePath(user_id): RoutePath<String>,
@@ -92,6 +112,15 @@ async fn update_user_name(
     Json(patch): Json<UserNamePatch>,
 ) -> Result<StatusCode, StatusCode> {
     let (current, _) = authenticated(state.clone(), headers).await?;
+    update_user_name_inner(state, current, user_id, patch).await
+}
+
+async fn update_user_name_inner(
+    state: Arc<AppState>,
+    current: User,
+    user_id: String,
+    patch: UserNamePatch,
+) -> Result<StatusCode, StatusCode> {
     if !current.policy.is_administrator {
         return Err(StatusCode::FORBIDDEN);
     }
