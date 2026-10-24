@@ -39,7 +39,10 @@ pub struct HlsSegment {
 /// verify that all supplied TS segments begin at usable decoder boundaries.
 pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> {
     if segments.is_empty() || segments.len() > MAX_VOD_SEGMENTS {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment count"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid HLS segment count",
+        ));
     }
     let mut max_duration = 0.0_f64;
     let mut total = 0.0_f64;
@@ -49,12 +52,18 @@ pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> 
             || segment.transport_bytes < 188
             || segment.transport_bytes % 188 != 0
         {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment metadata"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid HLS segment metadata",
+            ));
         }
         total += segment.duration_seconds;
         max_duration = max_duration.max(segment.duration_seconds);
         if total > 86_400.0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "HLS VOD exceeds one day"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "HLS VOD exceeds one day",
+            ));
         }
     }
     let mut playlist = format!(
@@ -70,7 +79,6 @@ pub fn render_vod_media_playlist(segments: &[HlsSegment]) -> io::Result<String> 
     playlist.push_str("#EXT-X-ENDLIST\n");
     Ok(playlist)
 }
-
 
 struct PartialBundle {
     dir: PathBuf,
