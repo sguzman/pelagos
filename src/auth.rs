@@ -574,13 +574,15 @@ pub fn authenticate_with_client(
         params![session_id],
         |row| row.get(0),
     )?;
-    let has_custom_device_name: bool = tx.query_row(
-        "SELECT EXISTS(
-             SELECT 1 FROM pelagos_devices WHERE id=?1 AND custom_name IS NOT NULL
-         )",
-        params![metadata.device_id.as_deref()],
-        |row| row.get(0),
-    )?;
+    let custom_device_name: Option<String> = tx
+        .query_row(
+            "SELECT custom_name FROM pelagos_devices WHERE id=?1",
+            params![metadata.device_id.as_deref()],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    let has_custom_device_name = custom_device_name.is_some();
     tx.commit()?;
     let session_info = SessionInfo {
         id: session_id,
@@ -588,7 +590,7 @@ pub fn authenticate_with_client(
         user_name: user.name.clone(),
         client: metadata.client,
         device_id: metadata.device_id,
-        device_name: metadata.device_name,
+        device_name: custom_device_name.or(metadata.device_name),
         application_version: metadata.application_version,
         server_id: server_id.to_owned(),
         is_active: true,
@@ -786,7 +788,8 @@ pub fn list_sessions_with_activity(
 ) -> Result<Vec<SessionInfo>> {
     let db = database(state_dir)?;
     let mut statement = db.prepare(
-        "SELECT s.id, u.id, u.username, s.client, s.device_id, s.device_name,
+        "SELECT s.id, u.id, u.username, s.client, s.device_id,
+                COALESCE(NULLIF(d.custom_name,''),s.device_name),
                 s.application_version,
                 COALESCE(c.supports_media_control, 0),
                 COALESCE(c.playable_media_types, ''),
