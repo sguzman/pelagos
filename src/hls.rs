@@ -7,10 +7,7 @@ use std::{
     time::Duration,
 };
 
-use tokio::{
-    fs::OpenOptions,
-    io::AsyncWriteExt,
-};
+use tokio::{fs::OpenOptions, io::AsyncWriteExt};
 
 use crate::{probe, transcode::TranscodeController};
 
