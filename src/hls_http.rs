@@ -36,6 +36,7 @@ struct Published {
     digest: [u8; 32],
     source: PathBuf,
     private_root: PathBuf,
+    media_playlist: String,
     segments: Vec<(PathBuf, u64)>,
 }
 impl Drop for Published {
@@ -137,6 +138,25 @@ async fn video_main(
     Query(query): Query<PlaylistQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
+    generate_video_playlist(state, item, query, headers, false).await
+}
+
+async fn video_master(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item): RoutePath<String>,
+    Query(query): Query<PlaylistQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    generate_video_playlist(state, item, query, headers, true).await
+}
+
+async fn generate_video_playlist(
+    state: Arc<AppState>,
+    item: String,
+    query: PlaylistQuery,
+    headers: HeaderMap,
+    master: bool,
+) -> Result<Response, StatusCode> {
     let target_seconds = query.segment_length.unwrap_or(10);
     if !(1..=10).contains(&target_seconds) {
         return Err(StatusCode::BAD_REQUEST);
@@ -179,6 +199,20 @@ async fn video_main(
     if playlist.len() > MAX_MANIFEST || artifact.segments.len() > 64 {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
+    // Advertise the highest measured segment bandwidth. This is a single
+    // verified VOD rendition, not a multi-bitrate ABR ladder.
+    let peak_bandwidth = artifact
+        .segments
+        .iter()
+        .map(|segment| {
+            (segment.transport_bytes as f64 * 8.0 / segment.duration_seconds).ceil() as u64
+        })
+        .max()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !(1..=1_000_000_000).contains(&peak_bandwidth) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let mut media_playlist = playlist.clone();
     let segments = artifact
         .segment_paths
         .iter()
@@ -188,24 +222,36 @@ async fn video_main(
                 &format!("segment{index:05}.ts"),
                 &format!("hls1/{id}/{index}.ts"),
             );
+            media_playlist = media_playlist.replace(
+                &format!("segment{index:05}.ts"),
+                &format!("{index}.ts"),
+            );
             (path.clone(), artifact.segments[index].transport_bytes)
         })
         .collect();
+    let reply = if master {
+        format!(
+            "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\\nhls1/{id}/index.m3u8\\n"
+        )
+    } else {
+        playlist
+    };
     let publication = Arc::new(Published {
         id,
         item,
         digest: Sha256::digest(token.as_bytes()).into(),
         source,
         private_root,
+        media_playlist,
         segments,
     });
     cleanup.armed = false;
     registry.publish(publication);
-    let mut response = Response::new(Body::from(playlist.clone()));
+    let mut response = Response::new(Body::from(reply.clone()));
     set_private_headers(
         &mut response,
         "application/vnd.apple.mpegurl",
-        playlist.len(),
+        reply.len(),
     );
     Ok(response)
 }
@@ -223,6 +269,23 @@ async fn serve_segment(
         .hls_registry()
         .lookup(&playlist_id, &item, &token)
         .ok_or(StatusCode::NOT_FOUND)?;
+    // Reauthorize every segment, including library grants and confined source.
+    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
+    let (source, kind) = playback::media_file(&state, item, scope).await?;
+    if kind != "video" || source != publication.source {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    if name == "index.m3u8" {
+        let text = &publication.media_playlist;
+        let mut response = Response::new(if head_only {
+            Body::empty()
+        } else {
+            Body::from(text.clone())
+        });
+        set_private_headers(&mut response, "application/vnd.apple.mpegurl", text.len());
+        return Ok(response);
+    }
     let segment_number = name.strip_suffix(".ts").ok_or(StatusCode::NOT_FOUND)?;
     if segment_number.is_empty()
         || segment_number.len() > 2
@@ -238,12 +301,6 @@ async fn serve_segment(
         .get(index)
         .ok_or(StatusCode::NOT_FOUND)?;
     if *size == 0 || *size > MAX_SEGMENT_BYTES {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    // Reauthorize every segment, including library grants and confined source.
-    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
-    let (source, kind) = playback::media_file(&state, item, scope).await?;
-    if kind != "video" || source != publication.source {
         return Err(StatusCode::NOT_FOUND);
     }
     let file = tokio::fs::File::open(path)
@@ -288,6 +345,7 @@ async fn head_segment(
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Videos/{item_id}/main.m3u8", get(video_main))
+        .route("/Videos/{item_id}/master.m3u8", get(video_master))
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
             get(video_segment).head(head_segment),
@@ -314,6 +372,7 @@ mod tests {
                 digest,
                 source: PathBuf::from("/private/media-1"),
                 private_root: root,
+                media_playlist: String::new(),
                 segments: Vec::new(),
             }));
         }
@@ -333,6 +392,7 @@ mod tests {
             digest,
             source: PathBuf::from("/private/media-1"),
             private_root: fourth_root.clone(),
+            media_playlist: String::new(),
             segments: Vec::new(),
         }));
         assert!(registry.lookup("playlist-0", "media-1", owner).is_none());
