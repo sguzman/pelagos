@@ -194,10 +194,22 @@ async fn sessions_list_obeys_user_scope_and_explicitly_rejects_unimplemented_fil
     )
     .await;
     assert_eq!(all_sessions.as_array().unwrap().len(), 2);
+    let recent = json_response(
+        send(
+            &router,
+            "GET",
+            "/Sessions?activeWithinSeconds=30",
+            Body::empty(),
+            Some(&admin.access_token),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(recent.as_array().unwrap().len(), 2);
     let unsupported = send(
         &router,
         "GET",
-        "/Sessions?activeWithinSeconds=30",
+        "/Sessions?controllableByUserId=00000000-0000-0000-0000-000000000001",
         Body::empty(),
         Some(&admin.access_token),
     )
