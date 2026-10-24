@@ -342,6 +342,72 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn semaphore_limits_concurrent_jobs_without_spawning_queued_outputs() {
+        let (_temp, executable, source, first_output) = fixture("sleep 1; printf 'done'");
+        let second_output = first_output.with_file_name("second.ts");
+        let controller = TranscodeController::new(
+            executable,
+            1,
+            Duration::from_secs(5),
+            64,
+        )
+        .unwrap();
+        let running = controller.clone();
+        let first_source = source.clone();
+        let first_path = first_output.clone();
+        let first = tokio::spawn(async move { running.run(&first_source, &first_path).await });
+        time::timeout(Duration::from_secs(3), async {
+            while controller.active_jobs() != 1 {
+                time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let queued = controller.clone();
+        let second = second_output.clone();
+        let second_source = source.clone();
+        let second_job = tokio::spawn(async move { queued.run(&second_source, &second).await });
+        time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(controller.active_jobs(), 1);
+        assert!(!second_output.exists());
+        assert_eq!(first.await.unwrap().unwrap(), 4);
+        assert_eq!(second_job.await.unwrap().unwrap(), 4);
+        assert_eq!(controller.active_jobs(), 0);
+        assert_eq!(stdfs::read(&first_output).unwrap(), b"done");
+        assert_eq!(stdfs::read(&second_output).unwrap(), b"done");
+        assert!(TranscodeController::new(
+            PathBuf::from("ffmpeg"), 0, Duration::from_secs(5), 64
+        ).is_err());
+    }
+
+    #[tokio::test]
+    async fn cancelled_transcode_removes_partial_output_and_kills_child() {
+        let (_temp, executable, source, output) =
+            fixture("printf 'partial'; exec sleep 2");
+        let output_in_job = output.clone();
+        let job = tokio::spawn(async move {
+            transcode_mpegts(
+                &executable,
+                &source,
+                &output_in_job,
+                Duration::from_secs(5),
+                64,
+            )
+            .await
+        });
+        time::timeout(Duration::from_secs(2), async {
+            while !output.exists() {
+                time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        job.abort();
+        assert!(job.await.is_err());
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
     async fn zero_deadline_or_byte_limit_is_rejected_before_output_creation() {
         let (_temp, executable, source, output) = fixture("printf 'not reached'");
         for (deadline, cap) in [
