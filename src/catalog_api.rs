@@ -899,7 +899,12 @@ async fn create_virtual_folder(
     let name = query.name.ok_or(StatusCode::BAD_REQUEST)?;
     let location = query.paths.ok_or(StatusCode::BAD_REQUEST)?;
     if name.is_empty()
+        || name.len() > 255
         || name.trim() != name
+        || name.chars().any(char::is_control)
+        || matches!(name.as_str(), "." | "..")
+        || name.contains('/')
+        || name.contains('\\')
         || location.is_empty()
         || location.len() > 4096
         || location.contains(',')
@@ -907,7 +912,7 @@ async fn create_virtual_folder(
         return Err(StatusCode::BAD_REQUEST);
     }
     let path = PathBuf::from(location);
-    if !path.is_absolute() || path.file_name().is_none_or(|leaf| leaf != name.as_str()) {
+    if !path.is_absolute() {
         return Err(StatusCode::BAD_REQUEST);
     }
     let dir = state.auth_dir().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
@@ -916,15 +921,11 @@ async fn create_virtual_folder(
         if canonical != path || !canonical.is_dir() {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let existing =
-            catalog::library_entries(&dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        if existing
-            .iter()
-            .any(|entry| entry.name.eq_ignore_ascii_case(&name))
+        if !catalog::register_named(&dir, &canonical, &name)
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
         {
             return Err(StatusCode::CONFLICT);
         }
-        catalog::index(&dir, &canonical).map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         Ok(())
     })
     .await
