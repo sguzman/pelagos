@@ -84,6 +84,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/System/Info", get(system_info))
         .route("/System/Ping", get(ping).post(ping))
         .merge(auth_api::router())
+        .merge(crate::device_api::router())
         .merge(catalog_api::router())
         .merge(latest::router())
         .merge(theme::router())

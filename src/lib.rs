@@ -7,6 +7,7 @@ pub mod bitrate;
 pub mod catalog;
 pub mod catalog_api;
 pub mod discovery;
+pub mod device_api;
 pub mod identity;
 pub mod latest;
 pub mod media;
