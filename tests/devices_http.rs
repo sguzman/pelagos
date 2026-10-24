@@ -80,7 +80,10 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
         "server".to_owned(),
         state.clone(),
     )));
-    assert_eq!(call(&router, "/Devices", None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        call(&router, "/Devices", None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         call(&router, "/Devices", Some(&viewer.access_token))
             .await
@@ -88,9 +91,13 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
         StatusCode::FORBIDDEN
     );
     assert_eq!(
-        call(&router, "/Devices/Info?id=roku-1", Some(&viewer.access_token))
-            .await
-            .status(),
+        call(
+            &router,
+            "/Devices/Info?id=roku-1",
+            Some(&viewer.access_token)
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     let listing = json_body(call(&router, "/Devices", Some(&admin.access_token)).await).await;
@@ -98,7 +105,10 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     assert_eq!(listing["StartIndex"], 0);
     let entries = listing["Items"].as_array().unwrap();
     assert_eq!(entries.len(), 2);
-    let tv = entries.iter().find(|d| d["Id"] == "living-room-tv").unwrap();
+    let tv = entries
+        .iter()
+        .find(|d| d["Id"] == "living-room-tv")
+        .unwrap();
     assert_eq!(tv["Name"], "Living Room");
     assert_eq!(tv["AppName"], "Jellyfin Android TV");
     assert_eq!(tv["AppVersion"], "0.18");
@@ -131,9 +141,13 @@ async fn registered_devices_are_admin_only_stable_deduplicated_and_credential_fr
     .await;
     assert_eq!(unknown["Items"], json!([]));
     assert_eq!(
-        call(&router, "/Devices/Info?id=missing", Some(&admin.access_token))
-            .await
-            .status(),
+        call(
+            &router,
+            "/Devices/Info?id=missing",
+            Some(&admin.access_token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
 
