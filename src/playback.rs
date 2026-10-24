@@ -563,7 +563,10 @@ async fn playback_info(
         if limit <= 0 {
             return Err(StatusCode::BAD_REQUEST);
         }
-        if probed.streams.iter().filter(|stream| stream["codec_type"] == "audio")
+        if probed
+            .streams
+            .iter()
+            .filter(|stream| stream["codec_type"] == "audio")
             .any(|stream| number(&stream["channels"]).is_none_or(|channels| channels > limit))
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
