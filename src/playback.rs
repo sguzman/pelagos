@@ -671,7 +671,10 @@ mod tests {
             ),
             Ok(true),
         );
-        assert_eq!(profile_allows_direct_file(&json!({}), &source, &probe), Ok(false));
+        assert_eq!(
+            profile_allows_direct_file(&json!({}), &source, &probe),
+            Ok(false)
+        );
         assert_eq!(
             profile_allows_direct_file(
                 &json!({
