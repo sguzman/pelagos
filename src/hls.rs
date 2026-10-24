@@ -286,7 +286,10 @@ pub async fn generate_segmented_vod(
     target_seconds: u32,
 ) -> io::Result<HlsSegmentedArtifact> {
     if !(1..=10).contains(&target_seconds) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid HLS segment target"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid HLS segment target",
+        ));
     }
     let inspected = probe::probe(source, ffprobe, PROBE_TIMEOUT).await?;
     let source_seconds = inspected
@@ -297,17 +300,23 @@ pub async fn generate_segmented_vod(
         .filter(|seconds| seconds.is_finite() && (0.1..=600.0).contains(seconds))
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unbounded source duration"))?;
     if inspected.streams.is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "source has no audio or video"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source has no audio or video",
+        ));
     }
     let mut segment_count = (source_seconds / f64::from(target_seconds)).ceil() as usize;
     // A tiny final remainder belongs to the preceding full window.
-    let final_remainder = source_seconds
-        - (segment_count.saturating_sub(1) as f64 * f64::from(target_seconds));
+    let final_remainder =
+        source_seconds - (segment_count.saturating_sub(1) as f64 * f64::from(target_seconds));
     if segment_count > 1 && final_remainder < 0.1 {
         segment_count -= 1;
     }
     if segment_count == 0 || segment_count > MAX_ENCODED_SEGMENTS {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "HLS window count exceeds limit"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "HLS window count exceeds limit",
+        ));
     }
     // The synchronous create + guard ensures cancellation cleans the entire
     // private output tree, even while FFmpeg is still producing one window.
@@ -323,7 +332,10 @@ pub async fn generate_segmented_vod(
         let start = index as f64 * f64::from(target_seconds);
         let remaining = source_seconds - start;
         if remaining <= 0.0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "empty HLS time window"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "empty HLS time window",
+            ));
         }
         let target = f64::from(target_seconds);
         // Avoid sub-100ms tail jobs by adding short remainders to the
@@ -334,7 +346,10 @@ pub async fn generate_segmented_vod(
             remaining.min(target)
         };
         if duration < 0.1 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "short HLS tail window"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "short HLS tail window",
+            ));
         }
         let path = output_dir.join(format!("segment{index:05}.ts"));
         let size = controller
@@ -344,7 +359,10 @@ pub async fn generate_segmented_vod(
             io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
         })?;
         if total_bytes > MAX_SEGMENTED_BYTES || size < 188 || size % 188 != 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid HLS output bytes"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid HLS output bytes",
+            ));
         }
         // Verify TS sync markers in constant memory, rather than trusting
         // an extension or the FFmpeg exit code.
@@ -353,12 +371,18 @@ pub async fn generate_segmented_vod(
         for _ in 0..size / 188 {
             packet_reader.read_exact(&mut packet).await?;
             if packet[0] != 0x47 {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid TS sync packet"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "invalid TS sync packet",
+                ));
             }
         }
         let report = probe::probe(&path, ffprobe, PROBE_TIMEOUT).await?;
         if report.streams.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "unprobeable HLS segment"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "unprobeable HLS segment",
+            ));
         }
         let measured_seconds = report
             .format
@@ -366,7 +390,9 @@ pub async fn generate_segmented_vod(
             .and_then(|format| format["duration"].as_str())
             .and_then(|raw| raw.parse::<f64>().ok())
             .filter(|seconds| seconds.is_finite() && (0.001..=30.0).contains(seconds))
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid segment duration"))?;
+            .ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "invalid segment duration")
+            })?;
         segments.push(HlsSegment {
             duration_seconds: measured_seconds,
             transport_bytes: size,
