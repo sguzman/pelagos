@@ -125,6 +125,15 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     .unwrap()
     .user
     .id;
+    let sibling_token = auth::authenticate(
+        &state_dir,
+        "admin",
+        "strong-playback-test-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
     let app_state =
         AppState::with_auth_dir("server".to_owned(), state_dir).with_probe_executable(executable);
     let router = app::router(Arc::new(app_state));
@@ -312,6 +321,12 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
             .await
             .status(),
         StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&sibling_token), "{}")
+            .await
+            .status(),
+        StatusCode::OK
     );
     assert_eq!(
         request(
