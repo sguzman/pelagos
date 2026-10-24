@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 37%` across 165 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 37%` across 166 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -85,7 +85,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `█████░░░░░ 46%`
+## 🔌 M1 — Jellyfin protocol and API parity — `█████░░░░░ 47%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `█████░░░░░ 49%`
+### 👥 P4 — Authentication and user state — `█████░░░░░ 50%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -186,6 +186,10 @@
   - [x] Ingest up to 64 KiB, depth-limited DeviceProfile JSON with bounded HTTP(S) app-store/icon URLs into private FK-cascading session capability storage; project it through elevated DeviceInfoDto and scoped nested SessionInfoDto.Capabilities — src/auth.rs pelagos_session_capability_extras/set_session_capabilities/list_sessions_with_activity/list_registered_devices; src/auth_api.rs bounded_device_profile/report_session_capabilities_full; pinned Jellyfin v12.3 ClientCapabilitiesDto/DeviceProfile/SessionInfoDto
   - [x] Native HTTP regressions verify malformed profile/URL rejection, own-session isolation, restart persistence, token-free device DTO projection, nested session capability projection, replacement by basic capability reports and token-revocation cascade — GitHub Actions 40054083071 — complete Rust HTTP/unit tests, formatting, Clippy, roadmap and pinned source/API matrices passed
   - [ ] Typed codec and direct-play profile interpretation, real streaming negotiation, and unmodified Jellyfin Smart TV clients accepted
+- 🔑 **T141 — Elevated native local authentication-provider inventory** — `███████░░░ 67%`
+  - [x] Implement pinned GET /Auth/Providers and /Auth/PasswordResetProviders administrator-only NameIdPair JSON; expose the genuine Rust Argon2id local default provider and no nonexistent password-reset plugins — src/auth_api.rs auth_providers/password_reset_providers, pinned Jellyfin v12.3 SessionController.AuthProviders/PasswordResetProviders and UserManager provider enumeration
+  - [x] Native HTTP CI confirms unauthenticated denial, ordinary account prohibition, correct local provider identifier, empty reset-provider set, token redaction and token-revocation rejection — GitHub Actions 40054549296 — Rust formatting, Clippy, full HTTP/unit tests, roadmap and pinned source matrices passed
+  - [ ] Selectable provider policies, custom authentication plugins, password-reset provider implementations and unmodified client acceptance
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
@@ -660,8 +664,8 @@
   - [x] Native HTTP suite verifies anonymous/member denial, missing/unknown device IDs, invalid mixed-batch rollback, valid multi-device logout, percent-encoded IDs, surviving device records and new login after revocation — GitHub Actions 40052304486 and 40052337903 — full Rust unit/HTTP tests, formatting, Clippy, pinned source/controller matrices and roadmap gates passed
   - [ ] Unmodified Jellyfin admin and TV clients, concurrent device-session race cases and full upstream multi-device management acceptance
 - ✏️ **T524 — Durable administrator device display-name override** — `███████░░░ 67%`
-  - [x] Implement elevated GET/POST /Devices/Options including nullable or empty-string clearing, independent persistent display labels and stable numeric DeviceOptionsDto IDs without changing original device identity or token rights — src/auth.rs rename_registered_device/registered_device_options and pelagos_device_option_ids; src/device_api.rs update_device_options; CI 40053535666
-  - [x] Native CI verifies role validation, unsupported body types, name update and clearing, stable numeric IDs, lazy mapping, repeated login, and persisted restart state — GitHub Actions 40051766079, 40052163479, 40053535666 — complete Rust formatting, Clippy, HTTP/unit, pinned matrices and roadmap checks passed
+  - [x] Implement elevated GET/POST /Devices/Options including label clearing, stable numeric IDs and pinned SessionInfo.DeviceName override semantics that preserve the reported original name — src/auth.rs custom_device_name projection and rename_registered_device; src/device_api.rs update_device_options; pinned Jellyfin v12.3 SessionManager custom name logic; CI 40054337031
+  - [x] Native CI tests role validation, clearing, repeat login with overridden SessionInfo.DeviceName, restored original name, stable numeric IDs and restart persistence — GitHub Actions 40053535666, 40054321520 and 40054337031 — formatting, Clippy, full HTTP/unit, pinned source and roadmap checks passed
   - [ ] Unmodified Jellyfin device-management client acceptance and complete upstream options/UI semantics
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`

@@ -902,6 +902,28 @@
                   "passed": false
                 }
               ]
+            },
+            {
+              "id": "T141",
+              "emoji": "🔑",
+              "name": "Elevated native local authentication-provider inventory",
+              "progress": 67,
+              "checks": [
+                {
+                  "title": "Implement pinned GET /Auth/Providers and /Auth/PasswordResetProviders administrator-only NameIdPair JSON; expose the genuine Rust Argon2id local default provider and no nonexistent password-reset plugins",
+                  "passed": true,
+                  "evidence": "src/auth_api.rs auth_providers/password_reset_providers, pinned Jellyfin v12.3 SessionController.AuthProviders/PasswordResetProviders and UserManager provider enumeration"
+                },
+                {
+                  "title": "Native HTTP CI confirms unauthenticated denial, ordinary account prohibition, correct local provider identifier, empty reset-provider set, token redaction and token-revocation rejection",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40054549296 — Rust formatting, Clippy, full HTTP/unit tests, roadmap and pinned source matrices passed"
+                },
+                {
+                  "title": "Selectable provider policies, custom authentication plugins, password-reset provider implementations and unmodified client acceptance",
+                  "passed": false
+                }
+              ]
             }
           ]
         },
@@ -3270,14 +3292,14 @@
               "name": "Durable administrator device display-name override",
               "checks": [
                 {
-                  "title": "Implement elevated GET/POST /Devices/Options including nullable or empty-string clearing, independent persistent display labels and stable numeric DeviceOptionsDto IDs without changing original device identity or token rights",
+                  "title": "Implement elevated GET/POST /Devices/Options including label clearing, stable numeric IDs and pinned SessionInfo.DeviceName override semantics that preserve the reported original name",
                   "passed": true,
-                  "evidence": "src/auth.rs rename_registered_device/registered_device_options and pelagos_device_option_ids; src/device_api.rs update_device_options; CI 40053535666"
+                  "evidence": "src/auth.rs custom_device_name projection and rename_registered_device; src/device_api.rs update_device_options; pinned Jellyfin v12.3 SessionManager custom name logic; CI 40054337031"
                 },
                 {
-                  "title": "Native CI verifies role validation, unsupported body types, name update and clearing, stable numeric IDs, lazy mapping, repeated login, and persisted restart state",
+                  "title": "Native CI tests role validation, clearing, repeat login with overridden SessionInfo.DeviceName, restored original name, stable numeric IDs and restart persistence",
                   "passed": true,
-                  "evidence": "GitHub Actions 40051766079, 40052163479, 40053535666 — complete Rust formatting, Clippy, HTTP/unit, pinned matrices and roadmap checks passed"
+                  "evidence": "GitHub Actions 40053535666, 40054321520 and 40054337031 — formatting, Clippy, full HTTP/unit, pinned source and roadmap checks passed"
                 },
                 {
                   "title": "Unmodified Jellyfin device-management client acceptance and complete upstream options/UI semantics",
