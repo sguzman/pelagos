@@ -220,6 +220,26 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
     assert_eq!(resumed.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(resumed.headers()[header::ETAG], etag);
     assert_eq!(to_bytes(resumed.into_body(), 188).await.unwrap().len(), 188);
+    // Weak validators are never sufficient for safe byte-range resumption.
+    let weak = request_if_range(
+        &app,
+        "HEAD",
+        first_path,
+        &viewer,
+        "bytes=0-187",
+        &format!("W/{etag}"),
+    )
+    .await;
+    assert_eq!(weak.status(), StatusCode::OK);
+    assert!(weak.headers().get(header::CONTENT_RANGE).is_none());
+    assert_eq!(
+        weak.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap()
+            .parse::<usize>()
+            .unwrap(),
+        bytes.len()
+    );
     let stale = request_if_range(
         &app,
         "GET",
@@ -333,6 +353,8 @@ async fn authenticated_hls_playlist_segments_and_current_library_grants() {
             .status(),
         StatusCode::OK
     );
+    let other_etag = request(&app, "HEAD", &segment_paths[1], Some(&viewer)).await;
+    assert_ne!(other_etag.headers()[header::ETAG], etag);
     // The pinned master endpoint serves one measured, completed rendition;
     // its nested media playlist uses paths relative to the hls1 directory.
     let master_route = format!("/Videos/{id}/master.m3u8?segmentLength=2");
