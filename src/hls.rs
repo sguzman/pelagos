@@ -1163,6 +1163,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn measured_multi_segment_adaptive_ladder_orders_variants_and_rolls_back() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("sound.wav");
+        stdfs::write(&source, b"synthetic").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "fake-ffmpeg",
+            "for arg in \"$@\"; do if [ \"$arg\" = \"64k\" ]; then for i in 1 2; do printf '\\107'; head -c 187 /dev/zero; done; exit 0; fi; done; for i in 1 2 3 4; do printf '\\107'; head -c 187 /dev/zero; done",
+        );
+        let inspector = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_type":"audio","codec_name":"aac"}]}' ;; *) printf '%s' '{"format":{"duration":"4.0"},"streams":[{"codec_type":"audio","codec_name":"pcm_s16le"}]}' ;; esac"#,
+        );
+        let controller = TranscodeController::new(
+            encoder,
+            1,
+            Duration::from_secs(4),
+            1024,
+        )
+        .unwrap();
+        let high = MpegTsQuality { video_kbps: 1200, audio_kbps: 128 };
+        let low = MpegTsQuality { video_kbps: 300, audio_kbps: 64 };
+        let dir = temp.path().join("adaptive");
+        let result = generate_adaptive_segmented_vod(
+            &controller,
+            &inspector,
+            &source,
+            &dir,
+            2,
+            &[high, low],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.variants.len(), 2);
+        assert_eq!(result.renditions.len(), 2);
+        assert!(result.variants[0].bandwidth < result.variants[1].bandwidth);
+        assert_eq!(result.renditions[0].segment_paths.len(), 2);
+        assert_eq!(result.renditions[1].segment_paths.len(), 2);
+        assert_eq!(result.renditions[0].transport_bytes, 752);
+        assert_eq!(result.renditions[1].transport_bytes, 1504);
+        let master = stdfs::read_to_string(&result.master_path).unwrap();
+        assert!(master.contains("variant00/index.m3u8"));
+        assert!(master.contains("variant01/index.m3u8"));
+        for rendition in &result.renditions {
+            assert!(rendition.playlist_path.exists());
+            for path in &rendition.segment_paths {
+                assert!(path.exists());
+            }
+        }
+        result.remove().unwrap();
+        assert!(!dir.exists());
+
+        let bad_quality = MpegTsQuality { video_kbps: 200, audio_kbps: 96 };
+        let rejected = temp.path().join("rejected");
+        assert_eq!(
+            generate_adaptive_segmented_vod(
+                &controller,
+                &inspector,
+                &source,
+                &rejected,
+                2,
+                &[low, bad_quality],
+            )
+            .await
+            .unwrap_err()
+            .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!rejected.exists());
+    }
+
+    #[tokio::test]
     async fn real_ffmpeg_multisegment_playlist_demuxes_when_ci_requires_it() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
