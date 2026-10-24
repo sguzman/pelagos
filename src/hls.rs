@@ -7,9 +7,15 @@ use std::{
     time::Duration,
 };
 
-use tokio::{fs::{self, OpenOptions}, io::AsyncWriteExt};
+use tokio::{
+    fs::{self, OpenOptions},
+    io::AsyncWriteExt,
+};
 
-use crate::{probe, transcode::{MpegTsQuality, TranscodeController}};
+use crate::{
+    probe,
+    transcode::{MpegTsQuality, TranscodeController},
+};
 
 const SEGMENT_NAME: &str = "segment00000.ts";
 const PLAYLIST_NAME: &str = "index.m3u8";
@@ -126,7 +132,11 @@ async fn generate_single_segment_vod_with_quality(
     };
     let segment_path = output_dir.join(SEGMENT_NAME);
     let transport_bytes = match quality {
-        Some(profile) => controller.try_run_with_quality(source, &segment_path, profile).await?,
+        Some(profile) => {
+            controller
+                .try_run_with_quality(source, &segment_path, profile)
+                .await?
+        }
         None => controller.try_run(source, &segment_path).await?,
     };
     let inspection = probe::probe(&segment_path, ffprobe, PROBE_TIMEOUT).await?;
@@ -212,8 +222,8 @@ pub async fn generate_adaptive_vod(
             Some(*quality),
         )
         .await?;
-        let bandwidth = (rendition.transport_bytes as f64 * 8.0 / rendition.duration_seconds)
-            .ceil() as u64;
+        let bandwidth =
+            (rendition.transport_bytes as f64 * 8.0 / rendition.duration_seconds).ceil() as u64;
         if bandwidth == 0 || bandwidth > 1_000_000_000 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -472,25 +482,39 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_name":"aac"}]}'"#,
         );
-        let controller =
-            TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
+        let controller = TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
         let profiles = [
-            MpegTsQuality { video_kbps: 1500, audio_kbps: 128 },
-            MpegTsQuality { video_kbps: 300, audio_kbps: 64 },
+            MpegTsQuality {
+                video_kbps: 1500,
+                audio_kbps: 128,
+            },
+            MpegTsQuality {
+                video_kbps: 300,
+                audio_kbps: 64,
+            },
         ];
         let dir = temp.path().join("adaptive");
-        let result =
-            generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
-                .await
-                .unwrap();
+        let result = generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
+            .await
+            .unwrap();
         assert_eq!(result.variants.len(), 2);
         assert_eq!(result.renditions.len(), 2);
         assert_eq!(result.variants[0].bandwidth, 1504);
         assert_eq!(result.variants[1].bandwidth, 3008);
         assert_eq!(result.variants[0].playlist_name, "variant00/index.m3u8");
         assert_eq!(result.variants[1].playlist_name, "variant01/index.m3u8");
-        assert_eq!(stdfs::metadata(&result.renditions[0].segment_path).unwrap().len(), 376);
-        assert_eq!(stdfs::metadata(&result.renditions[1].segment_path).unwrap().len(), 752);
+        assert_eq!(
+            stdfs::metadata(&result.renditions[0].segment_path)
+                .unwrap()
+                .len(),
+            376
+        );
+        assert_eq!(
+            stdfs::metadata(&result.renditions[1].segment_path)
+                .unwrap()
+                .len(),
+            752
+        );
         assert!(!dir.join("candidate00").exists());
         assert!(!dir.join("candidate01").exists());
         let master = stdfs::read_to_string(&result.master_path).unwrap();
@@ -529,11 +553,16 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"2.0"},"streams":[{"codec_name":"aac"}]}'"#,
         );
-        let controller =
-            TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
+        let controller = TranscodeController::new(ffmpeg, 1, Duration::from_secs(3), 1024).unwrap();
         let profiles = [
-            MpegTsQuality { video_kbps: 500, audio_kbps: 64 },
-            MpegTsQuality { video_kbps: 500, audio_kbps: 1 },
+            MpegTsQuality {
+                video_kbps: 500,
+                audio_kbps: 64,
+            },
+            MpegTsQuality {
+                video_kbps: 500,
+                audio_kbps: 1,
+            },
         ];
         let dir = temp.path().join("rollback");
         assert_eq!(

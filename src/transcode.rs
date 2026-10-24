@@ -30,11 +30,9 @@ pub struct MpegTsQuality {
 
 impl MpegTsQuality {
     fn valid(self) -> bool {
-        (300..=20_000).contains(&self.video_kbps)
-            && (32..=320).contains(&self.audio_kbps)
+        (300..=20_000).contains(&self.video_kbps) && (32..=320).contains(&self.audio_kbps)
     }
 }
-
 
 /// A synchronous drop guard also removes partial output if the caller
 /// cancels its Rust future before a timeout or FFmpeg exit is observed.
@@ -185,7 +183,15 @@ pub async fn transcode_mpegts_with_quality(
             "invalid MPEG-TS encoder target bitrates",
         ));
     }
-    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, Some(quality)).await
+    transcode_mpegts_inner(
+        executable,
+        source,
+        output,
+        deadline,
+        max_bytes,
+        Some(quality),
+    )
+    .await
 }
 
 async fn transcode_mpegts_inner(
