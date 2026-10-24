@@ -814,6 +814,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T137",
+              "emoji": "📡",
+              "name": "Owned-session Jellyfin client capability reporting and durable metadata",
+              "checks": [
+                {
+                  "title": "Implement authenticated pinned POST /Sessions/Capabilities query subset with token-owned session mutation, bounded client fields, durable report and unimplemented remote-control capability left disabled",
+                  "passed": true,
+                  "evidence": "src/auth.rs set_session_capabilities/list_sessions with private SQLite FK persistence; src/auth_api.rs report_session_capabilities; pinned Jellyfin v12.3 SessionController.PostCapabilities"
+                },
+                {
+                  "title": "Native HTTP CI validates unauthenticated/other-session denial, malformed media/command inputs, client metadata visibility, untouched sibling sessions, restart and token revocation",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40047277534 — complete Rust unit and integration tests, formatting, Clippy, pinned controller/source and roadmap checks passed"
+                },
+                {
+                  "title": "Full ClientCapabilitiesDto/DeviceProfile support, real client capability negotiation, remote-control actions and unmodified TV acceptance",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

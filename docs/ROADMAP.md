@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 35%` across 158 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 36%` across 159 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -85,7 +85,7 @@
   - [x] Rust CI rejects missing, malformed or silently changed pinned controller inventory — GitHub Actions 39953180557 — pelagos-api-matrix test and check pass
   - [ ] Differential OpenAPI and real-client verification resolves route and DTO coverage
 
-## 🔌 M1 — Jellyfin protocol and API parity — `████░░░░░░ 44%`
+## 🔌 M1 — Jellyfin protocol and API parity — `█████░░░░░ 45%`
 
 **Gate:** Unmodified Jellyfin clients can discover, authenticate, browse and maintain sessions without C#.
 
@@ -124,7 +124,7 @@
   - [x] CI verifies public false boolean, 401 disabled operations with and without tokens, and no impacts on normal login — GitHub Actions 40004753528 — format, Clippy, full Rust tests and roadmap/upstream checks passed
   - [ ] Unmodified Jellyfin TV/web clients confirm disabled pairing fallback and complete enabled Quick Connect flow is implemented and verified
 
-### 👥 P4 — Authentication and user state — `████░░░░░░ 43%`
+### 👥 P4 — Authentication and user state — `█████░░░░░ 45%`
 
 - 🔑 **T110 — Users and token issuance** — `░░░░░░░░░░ 0%`
   - [ ] Implement password hashing, access tokens, logout and expiry
@@ -170,6 +170,10 @@
   - [x] Implement authenticated administrator-only pinned POST /Users/New accepting strict Name/Password body, creating non-admin users with Argon2 password hashes and scoped User DTO subset — src/auth_api.rs create_account; src/auth.rs create_user; pinned Jellyfin v12.3 UserController.CreateUserByName and CreateUserByName DTO
   - [x] Rust CI verifies anonymous/user denial, privileged creation, password privacy, duplicate case-insensitive names, invalid and unknown privilege fields, restart and new-user login — GitHub Actions 40043498922: complete Rust HTTP tests, formatting, Clippy, pinned controller/contract and evidence ledger checks passed
   - [ ] Full Jellyfin UserDto fields, passwordless account lifecycle, user update/deletion/admin controls and unmodified client interoperability
+- 📡 **T137 — Owned-session Jellyfin client capability reporting and durable metadata** — `███████░░░ 67%`
+  - [x] Implement authenticated pinned POST /Sessions/Capabilities query subset with token-owned session mutation, bounded client fields, durable report and unimplemented remote-control capability left disabled — src/auth.rs set_session_capabilities/list_sessions with private SQLite FK persistence; src/auth_api.rs report_session_capabilities; pinned Jellyfin v12.3 SessionController.PostCapabilities
+  - [x] Native HTTP CI validates unauthenticated/other-session denial, malformed media/command inputs, client metadata visibility, untouched sibling sessions, restart and token revocation — GitHub Actions 40047277534 — complete Rust unit and integration tests, formatting, Clippy, pinned controller/source and roadmap checks passed
+  - [ ] Full ClientCapabilitiesDto/DeviceProfile support, real client capability negotiation, remote-control actions and unmodified TV acceptance
 
 ### 🧭 P5 — General API contracts — `█████░░░░░ 50%`
 
