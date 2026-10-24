@@ -36,7 +36,10 @@ pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Devices", get(devices).delete(delete_device))
         .route("/Devices/Info", get(device_info))
-        .route("/Devices/Options", get(device_options).post(update_device_options))
+        .route(
+            "/Devices/Options",
+            get(device_options).post(update_device_options),
+        )
 }
 
 async fn administrator_state(
