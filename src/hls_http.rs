@@ -83,7 +83,8 @@ struct CacheLookup<'a> {
     rendition_count: u8,
 }
 
-/// Small private LRU cache; segment access promotes active publications and\n/// an in-flight request holds its own Arc during eviction.
+/// Small private LRU cache; segment access promotes active publications and
+/// an in-flight request holds its own Arc during eviction.
 #[derive(Debug)]
 pub struct HlsRegistry {
     jobs: Semaphore,
