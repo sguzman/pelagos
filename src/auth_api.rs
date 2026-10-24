@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode, header::AUTHORIZATION},
     routing::{get, post},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app::AppState,
@@ -32,6 +32,8 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Users/{user_id}/Policy", post(update_user_policy))
         .route("/Users/Password", post(change_password))
         .route("/Users/{user_id}/Password", post(admin_reset_password))
+        .route("/Auth/Providers", get(auth_providers))
+        .route("/Auth/PasswordResetProviders", get(password_reset_providers))
         .route("/Sessions/Logout", post(logout))
         .route("/Sessions", get(sessions))
         .route("/Sessions/Capabilities", post(report_session_capabilities))
@@ -45,6 +47,42 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/QuickConnect/Initiate", post(quick_connect_unavailable))
         .route("/QuickConnect/Connect", get(quick_connect_unavailable))
         .route("/QuickConnect/Authorize", post(quick_connect_authorize))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+struct AuthProviderDto {
+    name: &'static str,
+    id: &'static str,
+}
+
+/// Pinned administrator-only provider inventory. The provider is Rust
+/// native and has a stable local ID, not the old .NET type name.
+async fn auth_providers(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<AuthProviderDto>>, StatusCode> {
+    let (user, _) = authenticated(state, headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json(vec![AuthProviderDto {
+        name: "Default",
+        id: "pelagos.auth.local.argon2id",
+    }]))
+}
+
+/// No password-reset plugin is installed; ordinary administrator resets
+/// and current-password self-service are not pluggable providers.
+async fn password_reset_providers(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<AuthProviderDto>>, StatusCode> {
+    let (user, _) = authenticated(state, headers).await?;
+    if !user.policy.is_administrator {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json(Vec::new()))
 }
 
 #[derive(Debug, Default, Deserialize)]
