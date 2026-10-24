@@ -274,6 +274,7 @@ pub struct HlsSegmentedArtifact {
     pub segment_paths: Vec<PathBuf>,
     pub segments: Vec<HlsSegment>,
     pub transport_bytes: u64,
+    pub resolution: Option<(u32, u32)>,
     root: PathBuf,
 }
 
@@ -392,6 +393,7 @@ async fn generate_segmented_vod_with_quality(
     let mut segments = Vec::with_capacity(segment_count);
     let mut segment_paths = Vec::with_capacity(segment_count);
     let mut total_bytes = 0_u64;
+    let mut resolution: Option<(u32, u32)> = None;
     for index in 0..segment_count {
         let start = start_seconds + index as f64 * f64::from(target_seconds);
         let remaining = source_seconds - start;
@@ -459,6 +461,24 @@ async fn generate_segmented_vod_with_quality(
                 "unprobeable HLS segment",
             ));
         }
+        let segment_resolution = report.streams.iter().find_map(|stream| {
+            if stream["codec_type"].as_str() != Some("video") {
+                return None;
+            }
+            let width = u32::try_from(stream["width"].as_u64()?).ok()?;
+            let height = u32::try_from(stream["height"].as_u64()?).ok()?;
+            ((16..=16_384).contains(&width) && (16..=16_384).contains(&height))
+                .then_some((width, height))
+        });
+        if index > 0 && segment_resolution != resolution {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HLS video resolution changes between segment windows",
+            ));
+        }
+        if index == 0 {
+            resolution = segment_resolution;
+        }
         let measured_seconds = report
             .format
             .as_ref()
@@ -489,6 +509,7 @@ async fn generate_segmented_vod_with_quality(
         segment_paths,
         segments,
         transport_bytes: total_bytes,
+        resolution,
         root: output_dir.to_path_buf(),
     })
 }
@@ -622,7 +643,7 @@ pub async fn generate_adaptive_segmented_vod_from(
         variants.push(HlsVariant {
             playlist_name: format!("{name}/index.m3u8"),
             bandwidth,
-            resolution: None,
+            resolution: rendition.resolution,
         });
         renditions.push(HlsSegmentedArtifact {
             playlist_path: dir.join(PLAYLIST_NAME),
@@ -634,6 +655,7 @@ pub async fn generate_adaptive_segmented_vod_from(
                 .collect(),
             segments: rendition.segments,
             transport_bytes: rendition.transport_bytes,
+            resolution: rendition.resolution,
             root: dir,
         });
         previous = bandwidth;
