@@ -629,7 +629,7 @@
   - [ ] Full Jellyfin UpdateUserPassword semantics, user current-password flows, recovery and unmodified real client acceptance
 - 🔑 **T517 — Current-password-verified self-service account change with sibling-session revocation** — `███████░░░ 67%`
   - [x] Implement pinned POST /Users/Password self-account subset requiring CurrentPw and NewPw, with current-session preservation and other-session revocation in one authentication transaction — src/auth.rs change_own_password; src/auth_api.rs change_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword
-  - [x] Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login — GitHub Actions 40046475207: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned route/source gates passed
+  - [x] Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login — GitHub Actions 40046475207 and 40046592852: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned contract gates passed; the latter includes transaction-time credential revalidation
   - [ ] Full Jellyfin UpdateUserPassword semantics, concurrent reset/login adversarial acceptance and unmodified Jellyfin client behavior verified
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`

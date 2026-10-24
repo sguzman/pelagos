@@ -3101,7 +3101,7 @@
                 {
                   "title": "Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login",
                   "passed": true,
-                  "evidence": "GitHub Actions 40046475207: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned route/source gates passed"
+                  "evidence": "GitHub Actions 40046475207 and 40046592852: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned contract gates passed; the latter includes transaction-time credential revalidation"
                 },
                 {
                   "title": "Full Jellyfin UpdateUserPassword semantics, concurrent reset/login adversarial acceptance and unmodified Jellyfin client behavior verified",
