@@ -531,8 +531,8 @@ mod tests {
         assert!(!dir.join("candidate00").exists());
         assert!(!dir.join("candidate01").exists());
         let master = stdfs::read_to_string(&result.master_path).unwrap();
-        assert!(master.contains("BANDWIDTH=1504\nvariant00/index.m3u8\n"));
-        assert!(master.contains("BANDWIDTH=3008\nvariant01/index.m3u8\n"));
+        assert!(master.contains("BANDWIDTH=1504,RESOLUTION=320x180\nvariant00/index.m3u8\n"));
+        assert!(master.contains("BANDWIDTH=3008,RESOLUTION=320x180\nvariant01/index.m3u8\n"));
         assert_eq!(
             generate_adaptive_vod(&controller, &ffprobe, &source, &dir, &profiles)
                 .await
