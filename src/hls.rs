@@ -620,5 +620,32 @@ mod tests {
         let manifest = stdfs::read_to_string(&artifact.playlist_path).unwrap();
         assert!(manifest.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
         assert!(manifest.contains("#EXT-X-ENDLIST"));
+
+        let ladder = generate_adaptive_vod(
+            &controller,
+            Path::new("ffprobe"),
+            &input,
+            &temp.path().join("ladder"),
+            &[
+                MpegTsQuality {
+                    video_kbps: 300,
+                    audio_kbps: 64,
+                },
+                MpegTsQuality {
+                    video_kbps: 1200,
+                    audio_kbps: 128,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+        assert!(!ladder.variants.is_empty());
+        assert_eq!(ladder.variants.len(), ladder.renditions.len());
+        assert!(ladder.master_path.exists());
+        for variant in &ladder.renditions {
+            assert!(variant.transport_bytes >= 188);
+            assert_eq!(variant.transport_bytes % 188, 0);
+            assert!(variant.duration_seconds > 0.0);
+        }
     }
 }
