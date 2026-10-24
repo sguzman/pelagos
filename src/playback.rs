@@ -672,6 +672,19 @@ mod tests {
             Ok(true),
         );
         assert_eq!(profile_allows_direct_file(&json!({}), &source, &probe), Ok(false));
+        assert_eq!(
+            profile_allows_direct_file(
+                &json!({
+                    "DirectPlayProfiles": [
+                        {"Type":"Video","Container":"mp4"},
+                        {"Type":"Video","Container":"mp4","Unexpected":true}
+                    ]
+                }),
+                &source,
+                &probe,
+            ),
+            Err(StatusCode::BAD_REQUEST),
+        );
         for unsupported in [
             json!({"DirectPlayProfiles":[{"Type":"Video","Container":"mkv"}]}),
             json!({"DirectPlayProfiles":[{"Type":"Audio","Container":"mp4"}]}),
