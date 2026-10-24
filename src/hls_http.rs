@@ -33,6 +33,7 @@ const MAX_SEGMENT_BYTES: u64 = 128 * 1024 * 1024;
 struct Published {
     id: String,
     item: String,
+    kind: &'static str,
     digest: [u8; 32],
     source: PathBuf,
     private_root: PathBuf,
@@ -67,13 +68,13 @@ impl HlsRegistry {
         }
     }
 
-    fn lookup(&self, id: &str, item: &str, token: &str) -> Option<Arc<Published>> {
+    fn lookup(&self, id: &str, item: &str, kind: &str, token: &str) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         self.entries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
-            .find(|entry| entry.id == id && entry.item == item && entry.digest == digest)
+            .find(|entry| entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest)
             .cloned()
     }
 
@@ -138,7 +139,7 @@ async fn video_main(
     Query(query): Query<PlaylistQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    generate_video_playlist(state, item, query, headers, false).await
+    generate_hls_playlist(state, item, "video", query, headers, false).await
 }
 
 async fn video_master(
@@ -147,12 +148,31 @@ async fn video_master(
     Query(query): Query<PlaylistQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    generate_video_playlist(state, item, query, headers, true).await
+    generate_hls_playlist(state, item, "video", query, headers, true).await
 }
 
-async fn generate_video_playlist(
+async fn audio_main(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item): RoutePath<String>,
+    Query(query): Query<PlaylistQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    generate_hls_playlist(state, item, "audio", query, headers, false).await
+}
+
+async fn audio_master(
+    State(state): State<Arc<AppState>>,
+    RoutePath(item): RoutePath<String>,
+    Query(query): Query<PlaylistQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    generate_hls_playlist(state, item, "audio", query, headers, true).await
+}
+
+async fn generate_hls_playlist(
     state: Arc<AppState>,
     item: String,
+    expected_kind: &'static str,
     query: PlaylistQuery,
     headers: HeaderMap,
     master: bool,
@@ -164,7 +184,7 @@ async fn generate_video_playlist(
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
     let (source, kind) = playback::media_file(&state, item.clone(), scope).await?;
-    if kind != "video" {
+    if kind != expected_kind {
         return Err(StatusCode::NOT_FOUND);
     }
     // Admission is reserved before touching any private output path.
@@ -237,6 +257,7 @@ async fn generate_video_playlist(
     let publication = Arc::new(Published {
         id,
         item,
+        kind: expected_kind,
         digest: Sha256::digest(token.as_bytes()).into(),
         source,
         private_root,
@@ -256,17 +277,18 @@ async fn serve_segment(
     playlist_id: String,
     name: String,
     headers: HeaderMap,
+    expected_kind: &'static str,
     head_only: bool,
 ) -> Result<Response, StatusCode> {
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let publication = state
         .hls_registry()
-        .lookup(&playlist_id, &item, &token)
+        .lookup(&playlist_id, &item, expected_kind, &token)
         .ok_or(StatusCode::NOT_FOUND)?;
     // Reauthorize every segment, including library grants and confined source.
     let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
     let (source, kind) = playback::media_file(&state, item, scope).await?;
-    if kind != "video" || source != publication.source {
+    if kind != expected_kind || source != publication.source {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -325,24 +347,46 @@ async fn video_segment(
     RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_segment(state, item, playlist, name, headers, false).await
+    serve_segment(state, item, playlist, name, headers, "video", false).await
 }
 
-async fn head_segment(
+async fn head_video_segment(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_segment(state, item, playlist, name, headers, true).await
+    serve_segment(state, item, playlist, name, headers, "video", true).await
+}
+
+async fn audio_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(state, item, playlist, name, headers, "audio", false).await
+}
+
+async fn head_audio_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist, name)): RoutePath<(String, String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_segment(state, item, playlist, name, headers, "audio", true).await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/Videos/{item_id}/main.m3u8", get(video_main))
         .route("/Videos/{item_id}/master.m3u8", get(video_master))
+        .route("/Audio/{item_id}/main.m3u8", get(audio_main))
+        .route("/Audio/{item_id}/master.m3u8", get(audio_master))
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
-            get(video_segment).head(head_segment),
+            get(video_segment).head(head_video_segment),
+        )
+        .route(
+            "/Audio/{item_id}/hls1/{playlist_id}/{segment_name}",
+            get(audio_segment).head(head_audio_segment),
         )
 }
 
@@ -363,6 +407,7 @@ mod tests {
             registry.publish(Arc::new(Published {
                 id: format!("playlist-{index}"),
                 item: "media-1".to_owned(),
+                kind: "video",
                 digest,
                 source: PathBuf::from("/private/media-1"),
                 private_root: root,
@@ -370,30 +415,31 @@ mod tests {
                 segments: Vec::new(),
             }));
         }
-        assert!(registry.lookup("playlist-0", "media-1", owner).is_some());
-        assert!(registry.lookup("playlist-0", "media-2", owner).is_none());
+        assert!(registry.lookup("playlist-0", "media-1", "video", owner).is_some());
+        assert!(registry.lookup("playlist-0", "media-2", "video", owner).is_none());
         assert!(
             registry
-                .lookup("playlist-0", "media-1", "other-token")
+                .lookup("playlist-0", "media-1", "video", "other-token")
                 .is_none()
         );
-        let in_flight = registry.lookup("playlist-0", "media-1", owner).unwrap();
+        let in_flight = registry.lookup("playlist-0", "media-1", "video", owner).unwrap();
         let fourth_root = temp.path().join("session-3");
         fs::create_dir(&fourth_root).unwrap();
         registry.publish(Arc::new(Published {
             id: "playlist-3".to_owned(),
             item: "media-1".to_owned(),
+            kind: "video",
             digest,
             source: PathBuf::from("/private/media-1"),
             private_root: fourth_root.clone(),
             media_playlist: String::new(),
             segments: Vec::new(),
         }));
-        assert!(registry.lookup("playlist-0", "media-1", owner).is_none());
+        assert!(registry.lookup("playlist-0", "media-1", "video", owner).is_none());
         assert!(first_root.exists());
         drop(in_flight);
         assert!(!first_root.exists());
-        assert!(registry.lookup("playlist-3", "media-1", owner).is_some());
+        assert!(registry.lookup("playlist-3", "media-1", "video", owner).is_some());
         drop(registry);
         for index in 1..=3 {
             assert!(!temp.path().join(format!("session-{index}")).exists());
