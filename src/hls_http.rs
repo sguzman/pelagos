@@ -73,6 +73,7 @@ struct CacheLookup<'a> {
 #[derive(Debug)]
 pub struct HlsRegistry {
     jobs: Semaphore,
+    waiters: Semaphore,
     controller: TranscodeController,
     entries: Mutex<VecDeque<Arc<Published>>>,
 }
@@ -80,6 +81,7 @@ impl HlsRegistry {
     pub fn new(executable: PathBuf) -> Self {
         Self {
             jobs: Semaphore::new(1),
+            waiters: Semaphore::new(4),
             controller: TranscodeController::new(
                 executable,
                 1,
@@ -89,6 +91,26 @@ impl HlsRegistry {
             .expect("constant HLS worker limits"),
             entries: Mutex::new(VecDeque::new()),
         }
+    }
+
+    /// Join at most four ongoing HLS publication requests. Once the first
+    /// worker publishes, a waiter rechecks its exact cache key before
+    /// considering any additional FFmpeg work. Cancellation releases both
+    /// admission permits without a background worker or unbounded queue.
+    async fn acquire_generation(&self) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
+        if let Ok(permit) = self.jobs.try_acquire() {
+            return Ok(permit);
+        }
+        let queued = self
+            .waiters
+            .try_acquire()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+        let permit = tokio::time::timeout(Duration::from_secs(120), self.jobs.acquire())
+            .await
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        drop(queued);
+        Ok(permit)
     }
 
     fn lookup(&self, id: &str, item: &str, kind: &str, token: &str) -> Option<Arc<Published>> {
@@ -274,10 +296,7 @@ async fn generate_hls_playlist(
         }));
     }
     // Admission is reserved before touching any private output path.
-    let _permit = registry
-        .jobs
-        .try_acquire()
-        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    let _permit = registry.acquire_generation().await?;
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
     if let Some(existing) = registry.cached(&cache_key) {
