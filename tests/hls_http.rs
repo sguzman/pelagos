@@ -1184,6 +1184,26 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     assert_ne!(alice_master, bob_master);
     assert_eq!(alice_master.matches("#EXT-X-STREAM-INF:").count(), 2);
     assert_eq!(bob_master.matches("#EXT-X-STREAM-INF:").count(), 2);
+    let pinned_source_route =
+        format!("{route}&mediaSourceId={item}&enableAdaptiveBitrateStreaming=true");
+    assert_eq!(
+        text_body(request(&app, "GET", &pinned_source_route, Some(&alice)).await).await,
+        alice_master
+    );
+    let mismatched_source = format!("{route}&mediaSourceId=unknown-source");
+    assert_eq!(
+        request(&app, "GET", &mismatched_source, Some(&alice))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let contradicted_adaptive = format!("{route}&enableAdaptiveBitrateStreaming=false");
+    assert_eq!(
+        request(&app, "GET", &contradicted_adaptive, Some(&alice))
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
     for (client_index, (owner, other, master)) in
         [(&alice, &bob, &alice_master), (&bob, &alice, &bob_master)]
             .into_iter()
@@ -1384,6 +1404,18 @@ async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switc
     let master = text_body(response).await;
     assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 3);
     assert!(!master.contains("RESOLUTION="));
+    let valid_source = format!("{route}&mediaSourceId={item}");
+    assert_eq!(
+        text_body(request(&app, "GET", &valid_source, Some(&listener)).await).await,
+        master
+    );
+    let invalid_source = format!("{route}&mediaSourceId=invalid-source");
+    assert_eq!(
+        request(&app, "GET", &invalid_source, Some(&listener))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     assert!(!master.contains(&listener));
     let bandwidths = master
         .lines()
@@ -1468,7 +1500,13 @@ async fn adaptive_audio_hls_advertises_measured_ladder_and_decodes_variant_switc
     // Complete the bounded 2–4 audio ladder matrix with real FFmpeg
     // transports, measured bitrate ordering and private HTTP access.
     for count in [2_u8, 4] {
-        let variant_route = format!("/Audio/{item}/master.m3u8?segmentLength=2&renditions={count}");
+        let variant_route = if count == 2 {
+            format!(
+                "/Audio/{item}/master.m3u8?segmentLength=2&mediaSourceId={item}&enableAdaptiveBitrateStreaming=true"
+            )
+        } else {
+            format!("/Audio/{item}/master.m3u8?segmentLength=2&renditions={count}")
+        };
         let response = request(&app, "GET", &variant_route, Some(&listener)).await;
         assert_eq!(response.status(), StatusCode::OK);
         let body = text_body(response).await;
