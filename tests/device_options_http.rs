@@ -175,7 +175,7 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
     assert_eq!(options["CustomName"], "Den");
     assert_eq!(options["DeviceId"], "smart-tv");
     assert_eq!(options["Id"], numeric_id);
-    auth::authenticate_with_client(
+    let relogged = auth::authenticate_with_client(
         &state,
         "viewer",
         "device-options-viewer-password",
@@ -189,6 +189,8 @@ async fn administrator_device_name_update_is_durable_and_does_not_change_identit
     )
     .unwrap()
     .unwrap();
+    assert_eq!(relogged.session_info.device_name.as_deref(), Some("Den"));
+    assert!(relogged.session_info.has_custom_device_name);
     let relogged_options = response_json(
         call(
             &restarted,
