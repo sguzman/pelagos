@@ -3087,6 +3087,28 @@
                 }
               ],
               "progress": 67
+            },
+            {
+              "id": "T517",
+              "emoji": "🔑",
+              "name": "Current-password-verified self-service account change with sibling-session revocation",
+              "checks": [
+                {
+                  "title": "Implement pinned POST /Users/Password self-account subset requiring CurrentPw and NewPw, with current-session preservation and other-session revocation in one authentication transaction",
+                  "passed": true,
+                  "evidence": "src/auth.rs change_own_password; src/auth_api.rs change_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword"
+                },
+                {
+                  "title": "Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login",
+                  "passed": true,
+                  "evidence": "GitHub Actions 40046475207: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned route/source gates passed"
+                },
+                {
+                  "title": "Full Jellyfin UpdateUserPassword semantics, concurrent reset/login adversarial acceptance and unmodified Jellyfin client behavior verified",
+                  "passed": false
+                }
+              ],
+              "progress": 67
             }
           ]
         },

@@ -2,7 +2,7 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 35%` across 156 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 35%` across 157 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
 ## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
 
@@ -565,11 +565,11 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
   - [ ] Production or real-client acceptance validates UPnP/SSDP and appropriate interoperability where offered by Jellyfin extensions
 
-## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 37%`
+## 🛡️ M5 — Administration, extensibility and migration — `████░░░░░░ 38%`
 
 **Gate:** An operator can manage the entire server, retain their data and install equivalent supported extensions.
 
-### 🛠️ P15 — Admin and accounts — `█████░░░░░ 53%`
+### 🛠️ P15 — Admin and accounts — `█████░░░░░ 54%`
 
 - 🧭 **T500 — Complete Rust-driven admin frontend** — `░░░░░░░░░░ 0%`
   - [ ] Implement admin features with responsive desktop/mobile navigation
@@ -627,6 +627,10 @@
   - [x] Implement restricted pinned POST Users/{userId}/Password with elevated account reset, Argon2 replacement and atomic invalidation of existing access tokens, while protecting administrator passwords — src/auth.rs reset_ordinary_user_password; src/auth_api.rs admin_reset_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword
   - [x] Rust CI verifies anonymous/member denial, administrator protection, short password and unsupported reset-option rejection, token revocation, old/new credential behavior, stable account IDs and restart — GitHub Actions 40045690959: full Rust unit/HTTP suites, formatting, Clippy, source matrix and progress-ledger checks passed
   - [ ] Full Jellyfin UpdateUserPassword semantics, user current-password flows, recovery and unmodified real client acceptance
+- 🔑 **T517 — Current-password-verified self-service account change with sibling-session revocation** — `███████░░░ 67%`
+  - [x] Implement pinned POST /Users/Password self-account subset requiring CurrentPw and NewPw, with current-session preservation and other-session revocation in one authentication transaction — src/auth.rs change_own_password; src/auth_api.rs change_password; pinned Jellyfin v12.3 UserController.UpdateUserPassword
+  - [x] Rust CI checks wrong/absent credentials, cross-account denial, forbidden passwordless reset, password length validation, admin self-change, revoked tokens, and old/new password login — GitHub Actions 40046475207: full Rust HTTP/unit tests, cargo fmt, Clippy, roadmap and pinned route/source gates passed
+  - [ ] Full Jellyfin UpdateUserPassword semantics, concurrent reset/login adversarial acceptance and unmodified Jellyfin client behavior verified
 
 ### 🔌 P16 — Plugins and integrations — `░░░░░░░░░░ 0%`
 
