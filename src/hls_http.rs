@@ -731,7 +731,7 @@ mod tests {
             "server".to_owned(),
             state_dir.clone(),
         ));
-        let authorize = || {
+        assert_eq!(
             reauthorize_publication(
                 &state,
                 &headers,
@@ -742,8 +742,9 @@ mod tests {
                 original.len(),
                 original.modified().ok(),
             )
-        };
-        assert_eq!(authorize().await, Ok(()));
+            .await,
+            Ok(())
+        );
 
         // Pause a request in the same one-worker admission gate as the HLS
         // encoder. Revoking its library grant while queued must survive the
