@@ -278,6 +278,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_ass_probe_fails_closed_when_extradata_is_absent_or_probe_fails() {
+        let (_dir, probe, media) = fake_probe(
+            r#"printf '%s' '{"streams":[{"index":1,"codec_name":"ass"}]}'"#,
+        );
+        assert!(
+            native_ass_stream_indices(&media, &probe)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let (_dir, probe, media) = fake_probe("echo malformed-json");
+        assert!(native_ass_stream_indices(&media, &probe).await.is_err());
+    }
+
+    #[tokio::test]
     async fn probes_synthetic_json_without_executing_media_path() {
         let (_dir, exe, media) = fake_probe(
             r#"printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264"}],"format":{"format_name":"mov,mp4"},"chapters":[]}'"#,
