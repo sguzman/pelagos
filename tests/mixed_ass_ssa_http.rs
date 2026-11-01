@@ -58,33 +58,42 @@ async fn same_matroska_ass_codec_is_not_confused_between_script_versions() {
     let movie = root.join("Mixed.mkv");
     let ffmpeg = Command::new("ffmpeg")
         .args([
-            "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-            "-i", "color=s=32x32:r=5:d=5", "-i",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=s=32x32:r=5:d=5",
+            "-i",
         ])
         .arg(&ass)
         .arg("-i")
         .arg(&ssa)
         .args([
-            "-map", "0:v:0", "-map", "1:s:0", "-map", "2:s:0",
-            "-c:v", "mpeg4", "-c:s", "ass", "-y",
+            "-map", "0:v:0", "-map", "1:s:0", "-map", "2:s:0", "-c:v", "mpeg4", "-c:s", "ass", "-y",
         ])
         .arg(&movie)
         .output()
         .unwrap();
-    assert!(ffmpeg.status.success(), "{}", String::from_utf8_lossy(&ffmpeg.stderr));
+    assert!(
+        ffmpeg.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ffmpeg.stderr)
+    );
     let original = fs::read(&movie).unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "mixed-ass-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "mixed-ass-viewer-password").unwrap();
-    let token = auth::authenticate(
-        &state_dir, "viewer", "mixed-ass-viewer-password", "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
+    let token = auth::authenticate(&state_dir, "viewer", "mixed-ass-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state_dir, "viewer", &root).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(), state_dir.clone(),
+        "server".to_owned(),
+        state_dir.clone(),
     )));
     let items = get(&app, "/Items", Some(&token)).await;
     assert_eq!(items.status(), StatusCode::OK);
@@ -103,17 +112,17 @@ async fn same_matroska_ass_codec_is_not_confused_between_script_versions() {
         .collect::<Vec<_>>();
     assert_eq!(subs.len(), 2);
     let mut indices = Vec::new();
-    for (position, ext, marker) in [
-        (0, "ass", "ASS track"),
-        (1, "ssa", "SSA track"),
-    ] {
+    for (position, ext, marker) in [(0, "ass", "ASS track"), (1, "ssa", "SSA track")] {
         let stream = subs[position];
         assert_eq!(stream["Codec"], "ass");
         let index = stream["Index"].as_i64().unwrap();
         indices.push(index);
         let url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.{ext}");
         assert_eq!(stream["DeliveryUrl"].as_str(), Some(url.as_str()));
-        assert_eq!(get(&app, &url, None).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            get(&app, &url, None).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
         let response = get(&app, &url, Some(&token)).await;
         assert_eq!(response.status(), StatusCode::OK);
         let payload = to_bytes(response.into_body(), 65_536).await.unwrap();
