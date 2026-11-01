@@ -11,6 +11,7 @@ fn pelagos_process_gracefully_exits_on_sigint_and_sigterm() {
 #[cfg(target_os = "linux")]
 fn run_child_signal(signal: &str) {
     use std::{
+        io::Read,
         net::{SocketAddr, TcpListener, TcpStream},
         process::{Command, Stdio},
         thread,
@@ -27,7 +28,8 @@ fn run_child_signal(signal: &str) {
         .arg("--state-dir")
         .arg(fixture.path())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
+        .env("RUST_LOG", "pelagos=info")
         .spawn()
         .unwrap();
     let address: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
@@ -65,4 +67,14 @@ fn run_child_signal(signal: &str) {
         panic!("Pelagos did not gracefully exit after {signal}");
     }
     assert!(stopped.unwrap().success());
+    let mut logs = String::new();
+    child.stderr.take().unwrap().read_to_string(&mut logs).unwrap();
+    assert!(
+        logs.contains("Pelagos listening") && logs.contains(&format!("listening_address={address}")),
+        "missing startup address/diagnostics after {signal}: {logs}"
+    );
+    assert!(
+        logs.contains("shutdown signal received, draining active HTTP responses"),
+        "missing graceful drain event after {signal}: {logs}"
+    );
 }
