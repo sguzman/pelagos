@@ -14,11 +14,26 @@ use axum::{
     routing::get,
 };
 use serde::Serialize;
-use std::{io::Read, path::Path, sync::Arc};
+use std::{
+    io::Read,
+    path::Path,
+    sync::{Arc, OnceLock},
+};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const MAX_FONT_COUNT: usize = 64;
 const MAX_DIRECTORY_ENTRIES: usize = 256;
 const MAX_TOTAL_BYTES: u64 = 20 * 1024 * 1024;
+const MAX_SCANNED_BYTES: u64 = 64 * 1024 * 1024;
+static FONT_READ_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+
+fn font_read_permit() -> Result<OwnedSemaphorePermit, StatusCode> {
+    FONT_READ_WORKERS
+        .get_or_init(|| Arc::new(Semaphore::new(2)))
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)
+}
 
 #[derive(Clone)]
 struct FontInfo {
@@ -108,6 +123,7 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
     names.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     let mut listed = Vec::new();
     let mut total = 0_u64;
+    let mut scanned = 0_u64;
     for (name, mime) in names {
         if listed.len() >= MAX_FONT_COUNT {
             break;
@@ -116,6 +132,13 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
             continue;
         };
         if size < 12 || size > attachments::MAX_FONT_BYTES as u64 {
+            continue;
+        }
+        scanned = scanned.checked_add(size).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        if scanned > MAX_SCANNED_BYTES {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        if total.saturating_add(size) > MAX_TOTAL_BYTES {
             continue;
         }
         let mut bytes = Vec::new();
@@ -148,6 +171,7 @@ async fn fallback_font_list(
     let Some(root) = state.fallback_font_dir().map(Path::to_path_buf) else {
         return Ok(Json(Vec::new()));
     };
+    let _permit = font_read_permit()?;
     let fonts = tokio::task::spawn_blocking(move || available(&root))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
@@ -168,6 +192,7 @@ async fn serve_font(
         .fallback_font_dir()
         .map(Path::to_path_buf)
         .ok_or(StatusCode::NOT_FOUND)?;
+    let _permit = font_read_permit()?;
     let (data, mime) = tokio::task::spawn_blocking(move || {
         let font = available(&root)?
             .into_iter()
