@@ -1233,6 +1233,10 @@ mod tests {
     fn auth_schema_upgrade_is_atomic_preserves_legacy_users_and_rejects_future_versions() {
         let dir = tempfile::tempdir().unwrap();
         let admin = create_user(dir.path(), "admin", "safe-migration-test-password").unwrap();
+        let token = authenticate(dir.path(), "admin", "safe-migration-test-password", "server")
+            .unwrap()
+            .unwrap()
+            .access_token;
         let path = dir.path().join(DB_NAME);
         let old = Connection::open(&path).unwrap();
         assert_eq!(
@@ -1258,6 +1262,13 @@ mod tests {
             )
             .unwrap();
         assert_eq!(id, admin.id);
+        assert_eq!(
+            identify(dir.path(), &token, "server")
+                .unwrap()
+                .unwrap()
+                .id,
+            admin.id
+        );
         upgraded.execute_batch("PRAGMA user_version=2;").unwrap();
         drop(upgraded);
         assert!(database(dir.path()).is_err());
@@ -1268,6 +1279,41 @@ mod tests {
                 .unwrap(),
             2
         );
+    }
+
+    #[test]
+    fn interrupted_auth_schema_transaction_recovers_without_half_created_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_NAME);
+        let interrupted = Connection::open(&path).unwrap();
+        interrupted
+            .execute_batch(
+                "BEGIN IMMEDIATE;
+                 CREATE TABLE pelagos_users(id TEXT PRIMARY KEY);
+                 PRAGMA user_version=1;",
+            )
+            .unwrap();
+        // Simulate a killed process before COMMIT; SQLite must roll back
+        // the schema and its version marker when the connection disappears.
+        drop(interrupted);
+        let db = database(dir.path()).unwrap();
+        assert_eq!(
+            db.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            AUTH_SCHEMA_VERSION
+        );
+        let user_columns: i64 = db
+            .query_row("SELECT COUNT(*) FROM pragma_table_info('pelagos_users')", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(user_columns, 6);
+        let session_columns: i64 = db
+            .query_row("SELECT COUNT(*) FROM pragma_table_info('pelagos_sessions')", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(session_columns, 6);
     }
 
     #[test]
