@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
+use tokio::io::AsyncReadExt;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Deserialize, Default)]
@@ -988,6 +989,62 @@ async fn post_playback(
     playback_info(state, item_id, headers, query.apply(body)).await
 }
 
+// Narrow UTF-8 SRT -> WebVTT normalization for ordinary numbered/unnumbered
+// cues. Refuse advanced timing syntax rather than returning malformed VTT.
+fn srt_timestamp(value: &str) -> Option<String> {
+    let (time, milliseconds) = value.split_once(',')?;
+    let mut fields = time.split(':');
+    let (hours, minutes, seconds) = (fields.next()?, fields.next()?, fields.next()?);
+    if fields.next().is_some()
+        || !(2..=3).contains(&hours.len())
+        || minutes.len() != 2
+        || seconds.len() != 2
+        || milliseconds.len() != 3
+        || ![hours, minutes, seconds, milliseconds]
+            .iter()
+            .all(|value| value.bytes().all(|byte| byte.is_ascii_digit()))
+        || minutes.parse::<u8>().ok()? > 59
+        || seconds.parse::<u8>().ok()? > 59
+    {
+        return None;
+    }
+    Some(format!("{hours}:{minutes}:{seconds}.{milliseconds}"))
+}
+
+fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
+    let input = std::str::from_utf8(source).ok()?.trim_start_matches('\u{feff}');
+    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
+    let mut output = String::from("WEBVTT\n\n");
+    let mut count = 0_u32;
+    for block in normalized.split("\n\n").filter(|part| !part.trim().is_empty()) {
+        let mut lines = block.lines();
+        let first = lines.next()?.trim();
+        let cue = if first.bytes().all(|byte| byte.is_ascii_digit()) && !first.is_empty() {
+            lines.next()?.trim()
+        } else {
+            first
+        };
+        let (begin, end) = cue.split_once(" --> ")?;
+        let start = srt_timestamp(begin.trim())?;
+        let finish = srt_timestamp(end.trim())?;
+        let text = lines.collect::<Vec<_>>().join("\n");
+        if text.trim().is_empty() {
+            return None;
+        }
+        output.push_str(&start);
+        output.push_str(" --> ");
+        output.push_str(&finish);
+        output.push('\n');
+        output.push_str(text.trim_end());
+        output.push_str("\n\n");
+        count += 1;
+        if output.len() > 4 * 1024 * 1024 + 4096 || count > 100_000 {
+            return None;
+        }
+    }
+    (count > 0).then(|| output.into_bytes())
+}
+
 // Only identity subtitle requests are supported. Timestamp conversion,
 // subtitle transcoding, and graphical subtitles need separate implementations.
 async fn serve_external_subtitle(
@@ -1014,11 +1071,16 @@ async fn serve_external_subtitle(
     let sidecar = tokio::task::spawn_blocking(move || {
         external_subtitles(&discovered_source, &report)
             .into_iter()
-            .find(|sidecar| sidecar.index == index && sidecar.format == format)
+            .find(|sidecar| {
+                sidecar.index == index
+                    && (sidecar.format == format
+                        || (sidecar.format == "srt" && format == "vtt"))
+            })
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     .ok_or(StatusCode::NOT_FOUND)?;
+    let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
     let (opened, _, size) = tokio::task::spawn_blocking(move || {
@@ -1029,13 +1091,30 @@ async fn serve_external_subtitle(
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let mut response = if head {
-        Response::new(Body::empty())
+    let (body, response_length) = if convert_to_vtt {
+        // Compute identical payload length for GET and HEAD; never touch
+        // or rewrite the user's adjacent subtitle file.
+        let mut bytes = Vec::new();
+        tokio::fs::File::from_std(opened)
+            .take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if bytes.len() > 4 * 1024 * 1024 {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let converted = convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        let length = converted.len() as u64;
+        (if head { Body::empty() } else { Body::from(converted) }, length)
     } else {
-        Response::new(Body::from_stream(ReaderStream::new(
-            tokio::fs::File::from_std(opened),
-        )))
+        let body = if head {
+            Body::empty()
+        } else {
+            Body::from_stream(ReaderStream::new(tokio::fs::File::from_std(opened)))
+        };
+        (body, size)
     };
+    let mut response = Response::new(body);
     response.headers_mut().insert(
         CONTENT_TYPE,
         HeaderValue::from_static(if format == "vtt" {
@@ -1049,7 +1128,8 @@ async fn serve_external_subtitle(
         .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     response.headers_mut().insert(
         CONTENT_LENGTH,
-        HeaderValue::from_str(&size.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        HeaderValue::from_str(&response_length.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
     Ok(response)
 }
@@ -1314,6 +1394,19 @@ mod tests {
         report.format = None;
         let unknown = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
         assert_eq!(unknown.bitrate, None);
+    }
+
+    #[test]
+    fn bounded_srt_to_webvtt_preserves_cues_and_rejects_bad_timestamps() {
+        let input = b"\xEF\xBB\xBF1\r\n00:00:01,000 --> 00:00:02,500\r\nHello!\r\n\r\n2\r\n00:01:00,050 --> 00:01:01,000\r\nBye\r\n";
+        let converted = convert_srt_to_webvtt(input).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&converted).unwrap(),
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello!\n\n00:01:00.050 --> 00:01:01.000\nBye\n\n"
+        );
+        assert!(convert_srt_to_webvtt(b"1\n00:00:70,000 --> 00:00:02,000\ninvalid\n").is_none());
+        assert!(convert_srt_to_webvtt(b"not a timestamp\ninvalid\n").is_none());
+        assert!(convert_srt_to_webvtt(&[0xFF, 0xFF]).is_none());
     }
 
     #[test]
