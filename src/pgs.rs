@@ -152,7 +152,7 @@ mod tests {
         extra.extend_from_slice(b"bad");
         assert!(!packets_valid(&mut extra.as_slice(), extra.len() as u64));
         let mut bad_header = bytes.clone();
-        bad_header[2] = b'X';
+        bad_header[0] = b'X';
         assert!(!packets_valid(
             &mut bad_header.as_slice(),
             bad_header.len() as u64
