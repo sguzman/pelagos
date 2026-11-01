@@ -1029,13 +1029,23 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     let response = request(&app, "GET", &mapped_url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
     let mapped_bytes = to_bytes(response.into_body(), 1024).await.unwrap();
-    assert!(std::str::from_utf8(&mapped_bytes)
-        .unwrap()
-        .starts_with("WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n"));
+    assert!(
+        std::str::from_utf8(&mapped_bytes)
+            .unwrap()
+            .starts_with("WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n")
+    );
     let response = request(&app, "HEAD", &mapped_url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_LENGTH], mapped_bytes.len().to_string());
-    assert!(to_bytes(response.into_body(), 1024).await.unwrap().is_empty());
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH],
+        mapped_bytes.len().to_string()
+    );
+    assert!(
+        to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     for (parameters, expected) in [
         ("startPositionTicks=10000000", StatusCode::NOT_IMPLEMENTED),
         ("endPositionTicks=10000000", StatusCode::NOT_IMPLEMENTED),
@@ -1044,12 +1054,26 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         ("startPositionTicks=-1", StatusCode::BAD_REQUEST),
     ] {
         assert_eq!(
-            request(&app, "GET", &format!("{converted_url}?{parameters}"), Some(&viewer), "").await.status(),
+            request(
+                &app,
+                "GET",
+                &format!("{converted_url}?{parameters}"),
+                Some(&viewer),
+                ""
+            )
+            .await
+            .status(),
             expected
         );
     }
-    let override_zero = format!("/Videos/{item}/{item}/Subtitles/2/1/Stream.vtt?startPositionTicks=0");
-    assert_eq!(request(&app, "GET", &override_zero, Some(&viewer), "").await.status(), StatusCode::OK);
+    let override_zero =
+        format!("/Videos/{item}/{item}/Subtitles/2/1/Stream.vtt?startPositionTicks=0");
+    assert_eq!(
+        request(&app, "GET", &override_zero, Some(&viewer), "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(
         vtt_url,

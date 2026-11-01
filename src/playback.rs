@@ -1366,7 +1366,11 @@ async fn subtitle_response(
         .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
         let mapped = add_vtt_timestamp_map(&payload)?;
         let length = mapped.len();
-        *response.body_mut() = if head { Body::empty() } else { Body::from(mapped) };
+        *response.body_mut() = if head {
+            Body::empty()
+        } else {
+            Body::from(mapped)
+        };
         response.headers_mut().insert(
             CONTENT_LENGTH,
             HeaderValue::from_str(&length.to_string())
@@ -1382,7 +1386,15 @@ async fn get_external_srt(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "srt", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "srt",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_external_srt(
@@ -1391,7 +1403,15 @@ async fn head_external_srt(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "srt", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "srt",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 async fn get_external_vtt(
@@ -1400,7 +1420,15 @@ async fn get_external_vtt(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "vtt",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_external_vtt(
@@ -1409,7 +1437,15 @@ async fn head_external_vtt(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "vtt",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 async fn get_timed_srt(
@@ -1758,15 +1794,29 @@ mod tests {
         let query: SubtitleQuery = serde_json::from_value(json!({
             "startPositionTicks": 0, "copyTimestamps": true,
             "addVttTimeMap": true, "mediaSourceId": "item"
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(query.validate("item", "item", 2, "vtt", 99), Ok(true));
-        assert_eq!(query.validate("item", "item", 2, "srt", 0), Err(StatusCode::NOT_IMPLEMENTED));
-        let invalid: SubtitleQuery = serde_json::from_value(json!({"endPositionTicks": 100})).unwrap();
-        assert_eq!(invalid.validate("item", "item", 2, "vtt", 0), Err(StatusCode::NOT_IMPLEMENTED));
-        let negative: SubtitleQuery = serde_json::from_value(json!({"startPositionTicks": -1})).unwrap();
-        assert_eq!(negative.validate("item", "item", 2, "vtt", 0), Err(StatusCode::BAD_REQUEST));
-        assert_eq!(add_vtt_timestamp_map(b"WEBVTT\n\nCue").unwrap(),
-            b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\nCue");
+        assert_eq!(
+            query.validate("item", "item", 2, "srt", 0),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        let invalid: SubtitleQuery =
+            serde_json::from_value(json!({"endPositionTicks": 100})).unwrap();
+        assert_eq!(
+            invalid.validate("item", "item", 2, "vtt", 0),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        let negative: SubtitleQuery =
+            serde_json::from_value(json!({"startPositionTicks": -1})).unwrap();
+        assert_eq!(
+            negative.validate("item", "item", 2, "vtt", 0),
+            Err(StatusCode::BAD_REQUEST)
+        );
+        assert_eq!(
+            add_vtt_timestamp_map(b"WEBVTT\n\nCue").unwrap(),
+            b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\nCue"
+        );
     }
 
     #[test]
