@@ -989,18 +989,25 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         response.headers()[header::CONTENT_LENGTH],
         webvtt.len().to_string()
     );
+    let srt_from_vtt = format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt");
+    let response = request(&app, "GET", &srt_from_vtt, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        request(
-            &app,
-            "GET",
-            &format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt"),
-            Some(&viewer),
-            ""
-        )
-        .await
-        .status(),
-        StatusCode::NOT_FOUND
+        response.headers()[header::CONTENT_TYPE],
+        "application/x-subrip"
     );
+    let bytes = to_bytes(response.into_body(), 4096).await.unwrap();
+    assert_eq!(
+        bytes.as_ref(),
+        b"1\n00:00:01,000 --> 00:00:02,000\nBonjour!\n\n"
+    );
+    let response = request(&app, "HEAD", &srt_from_vtt, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH],
+        bytes.len().to_string()
+    );
+    assert!(to_bytes(response.into_body(), 64).await.unwrap().is_empty());
     // Pinned subtitle HLS routes publish bounded segments only for
     // authenticated, selected native text sources; a client must forward
     // its authorization header to nested segment requests.
