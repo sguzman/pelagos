@@ -109,6 +109,50 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     // the known SRT conversion remains the truthful default.
     let srt = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
     assert_eq!(stream["DeliveryUrl"].as_str(), Some(srt.as_str()));
+    // Device format negotiation must not upgrade legacy SSA to a false
+    // native ASS offer even though FFprobe calls its source codec "ass".
+    for (format, expected) in [
+        ("ass", StatusCode::NOT_IMPLEMENTED),
+        ("srt", StatusCode::OK),
+        ("webvtt", StatusCode::OK),
+    ] {
+        let body = serde_json::json!({
+            "SubtitleStreamIndex": index,
+            "DeviceProfile": {
+                "DirectPlayProfiles": [
+                    {"Type":"Video","Container":"mkv","VideoCodec":"mpeg4"}
+                ],
+                "SubtitleProfiles": [{"Method":"External","Format":format}]
+            }
+        });
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/Items/{id}/PlaybackInfo"))
+            .header("Content-Type", "application/json")
+            .header("X-Emby-Token", token.as_str())
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(response.status(), expected, "{format}");
+        if expected == StatusCode::OK {
+            let info: serde_json::Value = serde_json::from_slice(
+                &to_bytes(response.into_body(), 65_536).await.unwrap()
+            )
+            .unwrap();
+            let selected = info["MediaSources"][0]["MediaStreams"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|stream| stream["Index"] == index)
+                .unwrap();
+            let extension = if format == "webvtt" { "vtt" } else { "srt" };
+            assert_eq!(
+                selected["DeliveryUrl"],
+                format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.{extension}")
+            );
+            assert_eq!(selected["Codec"], "ass");
+        }
+    }
     let ass = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.ass");
     assert_eq!(
         request(&app, &ass, None).await.status(),
