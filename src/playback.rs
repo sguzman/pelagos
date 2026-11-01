@@ -2058,10 +2058,7 @@ mod tests {
         );
         source.default_subtitle_stream_index = None;
         assert_eq!(
-            profile_allows_external_subtitles(
-                &[json!({"Method":"Embed","Format":"srt"})],
-                &source
-            ),
+            profile_allows_external_subtitles(&[json!({"Method":"Embed","Format":"srt"})], &source),
             Ok(true)
         );
     }
