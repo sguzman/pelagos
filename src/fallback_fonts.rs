@@ -14,11 +14,7 @@ use axum::{
     routing::get,
 };
 use serde::Serialize;
-use std::{
-    io::Read,
-    path::Path,
-    sync::Arc,
-};
+use std::{io::Read, path::Path, sync::Arc};
 
 const MAX_FONT_COUNT: usize = 64;
 const MAX_DIRECTORY_ENTRIES: usize = 256;
@@ -61,7 +57,9 @@ fn safe_name(name: &str) -> bool {
         && name != ".."
         && name.trim() == name
         && !name.ends_with('.')
-        && !name.chars().any(|ch| ch.is_control() || "/\\:<>\"|?*".contains(ch))
+        && !name
+            .chars()
+            .any(|ch| ch.is_control() || "/\\:<>\"|?*".contains(ch))
 }
 
 fn mime_for_name(name: &str) -> Option<&'static str> {
@@ -183,9 +181,7 @@ async fn serve_font(
         file.take(attachments::MAX_FONT_BYTES as u64 + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| StatusCode::NOT_FOUND)?;
-        if bytes.len() as u64 != size
-            || !attachments::font_header_matches(font.mime, &bytes)
-        {
+        if bytes.len() as u64 != size || !attachments::font_header_matches(font.mime, &bytes) {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         Ok::<_, StatusCode>((bytes, font.mime))
@@ -198,19 +194,17 @@ async fn serve_font(
     } else {
         Body::from(data)
     });
-    response.headers_mut().insert(
-        CONTENT_TYPE,
-        HeaderValue::from_static(mime),
-    );
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static(mime));
     response.headers_mut().insert(
         CONTENT_LENGTH,
         HeaderValue::from_str(&length.to_string())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
-    response.headers_mut().insert(
-        CACHE_CONTROL,
-        HeaderValue::from_static("private, no-store"),
-    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     response.headers_mut().insert(
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
@@ -248,8 +242,17 @@ mod tests {
     fn permits_only_simple_font_names_and_four_known_file_types() {
         assert!(safe_name("Noto Sans CJK.woff2"));
         assert!(safe_name("Fuente_Ágil.ttf"));
-        for invalid in ["", ".", "..", "../secret.ttf", "C:\\secret.ttf", "font\n.ttf",
-                        "foo.ttf/", "trailing.otf.", "double//slash.otf"] {
+        for invalid in [
+            "",
+            ".",
+            "..",
+            "../secret.ttf",
+            "C:\\secret.ttf",
+            "font\n.ttf",
+            "foo.ttf/",
+            "trailing.otf.",
+            "double//slash.otf",
+        ] {
             assert!(!safe_name(invalid), "{invalid:?}");
         }
         assert_eq!(mime_for_name("font.TTF"), Some("font/ttf"));
