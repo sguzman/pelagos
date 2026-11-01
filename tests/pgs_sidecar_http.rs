@@ -108,6 +108,15 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .expect("completed ODS continuation");
     invalid_rle[continuation + 4] = 0;
     fs::write(root.join("Feature.ja.sup"), &invalid_rle).unwrap();
+    let mut crossing_row = PGS[..24].to_vec();
+    // This RLE object declares four valid image bytes and correct dimensions,
+    // but its colored run of three pixels crosses a two-pixel scanline.
+    crossing_row.extend_from_slice(&[
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 15, 0, 4, 0, 0xc0, 0, 0, 8, 0, 2, 0, 2,
+        0, 0x83, 7, 0xaa,
+    ]);
+    crossing_row.extend_from_slice(&PGS[24..]);
+    fs::write(root.join("Feature.ko.sup"), &crossing_row).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -145,7 +154,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .iter()
         .filter(|stream| stream["Codec"] == "pgssub")
         .collect::<Vec<_>>();
-    assert_eq!(pgs.len(), 6);
+    assert_eq!(pgs.len(), 7);
     assert!(
         pgs.iter()
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
@@ -316,7 +325,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         to_bytes(complete.into_body(), 1024).await.unwrap().as_ref(),
         completed_object.as_slice()
     );
-    for language in ["fr", "de", "pt", "ja"] {
+    for language in ["fr", "de", "pt", "ja", "ko"] {
         let invalid_index = pgs
             .iter()
             .find(|track| track["Language"] == language)
@@ -355,6 +364,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         completed_object
     );
     assert_eq!(fs::read(root.join("Feature.ja.sup")).unwrap(), invalid_rle);
+    assert_eq!(fs::read(root.join("Feature.ko.sup")).unwrap(), crossing_row);
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
