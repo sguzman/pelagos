@@ -1628,8 +1628,7 @@ async fn serve_external_subtitle(
     }
     let sidecar = sidecar.ok_or(StatusCode::NOT_FOUND)?;
     let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
-    let convert_script = matches!(sidecar.format, "ass" | "ssa")
-        && matches!(format, "srt" | "vtt");
+    let convert_script = matches!(sidecar.format, "ass" | "ssa") && matches!(format, "srt" | "vtt");
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
     let (opened, _, size) = tokio::task::spawn_blocking(move || {
