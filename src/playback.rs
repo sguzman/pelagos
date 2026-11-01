@@ -2551,6 +2551,23 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn raw_pgs_packet_header_validation_is_bounded() {
+        let mut header = [0_u8; 13];
+        header[0..2].copy_from_slice(b"PG");
+        header[10] = 0x16;
+        header[12] = 2;
+        assert!(pgs_header_valid(&header, 15));
+        assert!(!pgs_header_valid(&header, 14));
+        header[10] = 0xff;
+        assert!(!pgs_header_valid(&header, 15));
+        header[10] = 0x80;
+        header[11..13].copy_from_slice(&0_u16.to_be_bytes());
+        assert!(pgs_header_valid(&header, 13));
+        header[0] = b'X';
+        assert!(!pgs_header_valid(&header, 13));
+    }
+
+    #[test]
     fn legacy_playback_query_overrides_posted_options() {
         let body: PlaybackRequest = serde_json::from_value(json!({
             "UserId": "u1", "EnableDirectPlay": false,
