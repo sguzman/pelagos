@@ -454,7 +454,7 @@ async fn reauthorize_publication(
     if kind != query.kind || source != query.source {
         return Err(StatusCode::NOT_FOUND);
     }
-    let metadata = tokio::fs::metadata(source)
+    let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     if metadata.len() != query.size || metadata.modified().ok() != query.modified {
