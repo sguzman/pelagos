@@ -3080,7 +3080,14 @@ mod tests {
             text.delivery_url.as_deref(),
             Some("/Videos/item/item/Subtitles/1/Stream.srt")
         );
-        assert_eq!(source.media_streams[2].delivery_url, None);
+        let graphical = &source.media_streams[2];
+        assert_eq!(graphical.delivery_method, Some("External"));
+        assert!(!graphical.is_text_subtitle_stream);
+        assert!(!graphical.is_external);
+        assert_eq!(
+            graphical.delivery_url.as_deref(),
+            Some("/Videos/item/item/Subtitles/2/Stream.pgssub")
+        );
         assert_eq!(source.media_streams[3].delivery_url, None);
         assert_eq!(
             source.media_streams[4].delivery_url.as_deref(),
@@ -3102,6 +3109,13 @@ mod tests {
                 &selected_source
             ),
             Ok(false)
+        );
+        assert_eq!(
+            profile_allows_external_subtitles(
+                &[json!({"Format":"pgssub","Method":"External"})],
+                &selected_source
+            ),
+            Ok(true)
         );
     }
 
