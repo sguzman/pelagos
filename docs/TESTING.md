@@ -33,6 +33,10 @@ The private catalog and authentication databases are separate from Jellyfin stat
 
 The synthetic `src/auth.rs` unit tests verify legacy user/token survival, rollback of an incompatible migration, rejection of unsupported future versions, and successful recovery after an uncommitted simulated upgrade. These are not guarantees of recovery from physical disk corruption or migration from arbitrary unknown authentication schemas, and they do not modify the user's existing Jellyfin installation.
 
+## Startup configuration validation
+
+See [CONFIGURATION.md](CONFIGURATION.md) for the optional XDG JSON schema, immutable settings, CLI overrides and isolated config subprocess tests.
+
 ## Lifecycle diagnostic evidence
 
 The isolated Linux `SIGINT`/`SIGTERM` process test captures only Pelagos' temporary child stderr and checks the structured startup listener address and graceful-drain event. It explicitly sets `RUST_LOG=pelagos=info` so the assertions are independent of the runner's logging environment. This is synthetic process-lifecycle evidence, not real service-manager deployment or a guarantee that all long-running streams drain before the 30-second bound.
