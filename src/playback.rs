@@ -2103,8 +2103,10 @@ async fn subtitle_playlist(
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     let discovered_file = file.clone();
     let discovered_item = item.clone();
-    let media = tokio::task::spawn_blocking(move || {
-        source_from_probe(&discovered_item, "video", &discovered_file, &report)
+    let (media, sidecars) = tokio::task::spawn_blocking(move || {
+        let sidecars = external_subtitles(&discovered_file, &report);
+        let media = source_from_probe(&discovered_item, "video", &discovered_file, &report);
+        (media, sidecars)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -2129,6 +2131,44 @@ async fn subtitle_playlist(
             })
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    // A filename extension is not proof that a script sidecar is
+    // convertible. Fail closed before advertising HLS segments for
+    // incomplete ASS/SSA scripts, using the same confined input path
+    // and bounded read as direct sidecar delivery.
+    if let Some(stream) = media.media_streams.iter().find(|stream| {
+        stream.index == index
+            && stream.is_external
+            && matches!(stream.codec.as_deref(), Some("ass" | "ssa"))
+    }) {
+        let sidecar = sidecars
+            .iter()
+            .find(|subtitle| subtitle.index == index)
+            .ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        let parent = file.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
+        let filename = sidecar.filename.clone();
+        let (opened, _, size) = tokio::task::spawn_blocking(move || {
+            streaming::open_confined(&parent, Path::new(&filename))
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+        if size > 4 * 1024 * 1024 {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let mut bytes = Vec::new();
+        tokio::fs::File::from_std(opened)
+            .take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        let valid = match stream.codec.as_deref() {
+            Some("ass") => probe::is_native_ass_script(&bytes),
+            Some("ssa") => probe::is_native_ssa_script(&bytes),
+            _ => false,
+        };
+        if bytes.len() > 4 * 1024 * 1024 || !valid {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
     }
     let mut text = format!(
         "#EXTM3U\n#EXT-X-TARGETDURATION:{segment_length}\n#EXT-X-VERSION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n"
