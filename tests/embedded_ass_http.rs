@@ -221,6 +221,76 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.{extension}")
         );
     }
+    // A client can report its subtitle format once and later use GET
+    // PlaybackInfo. That session profile must not leak to another token;
+    // a posted profile still takes precedence for this request.
+    let session_profile = serde_json::json!({
+        "DeviceProfile": {
+            "DirectPlayProfiles": [
+                {"Type":"Video","Container":"mkv","VideoCodec":"mpeg4"}
+            ],
+            "SubtitleProfiles": [
+                {"Method":"External","Format":"srt"}
+            ]
+        }
+    });
+    let report = Request::builder()
+        .method("POST")
+        .uri("/Sessions/Capabilities/Full")
+        .header("Content-Type", "application/json")
+        .header("X-Emby-Token", &viewer)
+        .body(Body::from(session_profile.to_string()))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(report).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let selected_url = format!("/Items/{id}/PlaybackInfo?subtitleStreamIndex={index}");
+    let viewer_playback = request(&app, "GET", &selected_url, Some(&viewer)).await;
+    assert_eq!(viewer_playback.status(), StatusCode::OK);
+    let viewer_info: serde_json::Value = serde_json::from_slice(
+        &to_bytes(viewer_playback.into_body(), 65_536).await.unwrap()
+    )
+    .unwrap();
+    let viewer_selected = viewer_info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|track| track["Index"] == index && track["Type"] == "Subtitle")
+        .unwrap();
+    assert_eq!(
+        viewer_selected["DeliveryUrl"],
+        format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt")
+    );
+    let admin_playback = request(&app, "GET", &selected_url, Some(&admin)).await;
+    assert_eq!(admin_playback.status(), StatusCode::OK);
+    let admin_info: serde_json::Value = serde_json::from_slice(
+        &to_bytes(admin_playback.into_body(), 65_536).await.unwrap()
+    )
+    .unwrap();
+    let admin_selected = admin_info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|track| track["Index"] == index && track["Type"] == "Subtitle")
+        .unwrap();
+    assert_eq!(admin_selected["DeliveryUrl"].as_str(), Some(url.as_str()));
+    let override_response = post_playback_with_subtitle_profile(
+        &app, id, &viewer, index, "External", "ass",
+    )
+    .await;
+    assert_eq!(override_response.status(), StatusCode::OK);
+    let override_info: serde_json::Value = serde_json::from_slice(
+        &to_bytes(override_response.into_body(), 65_536).await.unwrap()
+    )
+    .unwrap();
+    let override_stream = override_info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|track| track["Index"] == index && track["Type"] == "Subtitle")
+        .unwrap();
+    assert_eq!(override_stream["DeliveryUrl"].as_str(), Some(url.as_str()));
     assert_eq!(
         request(&app, "GET", &url, None).await.status(),
         StatusCode::UNAUTHORIZED
