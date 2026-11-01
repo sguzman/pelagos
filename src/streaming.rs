@@ -37,6 +37,12 @@ struct StreamQuery {
     audio_codec: Option<String>,
     video_codec: Option<String>,
     subtitle_stream_index: Option<i64>,
+    audio_stream_index: Option<i64>,
+    video_stream_index: Option<i64>,
+    audio_bit_rate: Option<i64>,
+    video_bit_rate: Option<i64>,
+    max_streaming_bitrate: Option<i64>,
+    max_audio_channels: Option<i64>,
 }
 
 fn media_type(path: &Path) -> &'static str {
@@ -229,13 +235,32 @@ async fn serve_file(
     if query.static_play != Some(true) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    if query.start_time_ticks.is_some_and(|value| value < 0) {
+    if [
+        query.start_time_ticks,
+        query.audio_stream_index,
+        query.video_stream_index,
+        query.subtitle_stream_index,
+        query.audio_bit_rate,
+        query.video_bit_rate,
+        query.max_streaming_bitrate,
+        query.max_audio_channels,
+    ]
+    .into_iter()
+    .flatten()
+    .any(|value| value < 0)
+    {
         return Err(StatusCode::BAD_REQUEST);
     }
     if query.start_time_ticks.is_some_and(|value| value > 0)
         || query.audio_codec.is_some()
         || query.video_codec.is_some()
         || query.subtitle_stream_index.is_some()
+        || query.audio_stream_index.is_some()
+        || query.video_stream_index.is_some()
+        || query.audio_bit_rate.is_some()
+        || query.video_bit_rate.is_some()
+        || query.max_streaming_bitrate.is_some()
+        || query.max_audio_channels.is_some()
         || query
             .media_source_id
             .as_deref()

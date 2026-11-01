@@ -107,6 +107,30 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
             StatusCode::NOT_IMPLEMENTED,
         ),
         (
+            format!("/Videos/{id}/stream?static=true&audioStreamIndex=1"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&videoStreamIndex=0"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&maxStreamingBitrate=1000000"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&maxAudioChannels=2"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&videoBitRate=150000"),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("/Videos/{id}/stream?static=true&audioBitRate=-1"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
             format!("/Videos/{id}/stream?static=true&mediaSourceId=wrong"),
             StatusCode::NOT_IMPLEMENTED,
         ),
