@@ -834,6 +834,123 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn external_srt_burn_in_is_seeked_bounded_and_path_safe_when_ffmpeg_is_available() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("commas,colon:and[brackets].avi");
+        let fixture = Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=320x128:r=5:d=4",
+                "-c:v",
+                "mpeg4",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "FFmpeg fixture: {}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+        let subtitle = b"1\n00:00:01,200 --> 00:00:02,900\nEXTERNAL SUBTITLE VISIBLE\n\n";
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(25),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        let plain = temp.path().join("plain.ts");
+        let burned = temp.path().join("external.ts");
+        controller
+            .try_run_window(&source, &plain, 1.0, 1.5)
+            .await
+            .unwrap();
+        let burned_size = controller
+            .try_run_window_external_srt_capped(
+                &source,
+                &burned,
+                1.0,
+                1.5,
+                8 * 1024 * 1024,
+                subtitle,
+            )
+            .await
+            .unwrap();
+        assert!(burned_size >= 188);
+        assert_eq!(stdfs::read(&burned).unwrap().len() as u64, burned_size);
+        let mut frames = Vec::new();
+        for output in [&plain, &burned] {
+            let decoded = Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(output)
+                .args([
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "select=eq(n\\,3),format=gray",
+                    "-f",
+                    "rawvideo",
+                    "pipe:1",
+                ])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "{}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 320 * 128);
+            frames.push(decoded.stdout);
+        }
+        let brightness = |pixels: &[u8]| pixels.iter().filter(|pixel| **pixel > 80).count();
+        assert!(brightness(&frames[1]) > brightness(&frames[0]) + 20);
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+
+        let invalid = temp.path().join("invalid.ts");
+        let error = controller
+            .try_run_window_external_srt_capped(
+                &source,
+                &invalid,
+                1.0,
+                1.5,
+                1024,
+                &[0xff, 0xfe],
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!invalid.exists());
+        let oversized = vec![b'A'; 4 * 1024 * 1024 + 1];
+        let error = controller
+            .try_run_window_external_srt_capped(
+                &source,
+                &invalid,
+                1.0,
+                1.5,
+                1024,
+                &oversized,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!invalid.exists());
+    }
+
+    #[tokio::test]
     async fn embedded_text_subtitle_burn_in_modifies_video_pixels_when_ci_requires_ffmpeg() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
