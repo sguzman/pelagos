@@ -361,7 +361,14 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
                 .metadata()
                 .is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
         {
-            names.push((filename, language, format, forced, hearing_impaired, default));
+            names.push((
+                filename,
+                language,
+                format,
+                forced,
+                hearing_impaired,
+                default,
+            ));
         }
     }
     names.sort_unstable_by(|a, b| a.0.cmp(&b.0));
@@ -369,17 +376,19 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         .into_iter()
         .take(16)
         .enumerate()
-        .map(|(offset, (filename, language, format, forced, hearing_impaired, default))| {
-            ExternalSubtitle {
-                index: first_index + offset as i64,
-                filename,
-                language,
-                format,
-                forced,
-                hearing_impaired,
-                default,
-            }
-        })
+        .map(
+            |(offset, (filename, language, format, forced, hearing_impaired, default))| {
+                ExternalSubtitle {
+                    index: first_index + offset as i64,
+                    filename,
+                    language,
+                    format,
+                    forced,
+                    hearing_impaired,
+                    default,
+                }
+            },
+        )
         .collect()
 }
 
@@ -1330,16 +1339,32 @@ mod tests {
             chapters: vec![],
         };
         let streams = source_from_probe("id", "video", &movie, &report).media_streams;
-        let subtitle = streams.iter().filter(|stream| stream.stream_type == "Subtitle").collect::<Vec<_>>();
+        let subtitle = streams
+            .iter()
+            .filter(|stream| stream.stream_type == "Subtitle")
+            .collect::<Vec<_>>();
         assert_eq!(subtitle.len(), 4);
-        let english = subtitle.iter().find(|stream| stream.language.as_deref() == Some("eng")).unwrap();
+        let english = subtitle
+            .iter()
+            .find(|stream| stream.language.as_deref() == Some("eng"))
+            .unwrap();
         assert!(english.is_forced);
         assert!(!english.is_hearing_impaired);
-        let french = subtitle.iter().find(|stream| stream.language.as_deref() == Some("fr")).unwrap();
+        let french = subtitle
+            .iter()
+            .find(|stream| stream.language.as_deref() == Some("fr"))
+            .unwrap();
         assert!(french.is_hearing_impaired);
-        let spanish = subtitle.iter().find(|stream| stream.language.as_deref() == Some("es")).unwrap();
+        let spanish = subtitle
+            .iter()
+            .find(|stream| stream.language.as_deref() == Some("es"))
+            .unwrap();
         assert!(spanish.is_default);
-        assert!(subtitle.iter().any(|stream| stream.language.is_none() && stream.is_hearing_impaired));
+        assert!(
+            subtitle
+                .iter()
+                .any(|stream| stream.language.is_none() && stream.is_hearing_impaired)
+        );
     }
 
     #[test]
