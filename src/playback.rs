@@ -1391,7 +1391,14 @@ async fn get_timed_srt(
     RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(state, (item, media_source, index, start), "srt", headers, false).await
+    timed_subtitle(
+        state,
+        (item, media_source, index, start),
+        "srt",
+        headers,
+        false,
+    )
+    .await
 }
 
 async fn head_timed_srt(
@@ -1399,7 +1406,14 @@ async fn head_timed_srt(
     RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(state, (item, media_source, index, start), "srt", headers, true).await
+    timed_subtitle(
+        state,
+        (item, media_source, index, start),
+        "srt",
+        headers,
+        true,
+    )
+    .await
 }
 
 async fn get_timed_vtt(
@@ -1407,7 +1421,14 @@ async fn get_timed_vtt(
     RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(state, (item, media_source, index, start), "vtt", headers, false).await
+    timed_subtitle(
+        state,
+        (item, media_source, index, start),
+        "vtt",
+        headers,
+        false,
+    )
+    .await
 }
 
 async fn head_timed_vtt(
@@ -1415,7 +1436,14 @@ async fn head_timed_vtt(
     RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(state, (item, media_source, index, start), "vtt", headers, true).await
+    timed_subtitle(
+        state,
+        (item, media_source, index, start),
+        "vtt",
+        headers,
+        true,
+    )
+    .await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
