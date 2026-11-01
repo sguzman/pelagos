@@ -16,7 +16,7 @@ use axum::{
 use serde::Serialize;
 use std::{
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
 };
 
@@ -192,10 +192,11 @@ async fn serve_font(
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    let length = data.len();
     let mut response = Response::new(if head {
         Body::empty()
     } else {
-        Body::from(data.clone())
+        Body::from(data)
     });
     response.headers_mut().insert(
         CONTENT_TYPE,
@@ -203,7 +204,7 @@ async fn serve_font(
     );
     response.headers_mut().insert(
         CONTENT_LENGTH,
-        HeaderValue::from_str(&data.len().to_string())
+        HeaderValue::from_str(&length.to_string())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
     response.headers_mut().insert(
