@@ -301,6 +301,18 @@ mod tests {
     fn validates_structured_clear_display_sets_and_packet_boundaries() {
         let bytes = valid_clear_set();
         assert!(packets_valid(&mut bytes.as_slice(), bytes.len() as u64));
+        let mut multiple = bytes.clone();
+        multiple.extend_from_slice(&bytes);
+        assert!(packets_valid(
+            &mut multiple.as_slice(),
+            multiple.len() as u64
+        ));
+        let mut unclosed = bytes.clone();
+        unclosed.extend(packet(0x14, &[0, 0]));
+        assert!(!packets_valid(
+            &mut unclosed.as_slice(),
+            unclosed.len() as u64
+        ));
         let mut truncated = bytes.clone();
         truncated.pop();
         assert!(!packets_valid(
