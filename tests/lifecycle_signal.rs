@@ -2,7 +2,14 @@
 //! loopback port. It never signals the user's desktop, service or real server.
 #[cfg(target_os = "linux")]
 #[test]
-fn pelagos_process_gracefully_exits_on_sigterm() {
+fn pelagos_process_gracefully_exits_on_sigint_and_sigterm() {
+    for signal in ["-TERM", "-INT"] {
+        run_child_signal(signal);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn run_child_signal(signal: &str) {
     use std::{
         net::{SocketAddr, TcpListener, TcpStream},
         process::{Command, Stdio},
@@ -37,12 +44,13 @@ fn pelagos_process_gracefully_exits_on_sigterm() {
         child.wait().unwrap();
         panic!("isolated Pelagos HTTP listener did not start");
     }
+    thread::sleep(Duration::from_millis(100));
     let signaled = Command::new("kill")
-        .arg("-TERM")
+        .arg(signal)
         .arg(child.id().to_string())
         .status()
         .unwrap();
-    assert!(signaled.success(), "SIGTERM command failed");
+    assert!(signaled.success(), "signal command failed: {signal}");
     let mut stopped = None;
     for _ in 0..100 {
         if let Some(status) = child.try_wait().unwrap() {
@@ -54,7 +62,7 @@ fn pelagos_process_gracefully_exits_on_sigterm() {
     if stopped.is_none() {
         child.kill().unwrap();
         child.wait().unwrap();
-        panic!("Pelagos did not gracefully exit after SIGTERM");
+        panic!("Pelagos did not gracefully exit after {signal}");
     }
     assert!(stopped.unwrap().success());
 }
