@@ -168,7 +168,10 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     );
     let native = request(&app, &ssa, Some(&token)).await;
     assert_eq!(native.status(), StatusCode::OK);
-    assert_eq!(native.headers()[header::CONTENT_TYPE], "text/x-ssa; charset=utf-8");
+    assert_eq!(
+        native.headers()[header::CONTENT_TYPE],
+        "text/x-ssa; charset=utf-8"
+    );
     let native = to_bytes(native.into_body(), 65_536).await.unwrap();
     let native_text = std::str::from_utf8(&native).unwrap();
     assert!(native_text.contains("ScriptType: v4.00"));
