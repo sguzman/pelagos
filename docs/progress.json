@@ -316,7 +316,8 @@
               "checks": [
                 {
                   "title": "Implement contract replay harness without private user data",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "tests/contract_replay.rs; tests/fixtures/pinned_public_replay.json; GitHub Actions 41265325427: format, Clippy, all targets and roadmap/matrix gates passed; synthetic responses, not upstream golden captures"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data",
@@ -327,7 +328,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T012",

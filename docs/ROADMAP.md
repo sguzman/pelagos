@@ -4,7 +4,7 @@
 
 **Overall acceptance progress:** `████░░░░░░ 38%` across 171 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `███░░░░░░░ 33%`
+## 🧱 M0 — Foundation and project controls — `████░░░░░░ 35%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -62,14 +62,14 @@
   - [x] CI verifies hundreds of items across batch boundaries, watched/favorite/position/timestamp data, absent records, duplicate IDs and cross-user isolation — GitHub Actions 40012254173 — complete Rust tests, formatting, Clippy and repository guards passed
   - [ ] Large-scale library benchmarks and production performance/memory parity on Linux with unmodified Jellyfin client load
 
-### 🧪 P2 — Test framework — `███░░░░░░░ 27%`
+### 🧪 P2 — Test framework — `███░░░░░░░ 33%`
 
 - 📊 **T010 — Ledger generator and CI guard** — `███████░░░ 67%`
   - [x] Implement machine ledger, calculated percentages and acceptance evidence — src/bin/pelagos-roadmap.rs; docs/progress.json; docs/ROADMAP.md
   - [x] Automated CI verifies ledger evidence, task percentages and generated roadmap are in sync — GitHub Actions 39950134726: format, clippy, Rust HTTP/identity tests and ledger-check all succeeded
   - [ ] Review and prove milestone gate and acceptance evidence completeness
-- 🧰 **T011 — Protocol fixtures and mock clients** — `░░░░░░░░░░ 0%`
-  - [ ] Implement contract replay harness without private user data
+- 🧰 **T011 — Protocol fixtures and mock clients** — `███░░░░░░░ 33%`
+  - [x] Implement contract replay harness without private user data — tests/contract_replay.rs; tests/fixtures/pinned_public_replay.json; GitHub Actions 41265325427: format, Clippy, all targets and roadmap/matrix gates passed; synthetic responses, not upstream golden captures
   - [ ] Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data
   - [ ] Production or real-client acceptance validates contract replay harness without private user data
 - 🔒 **T012 — Security harness** — `░░░░░░░░░░ 0%`
