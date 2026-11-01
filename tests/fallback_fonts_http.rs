@@ -37,6 +37,7 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     otf[..4].copy_from_slice(b"OTTO");
     otf[4..6].copy_from_slice(&1_u16.to_be_bytes());
     fs::write(root.join("Family.ttf"), &ttf).unwrap();
+    fs::write(root.join("Fuente_Ágil.ttf"), &ttf).unwrap();
     fs::write(root.join("Alternative.otf"), &otf).unwrap();
     fs::write(root.join("Spoof.ttf"), b"not a font").unwrap();
     fs::write(root.join("Oversized.ttf"), vec![0_u8; 4 * 1024 * 1024 + 1]).unwrap();
@@ -108,7 +109,7 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     assert_eq!(response.status(), StatusCode::OK);
     let files: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
-    assert_eq!(files.as_array().unwrap().len(), 2);
+    assert_eq!(files.as_array().unwrap().len(), 3);
     // Pinned Jellyfin v12.3 sorts by smaller font size before name.
     assert_eq!(files[0]["Name"], "Family.ttf");
     assert_eq!(files[0]["Size"], ttf.len());
@@ -118,8 +119,10 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     let modified = files[0]["DateModified"].as_str().unwrap();
     assert!(modified.ends_with('Z'));
     assert!(modified.contains('T'));
-    assert_eq!(files[1]["Name"], "Alternative.otf");
-    assert_eq!(files[1]["Size"], otf.len());
+    assert_eq!(files[1]["Name"], "Fuente_Ágil.ttf");
+    assert_eq!(files[1]["Size"], ttf.len());
+    assert_eq!(files[2]["Name"], "Alternative.otf");
+    assert_eq!(files[2]["Size"], otf.len());
 
     for (filename, contents, mime) in [
         ("Family.ttf", ttf.as_slice(), "font/ttf"),
@@ -168,6 +171,22 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         ttf.as_slice()
     );
 
+    // An encoded non-ASCII filename matches an accented on-disk font when
+    // the caller varies both Unicode and ASCII letter case.
+    let accented = request(
+        &active,
+        "GET",
+        "/FallbackFont/Fonts/fuente_%C3%A1GIL.TTF",
+        Some(&token),
+    )
+    .await;
+    assert_eq!(accented.status(), StatusCode::OK);
+    assert_eq!(accented.headers()[header::CONTENT_TYPE], "font/ttf");
+    assert_eq!(
+        to_bytes(accented.into_body(), 1024).await.unwrap().as_ref(),
+        ttf.as_slice()
+    );
+
     for name in [
         "Spoof.ttf",
         "Oversized.ttf",
@@ -200,6 +219,7 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
     }
     assert_eq!(fs::read(root.join("Family.ttf")).unwrap(), ttf);
+    assert_eq!(fs::read(root.join("Fuente_Ágil.ttf")).unwrap(), ttf);
     assert_eq!(fs::read(root.join("Alternative.otf")).unwrap(), otf);
     assert_eq!(fs::read(temp.path().join("private.ttf")).unwrap(), ttf);
 }
