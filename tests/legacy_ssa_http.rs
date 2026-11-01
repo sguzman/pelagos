@@ -102,6 +102,10 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     // establish the original style-script format.
     assert_eq!(stream["Codec"], "ass");
     let index = stream["Index"].as_i64().unwrap();
+    // Metadata must no longer advertise the false native ASS extension;
+    // the known SRT conversion remains the truthful default.
+    let srt = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
+    assert_eq!(stream["DeliveryUrl"].as_str(), Some(srt.as_str()));
     let ass = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.ass");
     assert_eq!(
         request(&app, &ass, None).await.status(),
@@ -111,7 +115,6 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
         request(&app, &ass, Some(&token)).await.status(),
         StatusCode::NOT_IMPLEMENTED
     );
-    let srt = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
     let response = request(&app, &srt, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
