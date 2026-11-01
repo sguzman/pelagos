@@ -1108,11 +1108,29 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         let response = request(&app, "GET", &route, Some(&viewer), "").await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
-        assert_eq!(to_bytes(response.into_body(), 1_024).await.unwrap().as_ref(), expected);
-        assert_eq!(request(&app, "HEAD", &route, Some(&viewer), "").await.status(), StatusCode::OK);
         assert_eq!(
-            request(&app, "GET", &format!("/Videos/{item}/{item}/Subtitles/{index}/0/Stream.{format}"), Some(&viewer), "")
-                .await.status(),
+            to_bytes(response.into_body(), 1_024)
+                .await
+                .unwrap()
+                .as_ref(),
+            expected
+        );
+        assert_eq!(
+            request(&app, "HEAD", &route, Some(&viewer), "")
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            request(
+                &app,
+                "GET",
+                &format!("/Videos/{item}/{item}/Subtitles/{index}/0/Stream.{format}"),
+                Some(&viewer),
+                ""
+            )
+            .await
+            .status(),
             StatusCode::OK
         );
     }
