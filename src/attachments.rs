@@ -55,10 +55,10 @@ fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
     };
     match mime {
         "font/ttf" => {
-            matches!(&bytes[..4], b"\\x00\\x01\\x00\\x00" | b"true" | b"typ1") && sfnt()
+            matches!(&bytes[..4], b"\x00\x01\x00\x00" | b"true" | b"typ1") && sfnt()
         }
         "font/otf" => {
-            (matches!(&bytes[..4], b"OTTO" | b"\\x00\\x01\\x00\\x00") || &bytes[..4] == b"true")
+            (matches!(&bytes[..4], b"OTTO" | b"\x00\x01\x00\x00") || &bytes[..4] == b"true")
                 && sfnt()
         }
         "font/woff" => {
