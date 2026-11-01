@@ -1297,6 +1297,13 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
             .unwrap()
             .contains("Extracted cue!")
     );
+    for extension in ["ass", "ssa"] {
+        let unsupported = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.{extension}");
+        assert_eq!(
+            request(&app, "GET", &unsupported, Some(&viewer), "").await.status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
     let vtt_route = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.vtt");
     let response = request(&app, "GET", &vtt_route, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);

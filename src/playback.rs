@@ -1241,6 +1241,12 @@ async fn serve_external_subtitle(
         if !embedded {
             return Err(StatusCode::NOT_FOUND);
         }
+        // Embedded extraction currently encodes SRT only, with optional
+        // SRT-to-WebVTT conversion. Never label those bytes as native
+        // ASS or SSA when the requested route has that extension.
+        if !matches!(format, "srt" | "vtt") {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
         if !matches!(format, "srt" | "vtt") {
             // The bounded embedded extractor emits only SRT, optionally
             // converted to VTT. Never mislabel its bytes as ASS or SSA.
