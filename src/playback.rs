@@ -25,7 +25,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
+use crate::{
+    app::AppState, auth, auth_api, catalog, catalog_api,
+    pgs::{MAX_SUP_BYTES, header_valid as pgs_header_valid, packets_valid as pgs_packets_valid},
+    probe, streaming,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::Command,
@@ -361,53 +365,6 @@ fn is_pgs_codec(codec: &str) -> bool {
 // and never enumerate beyond the already authorized video's directory.
 // Raw PGS SUP files may be larger than ordinary 4 MiB text sidecars, but
 // remain bounded and are delivered as byte ranges without decoding.
-const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
-// Bound packet-header work even for adversarial streams of empty segments.
-const MAX_PGS_PACKETS: usize = 100_000;
-
-/// A raw Blu-ray PGS packet begins with "PG", PTS/DTS, a known segment
-/// type and a bounded segment payload. This does not decode/render bitmaps.
-fn pgs_header_valid(bytes: &[u8; 13], file_size: u64) -> bool {
-    let len = u64::from(u16::from_be_bytes([bytes[11], bytes[12]]));
-    &bytes[..2] == b"PG"
-        && matches!(bytes[10], 0x14 | 0x15 | 0x16 | 0x17 | 0x80)
-        && (bytes[10] != 0x80 || len == 0)
-        && 13_u64.checked_add(len).is_some_and(|end| end <= file_size)
-}
-
-/// Validate every raw PGS packet boundary without parsing or decoding bitmap
-/// payloads. A valid first header alone does not ensure the remaining stream
-/// is safe to advertise. A seek skips bounded segment payload bytes.
-fn pgs_packets_valid<R: std::io::Read + std::io::Seek>(reader: &mut R, size: u64) -> bool {
-    if !(13..=MAX_SUP_BYTES).contains(&size) {
-        return false;
-    }
-    let mut offset = 0_u64;
-    let mut packets = 0_usize;
-    while offset < size {
-        if packets >= MAX_PGS_PACKETS || size - offset < 13 {
-            return false;
-        }
-        let mut header = [0_u8; 13];
-        if reader.read_exact(&mut header).is_err() || !pgs_header_valid(&header, size - offset) {
-            return false;
-        }
-        let length = u64::from(u16::from_be_bytes([header[11], header[12]]));
-        let Some(next) = offset
-            .checked_add(13)
-            .and_then(|pos| pos.checked_add(length))
-        else {
-            return false;
-        };
-        if reader.seek(std::io::SeekFrom::Start(next)).is_err() {
-            return false;
-        }
-        offset = next;
-        packets += 1;
-    }
-    packets > 0
-}
-
 fn pgs_invalid_range(size: u64) -> Result<Response, StatusCode> {
     let mut response = Response::new(Body::empty());
     *response.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
@@ -2731,36 +2688,41 @@ mod tests {
 
     #[test]
     fn raw_pgs_rejects_invalid_later_packets_and_trailing_bytes() {
-        let good = [
-            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 2, 0xaa, 0xbb, b'P', b'G', 0, 0, 0, 2, 0,
-            0, 0, 2, 0x80, 0, 0,
+        // A valid empty graphical presentation followed by END. Dedicated
+        // segment-shape cases live in the PGS parser's own regression suite.
+        let mut good = vec![
+            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 11,
+            0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0,
         ];
+        good.extend_from_slice(&[
+            b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x80, 0, 0,
+        ]);
         assert!(pgs_packets_valid(
-            &mut std::io::Cursor::new(good),
+            &mut std::io::Cursor::new(&good),
             good.len() as u64,
         ));
-        let mut trailing = good.to_vec();
+        let mut trailing = good.clone();
         trailing.extend_from_slice(b"garbage");
         assert!(!pgs_packets_valid(
             &mut std::io::Cursor::new(&trailing),
             trailing.len() as u64,
         ));
-        let mut invalid_second = good;
-        invalid_second[15] = b'X';
+        let mut invalid_second = good.clone();
+        invalid_second[24] = b'X';
         assert!(!pgs_packets_valid(
-            &mut std::io::Cursor::new(invalid_second),
+            &mut std::io::Cursor::new(&invalid_second),
             invalid_second.len() as u64,
         ));
-        let mut truncated = good.to_vec();
+        let mut truncated = good.clone();
         truncated.pop();
         assert!(!pgs_packets_valid(
             &mut std::io::Cursor::new(&truncated),
             truncated.len() as u64,
         ));
         let mut invalid_end = good;
-        invalid_end[27] = 1;
+        *invalid_end.last_mut().expect("last header byte") = 1;
         assert!(!pgs_packets_valid(
-            &mut std::io::Cursor::new(invalid_end),
+            &mut std::io::Cursor::new(&invalid_end),
             invalid_end.len() as u64,
         ));
     }
