@@ -112,8 +112,12 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     // Pinned Jellyfin v12.3 sorts by smaller font size before name.
     assert_eq!(files[0]["Name"], "Family.ttf");
     assert_eq!(files[0]["Size"], ttf.len());
-    assert!(files[0]["DateCreated"].is_null());
-    assert!(files[0]["DateModified"].is_null());
+    // Filesystem creation time may be unavailable, but supported
+    // modification times must be actual UTC timestamps, never fabricated.
+    assert!(files[0]["DateCreated"].is_null() || files[0]["DateCreated"].is_string());
+    let modified = files[0]["DateModified"].as_str().unwrap();
+    assert!(modified.ends_with('Z'));
+    assert!(modified.contains('T'));
     assert_eq!(files[1]["Name"], "Alternative.otf");
     assert_eq!(files[1]["Size"], otf.len());
 
