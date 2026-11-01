@@ -59,6 +59,9 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
         .args([
             "-metadata:s:t:0",
             "mimetype=application/x-truetype-font",
+            // A Matroska attachment can supply a path-shaped untrusted name.
+            "-metadata:s:t:0",
+            "filename=../private.ttf",
             "-attach",
         ])
         .arg(&nonfont)
@@ -127,7 +130,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0]["Index"], 1);
     assert_eq!(attachments[0]["Codec"], "ttf");
-    assert_eq!(attachments[0]["FileName"], "fixture.ttf");
+    assert!(attachments[0]["FileName"].is_null());
     assert_eq!(attachments[0]["MimeType"], "font/ttf");
     assert_eq!(
         attachments[0]["DeliveryUrl"],
