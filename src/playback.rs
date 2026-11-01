@@ -179,9 +179,7 @@ fn safe_attachment_filename(value: &Value) -> Option<String> {
     if name == "."
         || name == ".."
         || name.trim() != name
-        || name
-            .chars()
-            .any(|ch| matches!(ch, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*'))
+        || name.chars().any(|ch| "/\\:<>\"|?*".contains(ch))
     {
         return None;
     }
