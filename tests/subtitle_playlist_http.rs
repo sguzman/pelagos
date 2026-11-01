@@ -220,9 +220,8 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         .find(|stream| stream["Language"] == "it" && stream["Type"] == "Subtitle")
         .unwrap();
     let malformed_srt_index = malformed_srt["Index"].as_i64().unwrap();
-    let malformed_srt_playlist = format!(
-        "/Videos/{id}/{id}/Subtitles/{malformed_srt_index}/subtitles.m3u8?segmentLength=2"
-    );
+    let malformed_srt_playlist =
+        format!("/Videos/{id}/{id}/Subtitles/{malformed_srt_index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
         request(&app, "GET", &malformed_srt_playlist, Some(&viewer))
             .await
