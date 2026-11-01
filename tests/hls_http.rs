@@ -1245,7 +1245,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     // The encoder maps the first input video/audio streams and drops
     // subtitles. Exact matching indices can be accepted without pretending
     // to support arbitrary stream selection.
-    let selected = format!("{route}&videoStreamIndex=0&audioStreamIndex=1&subtitleStreamIndex=-1");
+    let selected = format!("{route}&videoStreamIndex=0&subtitleStreamIndex=-1");
     assert_eq!(
         text_body(request(&app, "GET", &selected, Some(&alice)).await).await,
         alice_master
@@ -1253,6 +1253,7 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     for unsupported_selection in [
         "videoStreamIndex=1",
         "audioStreamIndex=0",
+        "audioStreamIndex=1",
         "audioStreamIndex=-1",
         "subtitleStreamIndex=2",
     ] {
