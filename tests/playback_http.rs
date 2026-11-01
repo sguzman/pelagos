@@ -993,7 +993,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         request(
             &app,
             "GET",
-            &format!("/Videos/{item}/{item}/Subtitles/2/Stream.vtt"),
+            &format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt"),
             Some(&viewer),
             "",
         )
