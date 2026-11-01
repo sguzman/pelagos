@@ -147,6 +147,20 @@ mod tests {
     }
 
     #[test]
+    fn ipv6_bind_is_validated_and_constructed_without_string_concatenation() {
+        let parsed = resolve(
+            FileConfig::default(),
+            Some("::1".to_owned()),
+            Some(8097),
+            false,
+            false,
+        )
+        .unwrap();
+        let address = std::net::SocketAddr::new(parsed.bind.parse().unwrap(), parsed.port);
+        assert_eq!(address.to_string(), "[::1]:8097");
+    }
+
+    #[test]
     fn legacy_json_is_migrated_in_memory_and_cli_override_is_authoritative() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.json");

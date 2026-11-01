@@ -220,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);
     let id = identity::load_or_create(&state_dir)?;
     let state_for_auth = state_dir.clone();
-    let address: SocketAddr = format!("{}:{}", effective.bind, effective.port).parse()?;
+    let address = SocketAddr::new(effective.bind.parse()?, effective.port);
     let listener = tokio::net::TcpListener::bind(address).await?;
     let listening_address = listener.local_addr()?;
     let mut discovery_task = None;
