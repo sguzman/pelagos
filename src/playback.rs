@@ -1914,10 +1914,13 @@ async fn subtitle_playlist(
         stream.index == index
             && stream.stream_type == "Subtitle"
             && stream.delivery_method == Some("External")
-            && stream
-                .delivery_url
-                .as_deref()
-                .is_some_and(|url| url.ends_with(".srt") || url.ends_with(".vtt"))
+            && stream.delivery_url.as_deref().is_some_and(|url| {
+                url.ends_with(".srt")
+                    || url.ends_with(".vtt")
+                    || (stream.codec.as_deref() == Some("ass")
+                        && !stream.is_external
+                        && url.ends_with(".ass"))
+            })
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
