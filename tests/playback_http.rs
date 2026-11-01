@@ -897,11 +897,12 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     )
     .await;
     assert_eq!(selected.status(), StatusCode::OK);
-    let selected_json: serde_json::Value = serde_json::from_slice(
-        &to_bytes(selected.into_body(), 65_536).await.unwrap(),
-    )
-    .unwrap();
-    assert_eq!(selected_json["MediaSources"][0]["DefaultSubtitleStreamIndex"], 2);
+    let selected_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(selected.into_body(), 65_536).await.unwrap()).unwrap();
+    assert_eq!(
+        selected_json["MediaSources"][0]["DefaultSubtitleStreamIndex"],
+        2
+    );
     assert_eq!(
         request(
             &app,
@@ -1136,10 +1137,8 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
     )
     .await;
     assert_eq!(selected.status(), StatusCode::OK);
-    let selected_json: serde_json::Value = serde_json::from_slice(
-        &to_bytes(selected.into_body(), 65_536).await.unwrap(),
-    )
-    .unwrap();
+    let selected_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(selected.into_body(), 65_536).await.unwrap()).unwrap();
     assert_eq!(
         selected_json["MediaSources"][0]["DefaultSubtitleStreamIndex"],
         embedded["Index"]
