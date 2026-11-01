@@ -65,7 +65,10 @@ pub fn load(explicit: Option<&Path>) -> io::Result<FileConfig> {
     let mut bytes = Vec::new();
     file.take(MAX_CONFIG_BYTES + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_CONFIG_BYTES {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Pelagos config exceeds 16 KiB"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Pelagos config exceeds 16 KiB",
+        ));
     }
     let config: FileConfig = serde_json::from_slice(&bytes)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -87,9 +90,14 @@ pub fn resolve(
     discover: bool,
     no_discover: bool,
 ) -> io::Result<RuntimeConfig> {
-    let bind = bind.or(config.bind).unwrap_or_else(|| "127.0.0.1".to_owned());
+    let bind = bind
+        .or(config.bind)
+        .unwrap_or_else(|| "127.0.0.1".to_owned());
     let parsed: IpAddr = bind.parse().map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidInput, "bind address must be an IP literal")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "bind address must be an IP literal",
+        )
     })?;
     let port = port.or(config.port).unwrap_or(8097);
     let discover = if no_discover {
@@ -105,7 +113,11 @@ pub fn resolve(
             "discovery requires an explicit LAN bind",
         ));
     }
-    Ok(RuntimeConfig { bind, port, discover })
+    Ok(RuntimeConfig {
+        bind,
+        port,
+        discover,
+    })
 }
 
 #[cfg(test)]
@@ -115,11 +127,8 @@ mod tests {
     #[test]
     fn xdg_lookup_is_absolute_and_defaults_are_loopback() {
         assert_eq!(
-            default_path_from(
-                Some(OsStr::new("/config")),
-                Some(OsStr::new("/home/test")),
-            )
-            .unwrap(),
+            default_path_from(Some(OsStr::new("/config")), Some(OsStr::new("/home/test")),)
+                .unwrap(),
             PathBuf::from("/config/pelagos/config.json")
         );
         assert_eq!(
@@ -127,8 +136,14 @@ mod tests {
                 .unwrap(),
             PathBuf::from("/home/test/.config/pelagos/config.json")
         );
-        assert_eq!(resolve(FileConfig::default(), None, None, false, false).unwrap(),
-            RuntimeConfig { bind: "127.0.0.1".to_owned(), port: 8097, discover: false });
+        assert_eq!(
+            resolve(FileConfig::default(), None, None, false, false).unwrap(),
+            RuntimeConfig {
+                bind: "127.0.0.1".to_owned(),
+                port: 8097,
+                discover: false
+            }
+        );
     }
 
     #[test]
@@ -139,7 +154,11 @@ mod tests {
         let config = load(Some(&path)).unwrap();
         assert_eq!(
             resolve(config, None, None, false, false).unwrap(),
-            RuntimeConfig { bind: "0.0.0.0".to_owned(), port: 8098, discover: true }
+            RuntimeConfig {
+                bind: "0.0.0.0".to_owned(),
+                port: 8098,
+                discover: true
+            }
         );
         let config = load(Some(&path)).unwrap();
         let effective = resolve(
@@ -153,7 +172,11 @@ mod tests {
         assert_eq!(effective.bind, "127.0.0.1");
         assert_eq!(effective.port, 8099);
         assert!(!effective.discover);
-        assert!(std::fs::read_to_string(&path).unwrap().contains("\"port\":8098"));
+        assert!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .contains("\"port\":8098")
+        );
     }
 
     #[test]
@@ -173,7 +196,16 @@ mod tests {
         std::fs::write(&path, "x".repeat(16 * 1024 + 1)).unwrap();
         assert!(load(Some(&path)).is_err());
         assert!(load(Some(&dir.path().join("absent.json"))).is_err());
-        assert!(resolve(FileConfig::default(), Some("bad.host".to_owned()), None, false, false).is_err());
+        assert!(
+            resolve(
+                FileConfig::default(),
+                Some("bad.host".to_owned()),
+                None,
+                false,
+                false
+            )
+            .is_err()
+        );
         assert!(resolve(FileConfig::default(), None, None, true, false).is_err());
     }
 }
