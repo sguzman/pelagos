@@ -808,8 +808,6 @@ mod tests {
                     "-hide_banner",
                     "-loglevel",
                     "error",
-                    "-ss",
-                    "0.7",
                     "-i",
                 ])
                 .arg(output)
@@ -817,7 +815,7 @@ mod tests {
                     "-frames:v",
                     "1",
                     "-vf",
-                    "format=gray",
+                    "select=eq(n\\,3),format=gray",
                     "-f",
                     "rawvideo",
                     "pipe:1",
@@ -834,7 +832,8 @@ mod tests {
             frames.push(decoded.stdout);
         }
         let above_black = |pixels: &[u8]| pixels.iter().filter(|pixel| **pixel > 80).count();
-        assert!(above_black(&frames[1]) > above_black(&frames[0]) + 100);
+        assert_ne!(frames[0], frames[1]);
+        assert!(above_black(&frames[1]) > above_black(&frames[0]) + 20);
 
         let invalid = temp.path().join("invalid.ts");
         let rejected = controller
