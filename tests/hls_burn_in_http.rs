@@ -480,6 +480,21 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     assert_eq!(burned_response.status(), StatusCode::OK);
     let burned = body_string(burned_response).await;
     assert_ne!(burned, plain);
+    // The pinned master route and media route must share this token- and
+    // selected-sidecar-scoped publication, not trigger a second transcode.
+    let master_url =
+        format!("/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode");
+    let master_response = call(&app, &master_url, Some(&token)).await;
+    assert_eq!(master_response.status(), StatusCode::OK);
+    let master = body_string(master_response).await;
+    let playlist_id = burned
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .split('/')
+        .nth(1)
+        .unwrap();
+    assert!(master.contains(&format!("hls1/{playlist_id}/index.m3u8")));
     let plain_bytes = segment_bytes(&app, id, &plain, &token, 0).await;
     let first_bytes = segment_bytes(&app, id, &burned, &token, 0).await;
     let second_bytes = segment_bytes(&app, id, &burned, &token, 1).await;
