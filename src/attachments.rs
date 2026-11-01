@@ -38,7 +38,7 @@ pub(crate) fn font_mime(raw: &str) -> Option<&'static str> {
 /// the extracted binary header. This is a bounded container/header check,
 /// not a general font parser or a guarantee that an untrusted font is safe
 /// for client-side shaping/rendering.
-fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
+pub(crate) fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
     if bytes.len() < 12 {
         return false;
     }
