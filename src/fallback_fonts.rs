@@ -118,13 +118,18 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
         if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
             continue;
         }
-        names.push((name, mime));
+        let Ok(hint) = entry.metadata() else {
+            continue;
+        };
+        names.push((name, mime, hint.len()));
     }
-    names.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    // Jellyfin v12.3 orders fallback fonts by size first, then name.
+    // Sorting before the bounded reads also makes the 20 MiB subset stable.
+    names.sort_unstable_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.cmp(&b.0)));
     let mut listed = Vec::new();
     let mut total = 0_u64;
     let mut scanned = 0_u64;
-    for (name, mime) in names {
+    for (name, mime, _) in names {
         if listed.len() >= MAX_FONT_COUNT {
             break;
         }
@@ -140,8 +145,8 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
         if scanned > MAX_SCANNED_BYTES {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        if total.saturating_add(size) > MAX_TOTAL_BYTES {
-            continue;
+        if total.saturating_add(size) >= MAX_TOTAL_BYTES {
+            break;
         }
         let mut bytes = Vec::new();
         let read = file
@@ -156,12 +161,13 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
         let Some(next_total) = total.checked_add(size) else {
             continue;
         };
-        if next_total > MAX_TOTAL_BYTES {
-            continue;
+        if next_total >= MAX_TOTAL_BYTES {
+            break;
         }
         total = next_total;
         listed.push(FontInfo { name, size, mime });
     }
+    listed.sort_unstable_by(|a, b| a.size.cmp(&b.size).then_with(|| a.name.cmp(&b.name)));
     Ok(listed)
 }
 
