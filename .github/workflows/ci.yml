@@ -22,6 +22,13 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      - name: Emit reproducible dependency resolution for future checked-in Cargo.lock
+        run: |
+          cargo generate-lockfile
+          echo PELAGOS_LOCKFILE_BEGIN
+          base64 -w0 Cargo.lock
+          echo
+          echo PELAGOS_LOCKFILE_END
       - name: FFmpeg and FFprobe prerequisites
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
