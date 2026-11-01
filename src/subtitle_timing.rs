@@ -1,6 +1,38 @@
 //! Narrow, bounded subtitle cue-window processing for the pinned Jellyfin
 //! HLS text-subtitle transport. This does not attempt general WebVTT parsing.
 
+/// Decode a bounded text subtitle without assuming that SRT files use
+/// UTF-8. Explicit UTF-16 BOMs are supported; unmarked invalid UTF-8 fails
+/// closed rather than corrupting international captions.
+pub(crate) fn decode_text_subtitle(input: &[u8]) -> Option<String> {
+    if input.len() > 4 * 1024 * 1024 {
+        return None;
+    }
+    let (data, little_endian) = if let Some(rest) = input.strip_prefix(&[0xff, 0xfe]) {
+        (rest, true)
+    } else if let Some(rest) = input.strip_prefix(&[0xfe, 0xff]) {
+        (rest, false)
+    } else {
+        return Some(
+            std::str::from_utf8(input)
+                .ok()?
+                .trim_start_matches('\u{feff}')
+                .to_owned(),
+        );
+    };
+    if data.len() % 2 != 0 {
+        return None;
+    }
+    let units = data.chunks_exact(2).map(|bytes| {
+        if little_endian {
+            u16::from_le_bytes([bytes[0], bytes[1]])
+        } else {
+            u16::from_be_bytes([bytes[0], bytes[1]])
+        }
+    });
+    std::char::decode_utf16(units).collect::<Result<String, _>>().ok()
+}
+
 fn parse_stamp(stamp: &str) -> Option<u64> {
     let (clock, fraction) = stamp.split_once('.')?;
     if fraction.len() != 3 || !fraction.bytes().all(|digit| digit.is_ascii_digit()) {
@@ -133,6 +165,21 @@ pub(crate) fn vtt_to_srt(source: &[u8]) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn srt_decoding_accepts_bom_utf16_without_replacing_invalid_data() {
+        let caption = "1\n00:00:00,000 --> 00:00:01,000\nOlá\n";
+        let mut utf16le = vec![0xff, 0xfe];
+        utf16le.extend(caption.encode_utf16().flat_map(u16::to_le_bytes));
+        let mut utf16be = vec![0xfe, 0xff];
+        utf16be.extend(caption.encode_utf16().flat_map(u16::to_be_bytes));
+        assert_eq!(decode_text_subtitle(&utf16le).as_deref(), Some(caption));
+        assert_eq!(decode_text_subtitle(&utf16be).as_deref(), Some(caption));
+        assert_eq!(decode_text_subtitle(caption.as_bytes()).as_deref(), Some(caption));
+        assert!(decode_text_subtitle(b"\xff\xfe\xff").is_none());
+        assert!(decode_text_subtitle(&[0xff, 0xff]).is_none());
+        assert!(decode_text_subtitle(&[0xff, 0xfe, 0x00, 0xd8]).is_none());
+    }
 
     #[test]
     fn clip_clamps_cues_and_supports_absolute_or_rebased_timestamps() {

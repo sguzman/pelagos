@@ -1096,9 +1096,7 @@ fn srt_timestamp(value: &str) -> Option<String> {
 }
 
 fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
-    let input = std::str::from_utf8(source)
-        .ok()?
-        .trim_start_matches('\u{feff}');
+    let input = crate::subtitle_timing::decode_text_subtitle(source)?;
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
     let mut output = String::from("WEBVTT\n\n");
     let mut count = 0_u32;
