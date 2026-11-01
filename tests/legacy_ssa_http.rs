@@ -172,7 +172,22 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
         native.headers()[header::CONTENT_TYPE],
         "text/x-ssa; charset=utf-8"
     );
+    let content_length = native.headers()[header::CONTENT_LENGTH].clone();
     let native = to_bytes(native.into_body(), 65_536).await.unwrap();
+    assert_eq!(
+        content_length.to_str().unwrap(),
+        native.len().to_string()
+    );
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(&ssa)
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let head = app.clone().oneshot(head).await.unwrap();
+    assert_eq!(head.status(), StatusCode::OK);
+    assert_eq!(head.headers()[header::CONTENT_LENGTH], content_length);
+    assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
     let native_text = std::str::from_utf8(&native).unwrap();
     assert!(native_text.contains("ScriptType: v4.00"));
     assert!(!native_text.contains("ScriptType: v4.00+"));
