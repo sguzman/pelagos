@@ -3,8 +3,8 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
     process::Stdio,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 
@@ -1087,7 +1087,10 @@ async fn extract_embedded_srt(
         .spawn()
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     tokio::time::timeout(Duration::from_secs(30), async {
-        let stdout = child.stdout.take().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         let mut payload = Vec::new();
         stdout
             .take(4 * 1024 * 1024 + 1)
@@ -1098,7 +1101,10 @@ async fn extract_embedded_srt(
             let _ = child.kill().await;
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        let status = child.wait().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        let status = child
+            .wait()
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !status.success() || payload.is_empty() {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -1127,7 +1133,9 @@ async fn serve_external_subtitle(
     if kind != "video" {
         return Err(StatusCode::NOT_FOUND);
     }
-    let source_metadata = tokio::fs::metadata(&source).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let source_metadata = tokio::fs::metadata(&source)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
     let report = probe::probe(&source, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
@@ -1174,7 +1182,11 @@ async fn serve_external_subtitle(
             return Err(StatusCode::NOT_FOUND);
         }
         let length = payload.len();
-        let mut response = Response::new(if head { Body::empty() } else { Body::from(payload) });
+        let mut response = Response::new(if head {
+            Body::empty()
+        } else {
+            Body::from(payload)
+        });
         response.headers_mut().insert(
             CONTENT_TYPE,
             HeaderValue::from_static(if format == "vtt" {
@@ -1183,10 +1195,9 @@ async fn serve_external_subtitle(
                 "application/x-subrip"
             }),
         );
-        response.headers_mut().insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("private, no-store"),
-        );
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
         response.headers_mut().insert(
             CONTENT_LENGTH,
             HeaderValue::from_str(&length.to_string())
