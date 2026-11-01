@@ -15,9 +15,8 @@ use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
 const RAW_PGS: &[u8] = &[
-    b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x16, 0, 11,
-    0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0,
-    b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0, 0,
+    b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x16, 0, 11, 0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0, b'P',
+    b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0, 0,
 ];
 
 async fn request(
