@@ -30,7 +30,9 @@ pub(crate) fn decode_text_subtitle(input: &[u8]) -> Option<String> {
             u16::from_be_bytes([bytes[0], bytes[1]])
         }
     });
-    std::char::decode_utf16(units).collect::<Result<String, _>>().ok()
+    std::char::decode_utf16(units)
+        .collect::<Result<String, _>>()
+        .ok()
 }
 
 fn parse_stamp(stamp: &str) -> Option<u64> {
@@ -175,7 +177,10 @@ mod tests {
         utf16be.extend(caption.encode_utf16().flat_map(u16::to_be_bytes));
         assert_eq!(decode_text_subtitle(&utf16le).as_deref(), Some(caption));
         assert_eq!(decode_text_subtitle(&utf16be).as_deref(), Some(caption));
-        assert_eq!(decode_text_subtitle(caption.as_bytes()).as_deref(), Some(caption));
+        assert_eq!(
+            decode_text_subtitle(caption.as_bytes()).as_deref(),
+            Some(caption)
+        );
         assert!(decode_text_subtitle(b"\xff\xfe\xff").is_none());
         assert!(decode_text_subtitle(&[0xff, 0xff]).is_none());
         assert!(decode_text_subtitle(&[0xff, 0xfe, 0x00, 0xd8]).is_none());
