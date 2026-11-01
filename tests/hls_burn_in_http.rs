@@ -656,7 +656,11 @@ Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,STYLED TEXT VISIBLE
         .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
         .unwrap();
     let previous_ssa_url = format!("/Videos/{id}/{previous_ssa_segment}");
-    fs::write(&ssa, legacy.replace("STYLED TEXT VISIBLE", "UPDATED SSA CAPTION")).unwrap();
+    fs::write(
+        &ssa,
+        legacy.replace("STYLED TEXT VISIBLE", "UPDATED SSA CAPTION"),
+    )
+    .unwrap();
     assert_eq!(
         call(&app, &previous_ssa_url, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
