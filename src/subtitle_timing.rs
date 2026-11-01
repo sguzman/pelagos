@@ -257,9 +257,109 @@ pub(crate) fn vtt_to_srt(source: &[u8]) -> Option<Vec<u8>> {
     Some(result.into_bytes())
 }
 
+/// Convert a separately delivered WebVTT sidecar to the bounded SRT
+/// subset. Accept ordinary cue identifiers, short timestamps and optional
+/// single-line WEBVTT titles, but fail closed on advanced regions/styles,
+/// malformed timing or unsupported settings. Neither rebase timestamps nor
+/// depend on a VOD-window duration.
+pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
+    if source.len() > 4 * 1024 * 1024 {
+        return None;
+    }
+    let source = std::str::from_utf8(source).ok()?.trim_start_matches('\u{feff}');
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    let (header, body) = normalized.split_once("\n\n")?;
+    if !(header == "WEBVTT" || header.starts_with("WEBVTT ") || header.starts_with("WEBVTT\t"))
+        || header.len() > 256
+        || header.contains('\n')
+        || header.chars().any(|ch| ch.is_control() && ch != '\t')
+    {
+        return None;
+    }
+    let mut result = String::new();
+    let mut cues = 0_u32;
+    for block in body.split("\n\n").filter(|block| !block.trim().is_empty()) {
+        let mut lines = block.lines();
+        let first = lines.next()?.trim();
+        if first == "NOTE" || first.starts_with("NOTE ") {
+            continue;
+        }
+        if matches!(first, "STYLE" | "REGION") {
+            return None;
+        }
+        let timing = if first.contains(" --> ") {
+            first
+        } else if !first.is_empty()
+            && first.len() <= 128
+            && !first.chars().any(char::is_control)
+        {
+            lines.next()?.trim()
+        } else {
+            return None;
+        };
+        let (start, end_with_settings) = timing.split_once(" --> ")?;
+        let (end, settings) = end_with_settings
+            .split_once(' ')
+            .unwrap_or((end_with_settings, ""));
+        let start = parse_stamp(start)?;
+        let end = parse_stamp(end)?;
+        if end <= start || !supported_cue_settings(settings) {
+            return None;
+        }
+        let caption = lines.collect::<Vec<_>>().join("\n");
+        if caption.trim().is_empty()
+            || caption.chars().any(|ch| ch.is_control() && ch != '\n' && ch != '\t')
+        {
+            return None;
+        }
+        cues += 1;
+        if cues > 100_000 {
+            return None;
+        }
+        result.push_str(&format!(
+            "{cues}\n{} --> {}\n{}\n\n",
+            write_stamp(start).replace('.', ","),
+            write_stamp(end).replace('.', ","),
+            caption.trim_end()
+        ));
+        if result.len() > 4 * 1024 * 1024 + 4096 {
+            return None;
+        }
+    }
+    Some(result.into_bytes())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn webvtt_sidecar_converts_short_cues_ids_and_positions_without_rebasing() {
+        let input = b"\xef\xbb\xbfWEBVTT - Local captions\r\n\r\nNOTE from the editor\r\nignored\r\n\r\nintro\r\n00:01.000 --> 00:03.500 align:start position:50.5%\r\nHola!\r\n\r\n00:00:04.000 --> 00:00:05.000\r\nSecond\r\n";
+        assert_eq!(
+            vtt_sidecar_to_srt(input).unwrap(),
+            b"1\n00:00:01,000 --> 00:00:03,500\nHola!\n\n2\n00:00:04,000 --> 00:00:05,000\nSecond\n\n"
+        );
+        assert_eq!(vtt_sidecar_to_srt(b"WEBVTT\n\n").unwrap(), b"");
+    }
+
+    #[test]
+    fn webvtt_sidecar_rejects_advanced_and_malformed_cues() {
+        for input in [
+            "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n\n",
+            "WEBVTT\n\nSTYLE\n::cue { color: red }\n\n",
+            "WEBVTT\n\nREGION\nid:r1\n\n",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:01.000\nZero\n\n",
+            "WEBVTT\n\n00:00:03.000 --> 00:00:01.000\nReversed\n\n",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000 align:invalid\nBad\n\n",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000 align:start align:end\nBad\n\n",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n\n",
+            "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nInvalid\x00cue\n\n",
+            "not WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBad\n\n",
+        ] {
+            assert!(vtt_sidecar_to_srt(input.as_bytes()).is_none(), "{input:?}");
+        }
+    }
 
     #[test]
     fn srt_decoding_accepts_bom_utf16_without_replacing_invalid_data() {
