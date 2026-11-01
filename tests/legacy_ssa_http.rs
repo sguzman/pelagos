@@ -49,30 +49,39 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     let movie = root.join("Legacy.mkv");
     let output = Command::new("ffmpeg")
         .args([
-            "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-            "-i", "color=s=32x32:r=5:d=5", "-i",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=s=32x32:r=5:d=5",
+            "-i",
         ])
         .arg(&subtitle)
         .args([
-            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4",
-            "-c:s", "ass", "-y",
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "ass", "-y",
         ])
         .arg(&movie)
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let original = fs::read(&movie).unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "viewer", "legacy-ssa-viewer-password").unwrap();
-    let token = auth::authenticate(
-        &state_dir, "viewer", "legacy-ssa-viewer-password", "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
+    let token = auth::authenticate(&state_dir, "viewer", "legacy-ssa-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state_dir, "viewer", &root).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(), state_dir.clone(),
+        "server".to_owned(),
+        state_dir.clone(),
     )));
     let items = request(&app, "/Items", Some(&token)).await;
     assert_eq!(items.status(), StatusCode::OK);
@@ -105,7 +114,10 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     let srt = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
     let response = request(&app, &srt, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CACHE_CONTROL], "private, no-store");
+    assert_eq!(
+        response.headers()[header::CACHE_CONTROL],
+        "private, no-store"
+    );
     let bytes = to_bytes(response.into_body(), 65_536).await.unwrap();
     assert!(std::str::from_utf8(&bytes).unwrap().contains("Hello SSA"));
     assert_eq!(fs::read(&movie).unwrap(), original);
