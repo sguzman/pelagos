@@ -1571,6 +1571,70 @@ pub(crate) async fn reauthorize_video_source(
     Ok(())
 }
 
+/// Copy an FFprobe-confirmed embedded PGS track to its raw SUP framing.
+/// Never render/burn bitmap subtitles or modify source media. The output is
+/// bounded like external SUP sidecars and shares text-extraction workers.
+async fn extract_embedded_pgs(
+    executable: &Path,
+    source: &Path,
+    index: i64,
+) -> Result<Vec<u8>, StatusCode> {
+    if !(0..=i64::from(i32::MAX)).contains(&index) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let workers = SUBTITLE_WORKERS
+        .get_or_init(|| Arc::new(Semaphore::new(2)))
+        .clone();
+    let _permit = workers
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    let mut child = Command::new(executable)
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error"])
+        .arg("-i")
+        .arg(source)
+        .arg("-map")
+        .arg(format!("0:{index}"))
+        .args(["-c:s", "copy", "-f", "sup", "pipe:1"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    tokio::time::timeout(Duration::from_secs(30), async {
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut payload = Vec::new();
+        stdout
+            .take(MAX_SUP_BYTES + 1)
+            .read_to_end(&mut payload)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if payload.len() as u64 > MAX_SUP_BYTES {
+            let _ = child.kill().await;
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let status = child
+            .wait()
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if !status.success()
+            || payload.len() < 13
+            || !pgs_header_valid(
+                payload[..13].try_into().expect("checked PGS header length"),
+                payload.len() as u64,
+            )
+        {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        Ok(payload)
+    })
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+}
+
 // Convert an already confined, bounded ASS/SSA sidecar to SRT without
 // passing a user-controlled file path to FFmpeg. Input is pipe-fed from the
 // authorized descriptor; source files and their directories are never written.
@@ -1684,6 +1748,11 @@ async fn serve_external_subtitle(
         })
         .and_then(|stream| stream["codec_name"].as_str())
         .map(str::to_owned);
+    let embedded_pgs = report.streams.iter().any(|stream| {
+        number(&stream["index"]) == Some(index)
+            && stream["codec_type"] == "subtitle"
+            && stream["codec_name"].as_str().is_some_and(is_pgs_codec)
+    });
     let discovered_source = source.clone();
     let sidecar = tokio::task::spawn_blocking(move || {
         external_subtitles(&discovered_source, &report)
@@ -1701,6 +1770,45 @@ async fn serve_external_subtitle(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if sidecar.is_none() {
+        if embedded_pgs {
+            if !matches!(format, "pgssub" | "sup") {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            let bytes = extract_embedded_pgs(state.ffmpeg_executable(), &source, index).await?;
+            let size = bytes.len() as u64;
+            let range = match pgs_requested_range(&headers, size) {
+                Ok(range) => range,
+                Err(()) => {
+                    reauthorize_video_source(
+                        state,
+                        headers,
+                        item,
+                        &source,
+                        &source_metadata,
+                    )
+                    .await?;
+                    return pgs_invalid_range(size);
+                }
+            };
+            let (start, length) = match &range {
+                Some(range) => (range.start as usize, (range.end - range.start + 1) as usize),
+                None => (0, bytes.len()),
+            };
+            reauthorize_video_source(
+                state,
+                headers,
+                item,
+                &source,
+                &source_metadata,
+            )
+            .await?;
+            let body = if head {
+                Body::empty()
+            } else {
+                Body::from(bytes[start..start + length].to_vec())
+            };
+            return pgs_success_response(body, size, range);
+        }
         if embedded_codec.is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
