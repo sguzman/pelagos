@@ -307,9 +307,10 @@ pub async fn generate_segmented_vod(
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-struct SegmentedOptions {
+struct SegmentedOptions<'a> {
     quality: Option<MpegTsQuality>,
     subtitle_index: Option<u8>,
+    external_srt: Option<&'a [u8]>,
 }
 
 /// Encode a bounded VOD from an explicit seek position. The source is
@@ -362,6 +363,33 @@ pub async fn generate_segmented_vod_with_burn_in_from(
     .await
 }
 
+/// Build bounded private HLS VOD with already-confined, caller-validated
+/// external SRT text. Cache identity and user authorization belong to the
+/// HTTP layer; this builder never discovers or opens arbitrary sidecar paths.
+pub async fn generate_segmented_vod_with_external_srt_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
+    srt_bytes: &[u8],
+) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_configured(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        start_seconds,
+        SegmentedOptions {
+            external_srt: Some(srt_bytes),
+            ..SegmentedOptions::default()
+        },
+    )
+    .await
+}
+
 async fn generate_segmented_vod_configured(
     controller: &TranscodeController,
     ffprobe: &Path,
@@ -369,7 +397,7 @@ async fn generate_segmented_vod_configured(
     output_dir: &Path,
     target_seconds: u32,
     start_seconds: f64,
-    options: SegmentedOptions,
+    options: SegmentedOptions<'_>,
 ) -> io::Result<HlsSegmentedArtifact> {
     if !(1..=10).contains(&target_seconds) {
         return Err(io::Error::new(
@@ -462,7 +490,13 @@ async fn generate_segmented_vod_configured(
                 "HLS segment budget exhausted",
             ));
         }
-        let size = if let Some(subtitle_index) = options.subtitle_index {
+        let size = if let Some(subtitle) = options.external_srt {
+            controller
+                .try_run_window_external_srt_capped(
+                    source, &path, start, duration, budget, subtitle,
+                )
+                .await?
+        } else if let Some(subtitle_index) = options.subtitle_index {
             controller
                 .try_run_window_burn_in_capped(
                     source,
