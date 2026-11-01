@@ -110,28 +110,35 @@ fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
     let mut pixels = vec![0; area];
     let mut cursor = 0_usize;
     let mut written = 0_usize;
+    let mut since_last_eol = false;
     while cursor < data.len() {
         if written == area {
             // A final EOL marker is allowed even if the last row was full.
-            return (data.len() == cursor + 2 && data[cursor..] == [0, 0])
-                .then_some(pixels);
+            return (data.len() == cursor + 2 && data[cursor..] == [0, 0]).then_some(pixels);
         }
         let opcode = *data.get(cursor)?;
         cursor += 1;
         if opcode != 0 {
             pixels[written] = opcode;
             written += 1;
+            since_last_eol = true;
             continue;
         }
         let control = *data.get(cursor)?;
         cursor += 1;
         if control == 0 {
-            // A short scanline is padded by the transparent palette index.
+            // A fully filled scanline followed by EOL must not skip
+            // the next row; two consecutive EOLs encode an empty row.
             let remainder = written % width;
-            written += if remainder == 0 { width } else { width - remainder };
+            if remainder != 0 {
+                written += width - remainder;
+            } else if !since_last_eol {
+                written += width;
+            }
             if written > area {
                 return None;
             }
+            since_last_eol = false;
             continue;
         }
         let mut count = usize::from(control & 0x3f);
@@ -155,6 +162,7 @@ fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
         }
         pixels[written..end].fill(color);
         written = end;
+        since_last_eol = true;
     }
     (written == area).then_some(pixels)
 }
@@ -344,14 +352,28 @@ mod tests {
 
     #[test]
     fn bitmap_rle_expansion_is_bounded_and_covers_literal_transparent_and_colored_runs() {
-        assert_eq!(decode_rle_bitmap(&[0xaa, 0xbb], 2, 1), Some(vec![0xaa, 0xbb]));
+        assert_eq!(
+            decode_rle_bitmap(&[0xaa, 0xbb], 2, 1),
+            Some(vec![0xaa, 0xbb])
+        );
         assert_eq!(decode_rle_bitmap(&[0, 0x83, 7], 3, 1), Some(vec![7; 3]));
-        assert_eq!(decode_rle_bitmap(&[0, 0xc0, 65, 7], 65, 1), Some(vec![7; 65]));
+        assert_eq!(
+            decode_rle_bitmap(&[0, 0xc0, 65, 7], 65, 1),
+            Some(vec![7; 65])
+        );
         assert_eq!(decode_rle_bitmap(&[0, 0x03], 3, 1), Some(vec![0; 3]));
         assert_eq!(decode_rle_bitmap(&[0, 0x40, 65], 65, 1), Some(vec![0; 65]));
         assert_eq!(
             decode_rle_bitmap(&[0, 0, 0xaa, 0xbb], 2, 2),
             Some(vec![0, 0, 0xaa, 0xbb])
+        );
+        assert_eq!(
+            decode_rle_bitmap(&[1, 2, 0, 0, 3, 4], 2, 2),
+            Some(vec![1, 2, 3, 4])
+        );
+        assert_eq!(
+            decode_rle_bitmap(&[0, 0, 0, 0, 3, 4], 2, 3),
+            Some(vec![0, 0, 0, 0, 3, 4])
         );
         assert_eq!(
             decode_rle_bitmap(&[0xaa, 0xbb, 0, 0], 2, 1),
