@@ -161,6 +161,11 @@ fn vtt_timing_parts(line: &str) -> Option<(&str, &str, &str)> {
     Some((start, end, settings))
 }
 
+// The WebVTT NOTE marker accepts a space or a tab before optional text.
+fn is_vtt_note(first: &str) -> bool {
+    first == "NOTE" || first.starts_with("NOTE ") || first.starts_with("NOTE\t")
+}
+
 /// Clip simple cue ranges into a short VOD window. Clamp overlapping cues,
 /// preserving source-clock timestamps only when explicitly requested.
 /// An empty output is valid for a subtitle-free window.
@@ -191,7 +196,7 @@ pub(crate) fn clip_vtt(
     for block in body.split("\n\n").filter(|part| !part.trim().is_empty()) {
         let mut lines = block.lines();
         let first = lines.next()?.trim();
-        if first == "NOTE" || first.starts_with("NOTE ") {
+        if is_vtt_note(first) {
             continue;
         }
         if matches!(first, "STYLE" | "REGION") {
@@ -299,7 +304,7 @@ pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
     for block in body.split("\n\n").filter(|block| !block.trim().is_empty()) {
         let mut lines = block.lines();
         let first = lines.next()?.trim();
-        if first == "NOTE" || first.starts_with("NOTE ") {
+        if is_vtt_note(first) {
             continue;
         }
         if matches!(first, "STYLE" | "REGION") {
@@ -406,6 +411,22 @@ mod tests {
                 "{malformed}"
             );
         }
+    }
+
+    #[test]
+    fn tab_delimited_webvtt_notes_do_not_reject_valid_captions() {
+        let source = b"WEBVTT\n\nNOTE\tEditorial annotation\nnot a cue\n\n00:01.000 --> 00:03.000\nHola\n\n";
+        assert_eq!(
+            vtt_sidecar_to_srt(source).unwrap(),
+            b"1\n00:00:01,000 --> 00:00:03,000\nHola\n\n"
+        );
+        assert_eq!(
+            clip_vtt(source, 0, 40_000_000, false).unwrap(),
+            b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHola\n\n"
+        );
+        let invalid = b"WEBVTT\n\nNOTES\tUnsupported\nnot a cue\n\n";
+        assert!(vtt_sidecar_to_srt(invalid).is_none());
+        assert!(clip_vtt(invalid, 0, 40_000_000, false).is_none());
     }
 
     #[test]
