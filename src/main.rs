@@ -1,4 +1,5 @@
 use std::{
+    future::IntoFuture,
     io::{self, IsTerminal, Read},
     net::SocketAddr,
     path::PathBuf,
@@ -234,7 +235,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .with_graceful_shutdown(async move {
         shutdown_signal().await;
         shutdown_notification.notify_one();
-    });
+    })
+    .into_future();
     tokio::pin!(server);
     let outcome = tokio::select! {
         result = &mut server => result,
