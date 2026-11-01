@@ -504,6 +504,26 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     assert_ne!(updated, burned);
     assert_eq!(fs::read(&source).unwrap(), original);
 
+    // A real UTF-16LE BOM SRT should enter FFmpeg as normalized UTF-8.
+    let mut utf16 = vec![0xff, 0xfe];
+    for unit in
+        "1\n00:00:00,200 --> 00:00:01,800\nUTF16 SUBTITLE VISIBLE\n\n"
+            .encode_utf16()
+    {
+        utf16.extend_from_slice(&unit.to_le_bytes());
+    }
+    fs::write(&sidecar, &utf16).unwrap();
+    let unicode_response = call(&app, &burn, Some(&token)).await;
+    assert_eq!(unicode_response.status(), StatusCode::OK);
+    let unicode_manifest = body_string(unicode_response).await;
+    assert_ne!(unicode_manifest, updated);
+    let unicode_bytes = segment_bytes(&app, id, &unicode_manifest, &token, 0).await;
+    let unicode_bright =
+        bright_pixels(&unicode_bytes, &temp.path().join("external-utf16.ts"));
+    assert!(unicode_bright > black + 20);
+    assert_eq!(fs::read(&sidecar).unwrap(), utf16);
+    assert_eq!(fs::read(&source).unwrap(), original);
+
     fs::write(&sidecar, b"this is not a valid SRT cue").unwrap();
     assert_eq!(
         call(&app, &burn, Some(&token)).await.status(),
