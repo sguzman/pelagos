@@ -155,10 +155,14 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         "GET",
         "/FallbackFont/Fonts/family.TTF",
         Some(&token),
-    ).await;
+    )
+    .await;
     assert_eq!(folded.status(), StatusCode::OK);
     assert_eq!(folded.headers()[header::CONTENT_TYPE], "font/ttf");
-    assert_eq!(to_bytes(folded.into_body(), 1024).await.unwrap().as_ref(), ttf.as_slice());
+    assert_eq!(
+        to_bytes(folded.into_body(), 1024).await.unwrap().as_ref(),
+        ttf.as_slice()
+    );
 
     for name in [
         "Spoof.ttf",
