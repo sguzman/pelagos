@@ -193,6 +193,19 @@ fn frame_rate(value: &Value) -> Option<f64> {
     (fps.is_finite() && fps > 0.0 && fps <= 1_000.0).then_some(fps)
 }
 
+/// Conservative classification for probed embedded text subtitles,
+/// consistent with the pinned MediaStream.IsTextSubtitleStream property.
+fn is_text_subtitle(codec: Option<&str>) -> bool {
+    let Some(codec) = codec else {
+        return false;
+    };
+    let codec = codec.to_ascii_lowercase();
+    !["pgs", "dvdsub", "vobsub", "dvbsub", "dvd_subtitle", "dvb_subtitle"]
+        .iter()
+        .any(|marker| codec.contains(marker))
+        && !matches!(codec.as_str(), "sup" | "sub")
+}
+
 fn mapped_stream(value: &Value) -> Option<MediaStream> {
     let stream_type = match value["codec_type"].as_str()? {
         "video" => "Video",
@@ -235,7 +248,8 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         is_default: number(&value["disposition"]["default"]) == Some(1),
         is_forced: number(&value["disposition"]["forced"]) == Some(1),
         is_external: false,
-        is_text_subtitle_stream: false,
+        is_text_subtitle_stream: stream_type == "Subtitle"
+            && is_text_subtitle(value["codec_name"].as_str()),
         delivery_method: None,
         delivery_url: None,
     })
@@ -1249,6 +1263,30 @@ mod tests {
         assert_eq!(audio.channel_layout.as_deref(), Some("5.1(side)"));
         assert_eq!(audio.bit_depth, Some(24));
         assert!(!audio.is_original);
+    }
+
+    #[test]
+    fn embedded_subtitle_text_classification_matches_supported_codecs() {
+        for (codec, is_text) in [
+            ("subrip", true),
+            ("ass", true),
+            ("webvtt", true),
+            ("mov_text", true),
+            ("hdmv_pgs_subtitle", false),
+            ("dvd_subtitle", false),
+            ("dvb_subtitle", false),
+            ("vobsub", false),
+        ] {
+            let stream = mapped_stream(&json!({
+                "index": 2,
+                "codec_type": "subtitle",
+                "codec_name": codec
+            }))
+            .unwrap();
+            assert_eq!(stream.is_text_subtitle_stream, is_text, "{codec}");
+            assert!(!stream.is_external);
+            assert_eq!(stream.delivery_url, None);
+        }
     }
 
     #[test]
