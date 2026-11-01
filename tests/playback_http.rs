@@ -1001,6 +1001,57 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         .status(),
         StatusCode::NOT_FOUND
     );
+    // Pinned subtitle HLS routes publish bounded segments only for
+    // authenticated, selected native text sources; a client must forward
+    // its authorization header to nested segment requests.
+    let playlist_uri =
+        format!("/Videos/{item}/{item}/Subtitles/2/subtitles.m3u8?segmentLength=2");
+    assert_eq!(
+        request(&app, "GET", &playlist_uri, None, "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let playlist_response = request(&app, "GET", &playlist_uri, Some(&viewer), "").await;
+    assert_eq!(playlist_response.status(), StatusCode::OK);
+    let playlist = to_bytes(playlist_response.into_body(), 4096).await.unwrap();
+    let playlist = std::str::from_utf8(&playlist).unwrap();
+    assert!(playlist.contains("#EXT-X-TARGETDURATION:2"));
+    assert!(playlist.contains("#EXT-X-ENDLIST"));
+    assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+    assert!(!playlist.to_ascii_lowercase().contains("apikey="));
+    let segment = playlist.lines().find(|line| line.starts_with("stream.vtt?")).unwrap();
+    let nested = format!("/Videos/{item}/{item}/Subtitles/2/{segment}");
+    assert_eq!(
+        request(&app, "GET", &nested, None, "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = request(&app, "GET", &nested, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let segment_body = to_bytes(response.into_body(), 4096).await.unwrap();
+    assert!(std::str::from_utf8(&segment_body)
+        .unwrap()
+        .contains("X-TIMESTAMP-MAP=MPEGTS:900000"));
+    assert!(std::str::from_utf8(&segment_body).unwrap().contains("Hello!"));
+    for (suffix, expected) in [
+        ("?segmentLength=0", StatusCode::BAD_REQUEST),
+        ("?segmentLength=61", StatusCode::BAD_REQUEST),
+        ("", StatusCode::BAD_REQUEST),
+    ] {
+        let uri = format!("/Videos/{item}/{item}/Subtitles/2/subtitles.m3u8{suffix}");
+        assert_eq!(request(&app, "GET", &uri, Some(&viewer), "").await.status(), expected);
+    }
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{item}/{item}/Subtitles/4/subtitles.m3u8?segmentLength=2"),
+            Some(&viewer),
+            "",
+        )
+        .await
+        .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+
     // The same authorized external SRT index can be requested as WebVTT.
     let converted_url = format!("/Videos/{item}/{item}/Subtitles/2/Stream.vtt");
     let response = request(&app, "GET", &converted_url, Some(&viewer), "").await;

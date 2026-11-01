@@ -1735,6 +1735,138 @@ async fn head_timed_ssa(
     subtitle_response(state, route, "ssa", headers, true, query).await
 }
 
+/// Pinned Jellyfin v12.3 HLS subtitle playlist, deliberately limited to
+/// short VOD and authenticated header transport. URLs do not embed tokens.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SubtitlePlaylistQuery {
+    segment_length: u64,
+}
+
+async fn subtitle_playlist(
+    state: Arc<AppState>,
+    item: String,
+    media_source: String,
+    index: i64,
+    segment_length: u64,
+    headers: HeaderMap,
+    head: bool,
+) -> Result<Response, StatusCode> {
+    if !(1..=60).contains(&segment_length) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
+    if item != media_source {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let (file, kind) = media_file(&state, item.clone(), scope).await?;
+    if kind != "video" {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let revision = tokio::fs::metadata(&file)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let report = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let discovered_file = file.clone();
+    let discovered_item = item.clone();
+    let media = tokio::task::spawn_blocking(move || {
+        source_from_probe(&discovered_item, "video", &discovered_file, &report)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let duration = media.run_time_ticks.ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let window = i64::try_from(segment_length)
+        .ok()
+        .and_then(|length| length.checked_mul(10_000_000))
+        .ok_or(StatusCode::BAD_REQUEST)?;
+    // Restrict playlist publication to at most 64 short, bounded segments.
+    if duration <= 0 || duration > window.saturating_mul(64) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    if !media.media_streams.iter().any(|stream| {
+        stream.index == index
+            && stream.stream_type == "Subtitle"
+            && stream.delivery_method == Some("External")
+            && stream.delivery_url.as_deref().is_some_and(|url| {
+                url.ends_with(".srt") || url.ends_with(".vtt")
+            })
+    }) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let mut text = format!(
+        "#EXTM3U\n#EXT-X-TARGETDURATION:{segment_length}\n#EXT-X-VERSION:3\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n"
+    );
+    let mut position = 0_i64;
+    while position < duration {
+        let end = position.saturating_add(window).min(duration);
+        text.push_str(&format!(
+            "#EXTINF:{:.3},\nstream.vtt?copyTimestamps=true&addVttTimeMap=true&startPositionTicks={position}&endPositionTicks={end}\n",
+            (end - position) as f64 / 10_000_000.0
+        ));
+        position = end;
+    }
+    text.push_str("#EXT-X-ENDLIST\n");
+    reauthorize_subtitle_source(state, headers, item, &file, &revision).await?;
+    let mut response = Response::new(if head {
+        Body::empty()
+    } else {
+        Body::from(text.clone())
+    });
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/vnd.apple.mpegurl"),
+    );
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    response.headers_mut().insert(
+        CONTENT_LENGTH,
+        HeaderValue::from_str(&text.len().to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    Ok(response)
+}
+
+async fn get_subtitle_playlist(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitlePlaylistQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_playlist(state, item, media_source, index, query.segment_length, headers, false).await
+}
+
+async fn head_subtitle_playlist(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitlePlaylistQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_playlist(state, item, media_source, index, query.segment_length, headers, true).await
+}
+
+// Segments use the pinned lowercase stream.vtt URL relative to subtitles.m3u8.
+async fn get_subtitle_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, false, query).await
+}
+
+async fn head_subtitle_segment(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, true, query).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -1748,6 +1880,14 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.vtt",
             get(get_external_vtt).head(head_external_vtt),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/subtitles.m3u8",
+            get(get_subtitle_playlist).head(head_subtitle_playlist),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/stream.vtt",
+            get(get_subtitle_segment).head(head_subtitle_segment),
         )
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.ass",
