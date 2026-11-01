@@ -1134,6 +1134,33 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             StatusCode::OK
         );
     }
+    // Pinned profile evaluation applies to the selected ASS/SSA track,
+    // not to every unrelated sidecar advertised in PlaybackInfo.
+    for (index, format, expected) in [
+        (4, "ass", StatusCode::OK),
+        (5, "ass", StatusCode::NOT_IMPLEMENTED),
+        (5, "ssa", StatusCode::OK),
+    ] {
+        let body = serde_json::json!({
+            "SubtitleStreamIndex": index,
+            "DeviceProfile": {
+                "DirectPlayProfiles": [{"Type":"Video","Container":"mp4"}],
+                "SubtitleProfiles": [{"Method":"External","Format":format}]
+            }
+        });
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                &format!("/Items/{item}/PlaybackInfo"),
+                Some(&viewer),
+                &body.to_string(),
+            )
+            .await
+            .status(),
+            expected
+        );
+    }
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(
         vtt_url,
