@@ -111,6 +111,11 @@ pub struct MediaSource {
     name: String,
     is_remote: bool,
     run_time_ticks: Option<i64>,
+    // Pinned MediaSourceInfo provides these fields to unmodified clients.
+    // Never infer a bitrate or an ambiguous default track.
+    bitrate: Option<i64>,
+    video_type: Option<&'static str>,
+    default_audio_stream_index: Option<i64>,
     supports_direct_play: bool,
     supports_direct_stream: bool,
     supports_transcoding: bool,
@@ -246,6 +251,18 @@ fn source_from_probe(
             seconds.is_finite() && *seconds >= 0.0 && *seconds <= i64::MAX as f64 / 10_000_000.0
         })
         .map(|seconds| (seconds * 10_000_000.0).round() as i64);
+    let media_streams: Vec<MediaStream> =
+        result.streams.iter().filter_map(mapped_stream).collect();
+    let mut audio_tracks = media_streams
+        .iter()
+        .filter(|stream| stream.stream_type == "Audio");
+    let first_audio = audio_tracks.next();
+    let default_audio_stream_index = media_streams
+        .iter()
+        .find(|stream| stream.stream_type == "Audio" && stream.is_default)
+        .or_else(|| audio_tracks.next().is_none().then_some(first_audio).flatten())
+        .map(|stream| stream.index)
+        .filter(|index| i32::try_from(*index).is_ok());
     MediaSource {
         protocol: "File",
         id: item_id.to_owned(),
@@ -255,10 +272,13 @@ fn source_from_probe(
         name,
         is_remote: false,
         run_time_ticks,
+        bitrate: measured_bitrate(result).filter(|rate| i32::try_from(*rate).is_ok()),
+        video_type: (kind == "video").then_some("VideoFile"),
+        default_audio_stream_index,
         supports_direct_play: true,
         supports_direct_stream: false,
         supports_transcoding: false,
-        media_streams: result.streams.iter().filter_map(mapped_stream).collect(),
+        media_streams,
         required_http_headers: Default::default(),
         direct_stream_url: format!(
             "/{}/{item_id}/stream?static=true",
@@ -870,6 +890,31 @@ mod tests {
         assert!(profile_contains("h264,hevc", "H264"));
         assert!(!profile_contains("-h264,hevc", "h264"));
         assert!(profile_contains("-h264,hevc", "flac"));
+    }
+
+    #[test]
+    fn media_source_track_defaults_are_never_ambiguous() {
+        let mut report = probe::ProbeReport {
+            path: PathBuf::from("movie.mp4"),
+            size_bytes: 42,
+            format: Some(json!({"bit_rate":"2000000"})),
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"h264"}),
+                json!({"index":1,"codec_type":"audio","codec_name":"aac"}),
+                json!({"index":2,"codec_type":"audio","codec_name":"ac3"}),
+            ],
+            chapters: vec![],
+        };
+        let source = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
+        assert_eq!(source.default_audio_stream_index, None);
+        assert_eq!(source.bitrate, Some(2_000_000));
+        assert_eq!(source.video_type, Some("VideoFile"));
+        report.streams[2]["disposition"] = json!({"default":1});
+        let selected = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
+        assert_eq!(selected.default_audio_stream_index, Some(2));
+        report.format = None;
+        let unknown = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
+        assert_eq!(unknown.bitrate, None);
     }
 
     #[test]

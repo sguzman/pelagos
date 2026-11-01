@@ -151,6 +151,10 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
     let info: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(info["MediaSources"][0]["Protocol"], "File");
     assert_eq!(info["MediaSources"][0]["Container"], "mp4");
+    assert_eq!(info["MediaSources"][0]["Bitrate"], 4_000_000);
+    assert_eq!(info["MediaSources"][0]["VideoType"], "VideoFile");
+    assert_eq!(info["MediaSources"][0]["DefaultAudioStreamIndex"], 1);
+
     assert_eq!(info["MediaSources"][0]["RunTimeTicks"], 612_500_000);
     assert_eq!(info["MediaSources"][0]["MediaStreams"][0]["Codec"], "h264");
     assert_eq!(
