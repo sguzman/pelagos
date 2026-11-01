@@ -311,7 +311,7 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
             {
                 continue;
             }
-            (format, Some(language.to_ascii_lowercase()))
+            (if format == "vtt" { "vtt" } else { "srt" }, Some(language.to_ascii_lowercase()))
         };
         if entry.file_type().is_ok_and(|kind| kind.is_file())
             && entry
