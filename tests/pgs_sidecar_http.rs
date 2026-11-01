@@ -90,6 +90,15 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     ]);
     unfinished_object.extend_from_slice(&PGS[24..]);
     fs::write(root.join("Feature.pt.sup"), &unfinished_object).unwrap();
+    let mut completed_object = PGS[..24].to_vec();
+    completed_object.extend_from_slice(&[
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0, 8, 0xaa,
+    ]);
+    completed_object.extend_from_slice(&[
+        b'P', b'G', 0, 0, 0, 3, 0, 0, 0, 3, 0x15, 0, 5, 0, 1, 0, 0x40, 0xbb,
+    ]);
+    completed_object.extend_from_slice(&PGS[24..]);
+    fs::write(root.join("Feature.nl.sup"), &completed_object).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -127,7 +136,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .iter()
         .filter(|stream| stream["Codec"] == "pgssub")
         .collect::<Vec<_>>();
-    assert_eq!(pgs.len(), 4);
+    assert_eq!(pgs.len(), 5);
     assert!(
         pgs.iter()
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
@@ -286,6 +295,21 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         send(&app, "GET", &alias, Some(&token), &[]).await.status(),
         StatusCode::OK
     );
+    // A properly completed pair of RLE object fragments stays deliverable
+    // without any mutation or attempted bitmap decoding.
+    let complete_index = pgs
+        .iter()
+        .find(|track| track["Language"] == "nl")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let complete_url = format!("/Videos/{id}/{id}/Subtitles/{complete_index}/Stream.pgssub");
+    let complete = send(&app, "GET", &complete_url, Some(&token), &[]).await;
+    assert_eq!(complete.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(complete.into_body(), 1024).await.unwrap().as_ref(),
+        completed_object.as_slice()
+    );
     for language in ["fr", "de", "pt"] {
         let invalid_index = pgs
             .iter()
@@ -319,6 +343,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     assert_eq!(
         fs::read(root.join("Feature.pt.sup")).unwrap(),
         unfinished_object
+    );
+    assert_eq!(
+        fs::read(root.join("Feature.nl.sup")).unwrap(),
+        completed_object
     );
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
