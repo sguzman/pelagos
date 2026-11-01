@@ -1,6 +1,7 @@
-//! Bounded, read-only structural preflight for raw Blu-ray PGS SUP tracks.
-//! This validates packet framing and the supported segment *shapes* before
-//! delivery, not palettes, RLE pixels, composition references, or rendering.
+//! Bounded, read-only preflight for raw Blu-ray PGS SUP tracks.
+//! Packet and segment layout validation now includes bounded indexed-pixel
+//! expansion for completed RLE objects. It does not interpret palettes,
+//! resolve graphical composition, or render subtitles to a video frame.
 use std::{collections::BTreeMap, io::Read};
 
 pub(crate) const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
