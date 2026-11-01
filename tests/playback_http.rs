@@ -798,6 +798,10 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     fs::write(library.join("Feature.eng.srt"), subtitle).unwrap();
     let webvtt = b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBonjour!\n";
     fs::write(library.join("Feature.fr.vtt"), webvtt).unwrap();
+    let ass = b"[Script Info]\nTitle: Pelagos\n[V4+ Styles]\n";
+    let ssa = b"[Script Info]\nTitle: Native SSA\n[V4 Styles]\n";
+    fs::write(library.join("Feature.xu.ass"), ass).unwrap();
+    fs::write(library.join("Feature.xy.ssa"), ssa).unwrap();
     let outside = fixture.path().join("outside.srt");
     fs::write(&outside, b"SECRET OUTSIDE LIBRARY").unwrap();
     symlink(&outside, library.join("Feature.es.srt")).unwrap();
@@ -840,7 +844,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     let value: serde_json::Value =
         serde_json::from_slice(&to_bytes(info.into_body(), 65_536).await.unwrap()).unwrap();
     let streams = value["MediaSources"][0]["MediaStreams"].as_array().unwrap();
-    assert_eq!(streams.len(), 4);
+    assert_eq!(streams.len(), 6);
     assert_eq!(streams[2]["Index"], 2);
     assert_eq!(streams[2]["Language"], "eng");
     assert_eq!(streams[2]["IsExternal"], true);
@@ -1094,6 +1098,24 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             .status(),
         StatusCode::OK
     );
+    assert_eq!(streams[4]["Codec"], "ass");
+    assert_eq!(streams[5]["Codec"], "ssa");
+    for (index, format, expected, mime) in [
+        (4, "ass", ass.as_slice(), "text/x-ass; charset=utf-8"),
+        (5, "ssa", ssa.as_slice(), "text/x-ssa; charset=utf-8"),
+    ] {
+        let route = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.{format}");
+        let response = request(&app, "GET", &route, Some(&viewer), "").await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
+        assert_eq!(to_bytes(response.into_body(), 1_024).await.unwrap().as_ref(), expected);
+        assert_eq!(request(&app, "HEAD", &route, Some(&viewer), "").await.status(), StatusCode::OK);
+        assert_eq!(
+            request(&app, "GET", &format!("/Videos/{item}/{item}/Subtitles/{index}/0/Stream.{format}"), Some(&viewer), "")
+                .await.status(),
+            StatusCode::OK
+        );
+    }
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(
         vtt_url,

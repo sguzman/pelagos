@@ -333,6 +333,8 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         let format = match tokens.last().copied() {
             Some("srt") => "srt",
             Some("vtt") => "vtt",
+            Some("ass") => "ass",
+            Some("ssa") => "ssa",
             _ => continue,
         };
         let mut language = None;
@@ -444,10 +446,11 @@ fn source_from_probe(
         }
         for sidecar in external_subtitles(file, result) {
             let language = sidecar.language.as_deref();
-            let codec = if sidecar.format == "vtt" {
-                "webvtt"
-            } else {
-                "subrip"
+            let codec = match sidecar.format {
+                "vtt" => "webvtt",
+                "ass" => "ass",
+                "ssa" => "ssa",
+                _ => "subrip",
             };
             let mut stream = mapped_stream(&serde_json::json!({
                 "index": sidecar.index,
@@ -606,6 +609,10 @@ fn profile_allows_external_subtitles(
             "srt"
         } else if url.ends_with(".vtt") {
             "vtt"
+        } else if url.ends_with(".ass") {
+            "ass"
+        } else if url.ends_with(".ssa") {
+            "ssa"
         } else {
             return Ok(false);
         };
@@ -1261,11 +1268,12 @@ async fn serve_external_subtitle(
         });
         response.headers_mut().insert(
             CONTENT_TYPE,
-            HeaderValue::from_static(if format == "vtt" {
-                "text/vtt; charset=utf-8"
-            } else {
-                "application/x-subrip"
-            }),
+            HeaderValue::from_static(match format {
+            "vtt" => "text/vtt; charset=utf-8",
+            "ass" => "text/x-ass; charset=utf-8",
+            "ssa" => "text/x-ssa; charset=utf-8",
+            _ => "application/x-subrip",
+        }),
         );
         response
             .headers_mut()
@@ -1325,10 +1333,11 @@ async fn serve_external_subtitle(
     let mut response = Response::new(body);
     response.headers_mut().insert(
         CONTENT_TYPE,
-        HeaderValue::from_static(if format == "vtt" {
-            "text/vtt; charset=utf-8"
-        } else {
-            "application/x-subrip"
+        HeaderValue::from_static(match format {
+            "vtt" => "text/vtt; charset=utf-8",
+            "ass" => "text/x-ass; charset=utf-8",
+            "ssa" => "text/x-ssa; charset=utf-8",
+            _ => "application/x-subrip",
         }),
     );
     response
@@ -1558,6 +1567,78 @@ async fn head_timed_vtt(
     subtitle_response(state, route, "vtt", headers, true, query).await
 }
 
+async fn get_external_ass(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "ass", headers, false, query).await
+}
+
+async fn head_external_ass(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "ass", headers, true, query).await
+}
+
+async fn get_external_ssa(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "ssa", headers, false, query).await
+}
+
+async fn head_external_ssa(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "ssa", headers, true, query).await
+}
+
+async fn get_timed_ass(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "ass", headers, false, query).await
+}
+
+async fn head_timed_ass(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "ass", headers, true, query).await
+}
+
+async fn get_timed_ssa(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "ssa", headers, false, query).await
+}
+
+async fn head_timed_ssa(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "ssa", headers, true, query).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -1573,12 +1654,28 @@ pub fn router() -> Router<Arc<AppState>> {
             get(get_external_vtt).head(head_external_vtt),
         )
         .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.ass",
+            get(get_external_ass).head(head_external_ass),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.ssa",
+            get(get_external_ssa).head(head_external_ssa),
+        )
+        .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.srt",
             get(get_timed_srt).head(head_timed_srt),
         )
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.vtt",
             get(get_timed_vtt).head(head_timed_vtt),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.ass",
+            get(get_timed_ass).head(head_timed_ass),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.ssa",
+            get(get_timed_ssa).head(head_timed_ssa),
         )
 }
 
