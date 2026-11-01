@@ -165,10 +165,27 @@ fn mapped_attachment(value: &Value, item_id: &str) -> Option<MediaAttachment> {
         codec_tag: text_field(&value["codec_tag_string"]),
         comment: text_field(&value["tags"]["comment"]),
         index,
-        file_name: text_field(&value["tags"]["filename"]),
+        file_name: safe_attachment_filename(&value["tags"]["filename"]),
         mime_type: mime,
         delivery_url: format!("/Videos/{item_id}/{item_id}/Attachments/{index}"),
     })
+}
+
+// Attachment filenames are untrusted Matroska metadata. A client may persist
+// them as local files, so never publish paths, traversal components, or
+// platform-reserved filename punctuation; extraction uses stream index only.
+fn safe_attachment_filename(value: &Value) -> Option<String> {
+    let name = text_field(value)?;
+    if name == "."
+        || name == ".."
+        || name.trim() != name
+        || name
+            .chars()
+            .any(|ch| matches!(ch, '/' | '\\' | ':' | '<' | '>' | '"' | '|' | '?' | '*'))
+    {
+        return None;
+    }
+    Some(name)
 }
 
 #[derive(Debug, Serialize)]
@@ -2598,6 +2615,39 @@ mod tests {
             assert_eq!(stream.is_text_subtitle_stream, is_text, "{codec}");
             assert!(!stream.is_external);
             assert_eq!(stream.delivery_url, None);
+        }
+    }
+
+    #[test]
+    fn attachment_filenames_are_never_client_visible_paths() {
+        let make = |filename: &str| {
+            mapped_attachment(
+                &json!({
+                    "index": 1,
+                    "codec_type": "attachment",
+                    "codec_name": "ttf",
+                    "tags": {
+                        "mimetype": "application/x-truetype-font",
+                        "filename": filename
+                    }
+                }),
+                "media-id",
+            )
+            .expect("font stream is otherwise deliverable")
+        };
+        assert_eq!(make("subtitle-font.ttf").file_name.as_deref(), Some("subtitle-font.ttf"));
+        for unsafe_name in [
+            "../secret.ttf",
+            "folder/font.ttf",
+            "C:\\fonts\\private.ttf",
+            "font:alternate.ttf",
+            "..",
+            " trailing.ttf ",
+            "invalid\\nname.ttf",
+        ] {
+            let mapped = make(unsafe_name);
+            assert_eq!(mapped.file_name, None, "{unsafe_name:?}");
+            assert_eq!(mapped.delivery_url, "/Videos/media-id/media-id/Attachments/1");
         }
     }
 
