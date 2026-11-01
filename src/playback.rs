@@ -779,11 +779,11 @@ fn profile_allows_external_subtitles(
     Ok(found)
 }
 
-/// A selected embedded ASS track can be separately extracted as native ASS,
-/// SRT, or VTT. Offer a fallback URL only when the device's explicit external
-/// subtitle profile permits that *delivered* format. Never rewrite source
-/// codecs, selection indices, or the file used for direct-play.
-fn negotiate_embedded_ass_delivery(
+/// Offer only actual separately delivered text formats for the selected
+/// track: embedded ASS can fall back to SRT/VTT, and an advertised SRT
+/// (embedded or sidecar) can fall back to WebVTT. Keep unselected tracks,
+/// source codecs, original files and stream indices unchanged.
+fn negotiate_selected_subtitle_delivery(
     profile: &Value,
     source: &mut MediaSource,
 ) -> Result<(), StatusCode> {
@@ -805,24 +805,30 @@ fn negotiate_embedded_ass_delivery(
         return Ok(());
     };
     let stream = &source.media_streams[position];
-    if stream.is_external || stream.codec.as_deref() != Some("ass") {
-        return Ok(());
-    }
-    let Some(original) = stream
-        .delivery_url
-        .as_ref()
-        .filter(|url| url.ends_with("/Stream.ass"))
-        .cloned()
-    else {
+    let Some(original) = stream.delivery_url.clone() else {
         return Ok(());
     };
-    // Preserve the style-bearing native ASS path whenever the client accepts
-    // it. Only use text conversion when native delivery is not supported.
+    let fallback_formats: &[&str] = if !stream.is_external
+        && stream.codec.as_deref() == Some("ass")
+        && original.ends_with("/Stream.ass")
+    {
+        &["srt", "vtt"]
+    } else if original.ends_with("/Stream.srt") {
+        // Both a real SRT sidecar and the bounded embedded SRT extractor
+        // support Stream.vtt; native ASS/SSA sidecars do not.
+        &["vtt"]
+    } else {
+        &[]
+    };
+    if fallback_formats.is_empty() {
+        return Ok(());
+    }
+    // Preserve native delivery whenever it is already permitted.
     if profile_allows_external_subtitles(profiles, source)? {
         return Ok(());
     }
-    let prefix = original.strip_suffix(".ass").expect("validated ASS suffix");
-    for format in ["srt", "vtt"] {
+    let prefix = original.rsplit_once('.').expect("validated subtitle suffix").0;
+    for format in fallback_formats {
         source.media_streams[position].delivery_url = Some(format!("{prefix}.{format}"));
         if profile_allows_external_subtitles(profiles, source)? {
             return Ok(());
@@ -1198,7 +1204,7 @@ async fn playback_info(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     if let Some(profile) = profile.as_ref() {
-        negotiate_embedded_ass_delivery(profile, &mut source)?;
+        negotiate_selected_subtitle_delivery(profile, &mut source)?;
         if !profile_allows_direct_file(profile, &source, &probed)? {
             // There is no remux or transcode fallback yet. Refuse the
             // unmatched profile rather than advertising unsupported playback.
@@ -2573,7 +2579,7 @@ mod tests {
             source.default_subtitle_stream_index = Some(1);
             let profile = json!({"SubtitleProfiles":rules});
             assert_eq!(
-                negotiate_embedded_ass_delivery(&profile, &mut source),
+                negotiate_selected_subtitle_delivery(&profile, &mut source),
                 Ok(())
             );
             let selected = &source.media_streams[1];
@@ -2590,8 +2596,56 @@ mod tests {
         source.default_subtitle_stream_index = Some(1);
         let malformed = json!({"SubtitleProfiles":[{"Method":"External","Unknown":true}]});
         assert_eq!(
-            negotiate_embedded_ass_delivery(&malformed, &mut source),
+            negotiate_selected_subtitle_delivery(&malformed, &mut source),
             Err(StatusCode::BAD_REQUEST)
+        );
+    }
+
+    #[test]
+    fn selected_srt_sidecar_and_embedded_srt_offer_only_supported_vtt_fallback() {
+        let fixture = tempfile::tempdir().unwrap();
+        let movie = fixture.path().join("Feature.mkv");
+        std::fs::write(&movie, b"media").unwrap();
+        std::fs::write(fixture.path().join("Feature.eng.srt"), b"caption").unwrap();
+        let sidecar_report = probe::ProbeReport {
+            path: movie.clone(),
+            size_bytes: 5,
+            format: None,
+            streams: vec![json!({"index":0,"codec_type":"video","codec_name":"mpeg4"})],
+            chapters: vec![],
+        };
+        let embedded_report = probe::ProbeReport {
+            path: movie.clone(),
+            size_bytes: 5,
+            format: None,
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"mpeg4"}),
+                json!({"index":1,"codec_type":"subtitle","codec_name":"subrip"}),
+            ],
+            chapters: vec![],
+        };
+        for (report, is_external) in [(&sidecar_report, true), (&embedded_report, false)] {
+            let mut source = source_from_probe("item", "video", &movie, report);
+            source.default_subtitle_stream_index = Some(1);
+            let profile = json!({"SubtitleProfiles":[{"Method":"External","Format":"vtt"}]});
+            assert_eq!(negotiate_selected_subtitle_delivery(&profile, &mut source), Ok(()));
+            let selected = source.media_streams.iter()
+                .find(|stream| stream.stream_type == "Subtitle" && stream.index == 1)
+                .unwrap();
+            assert_eq!(
+                selected.delivery_url.as_deref(),
+                Some("/Videos/item/item/Subtitles/1/Stream.vtt")
+            );
+            assert_eq!(selected.codec.as_deref(), Some("subrip"));
+            assert_eq!(selected.is_external, is_external);
+        }
+        let mut source = source_from_probe("item", "video", &movie, &sidecar_report);
+        source.default_subtitle_stream_index = Some(1);
+        let native_profile = json!({"SubtitleProfiles":[{"Method":"External","Format":"srt"}]});
+        assert_eq!(negotiate_selected_subtitle_delivery(&native_profile, &mut source), Ok(()));
+        assert_eq!(
+            source.media_streams[1].delivery_url.as_deref(),
+            Some("/Videos/item/item/Subtitles/1/Stream.srt")
         );
     }
 
