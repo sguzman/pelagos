@@ -155,22 +155,15 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         ("External", "ssa", "ass", StatusCode::NOT_IMPLEMENTED),
         ("Embed", "srt", "ass", StatusCode::NOT_IMPLEMENTED),
     ] {
-        let response = post_playback_with_subtitle_profile(
-            &app, id, &viewer, index, method, format,
-        )
-        .await;
+        let response =
+            post_playback_with_subtitle_profile(&app, id, &viewer, index, method, format).await;
         assert_eq!(response.status(), expected, "{method}/{format}");
         if expected != StatusCode::OK {
             continue;
         }
-        let info: serde_json::Value = serde_json::from_slice(
-            &to_bytes(response.into_body(), 65_536).await.unwrap()
-        )
-        .unwrap();
-        assert_eq!(
-            info["MediaSources"][0]["DefaultSubtitleStreamIndex"],
-            index
-        );
+        let info: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
+        assert_eq!(info["MediaSources"][0]["DefaultSubtitleStreamIndex"], index);
         let selected = info["MediaSources"][0]["MediaStreams"]
             .as_array()
             .unwrap()
