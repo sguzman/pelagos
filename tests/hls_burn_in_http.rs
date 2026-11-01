@@ -169,6 +169,8 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
         format!("{plain_url}&subtitleStreamIndex={index}"),
         format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=External"),
         format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=Embed"),
+        format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=Hls"),
+        format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=Drop"),
     ] {
         assert_eq!(
             call(&app, &unsupported, Some(&token)).await.status(),
@@ -203,6 +205,13 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     assert_eq!(burn_response.status(), StatusCode::OK);
     let burned = body_string(burn_response).await;
     assert_ne!(plain, burned);
+    // ASP.NET's pinned enum accepts the named Encode method and its 0
+    // numeric value, without creating a differently keyed HLS publication.
+    let numeric = format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=0");
+    assert_eq!(
+        body_string(call(&app, &numeric, Some(&token)).await).await,
+        burned
+    );
     assert_eq!(
         body_string(call(&app, &burn_url, Some(&token)).await).await,
         burned
