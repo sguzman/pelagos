@@ -103,6 +103,11 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         String::from_utf8_lossy(&output.stderr)
     );
     let original = fs::read(&movie).unwrap();
+    fs::write(
+        root.join("Feature.eng.srt"),
+        b"1\n00:00:00,000 --> 00:00:01,500\nSidecar cue\n",
+    )
+    .unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "native-ass-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "native-ass-viewer-password").unwrap();
@@ -134,6 +139,43 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     assert_eq!(playback.status(), StatusCode::OK);
     let info: serde_json::Value =
         serde_json::from_slice(&to_bytes(playback.into_body(), 65_536).await.unwrap()).unwrap();
+    let sidecar = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "subrip")
+        .expect("adjacent SRT sidecar advertised");
+    let sidecar_index = sidecar["Index"].as_i64().unwrap();
+    let profile = post_playback_with_subtitle_profile(
+        &app, id, &viewer, sidecar_index, "External", "webvtt",
+    )
+    .await;
+    assert_eq!(profile.status(), StatusCode::OK);
+    let profile_info: serde_json::Value = serde_json::from_slice(
+        &to_bytes(profile.into_body(), 65_536).await.unwrap()
+    )
+    .unwrap();
+    assert_eq!(
+        profile_info["MediaSources"][0]["DefaultSubtitleStreamIndex"],
+        sidecar_index
+    );
+    let selected_sidecar = profile_info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Index"] == sidecar_index && stream["Type"] == "Subtitle")
+        .unwrap();
+    assert_eq!(selected_sidecar["IsExternal"], true);
+    assert_eq!(selected_sidecar["Codec"], "subrip");
+    let vtt_url = format!(
+        "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.vtt"
+    );
+    assert_eq!(selected_sidecar["DeliveryUrl"].as_str(), Some(vtt_url.as_str()));
+    let converted = request(&app, "GET", &vtt_url, Some(&viewer)).await;
+    assert_eq!(converted.status(), StatusCode::OK);
+    let converted = to_bytes(converted.into_body(), 65_536).await.unwrap();
+    assert!(std::str::from_utf8(&converted).unwrap().contains("Sidecar cue"));
+
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
