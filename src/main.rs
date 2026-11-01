@@ -69,6 +69,35 @@ enum Command {
     },
 }
 
+// A graceful HTTP stop leaves the user's media untouched. The executable
+// handles normal interactive SIGINT and service-manager SIGTERM on Unix.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut terminate) => {
+                tokio::select! {
+                    result = tokio::signal::ctrl_c() => {
+                        if let Err(error) = result {
+                            tracing::error!(%error, "SIGINT listener failed");
+                        }
+                    }
+                    _ = terminate.recv() => {}
+                }
+            }
+            Err(error) => {
+                tracing::warn!(%error, "SIGTERM listener unavailable, falling back to SIGINT");
+                let _ = tokio::signal::ctrl_c().await;
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+    info!("shutdown signal received, draining active HTTP responses");
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tracing_subscriber::fmt()
@@ -174,30 +203,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
     let listening_address = listener.local_addr()?;
+    let mut discovery_task = None;
     if args.discover {
         if address.ip().is_loopback() {
             return Err("--discover requires an HTTP LAN bind such as --bind 0.0.0.0".into());
         }
         let udp = discovery::bind_default().await?;
         let discovery_id = id.clone();
-        tokio::spawn(async move {
+        discovery_task = Some(tokio::spawn(async move {
             if let Err(error) = discovery::serve(udp, listening_address.port(), discovery_id).await
             {
                 tracing::error!(%error, "UDP discovery stopped");
             }
-        });
+        }));
         info!(
             port = discovery::DISCOVERY_PORT,
             "opt-in Jellyfin UDP discovery active"
         );
     }
     info!(%listening_address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
-    axum::serve(
+    let outcome = axum::serve(
         listener,
         app::router(Arc::new(
             app::AppState::with_auth_dir(id, state_for_auth).with_listen_addr(listening_address),
         )),
     )
-    .await?;
+    .with_graceful_shutdown(shutdown_signal())
+    .await;
+    if let Some(task) = discovery_task {
+        task.abort();
+        let _ = task.await;
+    }
+    outcome?;
+    info!("Pelagos HTTP listener stopped");
     Ok(())
 }
