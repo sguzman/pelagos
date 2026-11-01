@@ -194,9 +194,8 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
             .status(),
         StatusCode::NOT_IMPLEMENTED
     );
-    let malformed_playlist = format!(
-        "/Videos/{id}/{id}/Subtitles/{malformed_index}/subtitles.m3u8?segmentLength=2"
-    );
+    let malformed_playlist =
+        format!("/Videos/{id}/{id}/Subtitles/{malformed_index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
         request(&app, "GET", &malformed_playlist, Some(&viewer))
             .await
