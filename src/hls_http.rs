@@ -3,7 +3,7 @@
 use crate::{
     app::AppState,
     auth_api, hls, playback, streaming,
-    transcode::{MpegTsQuality, TranscodeController},
+    transcode::{ExternalTextFormat, ExternalTextTrack, MpegTsQuality, TranscodeController},
 };
 use axum::{
     Router,
@@ -110,6 +110,16 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
         }
         let normalized = if filename.to_ascii_lowercase().ends_with(".vtt") {
             crate::subtitle_timing::vtt_sidecar_to_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
+        } else if filename.to_ascii_lowercase().ends_with(".ass") {
+            if !crate::probe::is_native_ass_script(&bytes) {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            bytes
+        } else if filename.to_ascii_lowercase().ends_with(".ssa") {
+            if !crate::probe::is_native_ssa_script(&bytes) {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            bytes
         } else {
             playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
         };
@@ -750,15 +760,22 @@ async fn generate_hls_playlist(
             )
             .await
         }
-        Some(HlsSubtitle::ExternalSrt { bytes, .. }) => {
-            hls::generate_segmented_vod_with_external_srt_from(
+        Some(HlsSubtitle::ExternalSrt { bytes, revision }) => {
+            let format = if revision.filename.to_ascii_lowercase().ends_with(".ass") {
+                ExternalTextFormat::Ass
+            } else if revision.filename.to_ascii_lowercase().ends_with(".ssa") {
+                ExternalTextFormat::Ssa
+            } else {
+                ExternalTextFormat::Srt
+            };
+            hls::generate_segmented_vod_with_external_text_from(
                 &registry.controller,
                 state.probe_executable(),
                 &source,
                 &private_root.join("bundle"),
                 target_seconds,
                 start_time_ticks as f64 / 10_000_000.0,
-                bytes,
+                ExternalTextTrack { bytes, format },
             )
             .await
         }
