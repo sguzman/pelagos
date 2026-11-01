@@ -279,9 +279,8 @@ mod tests {
 
     #[tokio::test]
     async fn native_ass_probe_fails_closed_when_extradata_is_absent_or_probe_fails() {
-        let (_dir, probe, media) = fake_probe(
-            r#"printf '%s' '{"streams":[{"index":1,"codec_name":"ass"}]}'"#,
-        );
+        let (_dir, probe, media) =
+            fake_probe(r#"printf '%s' '{"streams":[{"index":1,"codec_name":"ass"}]}'"#);
         assert!(
             native_ass_stream_indices(&media, &probe)
                 .await
