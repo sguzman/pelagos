@@ -26,6 +26,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello ASS
 "#;
 
+const SYNTHETIC_SSA: &str = r#"[Script Info]
+ScriptType: v4.00
+[V4 Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding
+Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,0,0,1,2,0,2,10,10,10,0,1
+[Events]
+Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: Marked=0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Sidecar SSA
+"#;
+
 async fn request(app: &Router, method: &str, url: &str, token: Option<&str>) -> Response {
     let mut builder = Request::builder().method(method).uri(url);
     if let Some(token) = token {
@@ -108,6 +118,8 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         b"1\n00:00:00,000 --> 00:00:01,500\nSidecar cue\n",
     )
     .unwrap();
+    fs::write(root.join("Feature.es.ass"), SYNTHETIC_ASS).unwrap();
+    fs::write(root.join("Feature.fr.ssa"), SYNTHETIC_SSA).unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "native-ass-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "native-ass-viewer-password").unwrap();
@@ -178,6 +190,66 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             .contains("Sidecar cue")
     );
 
+    // Real external ASS/SSA sidecars remain native but can now be
+    // pipe-converted into SRT or WebVTT for limited client profiles.
+    for (codec, native_extension, caption) in [
+        ("ass", "ass", "Hello ASS"),
+        ("ssa", "ssa", "Sidecar SSA"),
+    ] {
+        let stream = info["MediaSources"][0]["MediaStreams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stream| stream["IsExternal"] == true && stream["Codec"] == codec)
+            .unwrap();
+        let sidecar_index = stream["Index"].as_i64().unwrap();
+        let native_url = format!(
+            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{native_extension}"
+        );
+        let native = request(&app, "GET", &native_url, Some(&viewer)).await;
+        assert_eq!(native.status(), StatusCode::OK);
+        let native_body = to_bytes(native.into_body(), 65_536).await.unwrap();
+        assert!(std::str::from_utf8(&native_body).unwrap().contains(caption));
+        for (format, extension) in [("srt", "srt"), ("webvtt", "vtt")] {
+            let negotiated = post_playback_with_subtitle_profile(
+                &app, id, &viewer, sidecar_index, "External", format,
+            )
+            .await;
+            assert_eq!(negotiated.status(), StatusCode::OK);
+            let data: serde_json::Value = serde_json::from_slice(
+                &to_bytes(negotiated.into_body(), 65_536).await.unwrap()
+            )
+            .unwrap();
+            let selected = data["MediaSources"][0]["MediaStreams"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|track| track["Index"] == sidecar_index)
+                .unwrap();
+            assert_eq!(selected["Codec"], codec);
+            assert_eq!(selected["IsExternal"], true);
+            let url = format!(
+                "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{extension}"
+            );
+            assert_eq!(selected["DeliveryUrl"].as_str(), Some(url.as_str()));
+            assert_eq!(
+                request(&app, "GET", &url, None).await.status(),
+                StatusCode::UNAUTHORIZED
+            );
+            let converted = request(&app, "GET", &url, Some(&viewer)).await;
+            assert_eq!(converted.status(), StatusCode::OK);
+            let length = converted.headers()[header::CONTENT_LENGTH].clone();
+            let body = to_bytes(converted.into_body(), 65_536).await.unwrap();
+            let text = std::str::from_utf8(&body).unwrap();
+            assert!(text.contains(caption));
+            if extension == "vtt" {
+                assert!(text.starts_with("WEBVTT\n\n"));
+            } else {
+                assert!(text.contains(" --> "));
+            }
+            assert_eq!(length.to_str().unwrap(), body.len().to_string());
+        }
+    }
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
