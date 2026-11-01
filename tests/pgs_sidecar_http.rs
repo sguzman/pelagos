@@ -84,6 +84,13 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     // The WDS declares two windows but provides only one record.
     bad_windows[13 + 11 + 13] = 2;
     fs::write(root.join("Feature.de.sup"), &bad_windows).unwrap();
+    let mut unfinished_object = PGS[..24].to_vec();
+    unfinished_object.extend_from_slice(&[
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0,
+        8, 0xaa,
+    ]);
+    unfinished_object.extend_from_slice(&PGS[24..]);
+    fs::write(root.join("Feature.pt.sup"), &unfinished_object).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -121,7 +128,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .iter()
         .filter(|stream| stream["Codec"] == "pgssub")
         .collect::<Vec<_>>();
-    assert_eq!(pgs.len(), 3);
+    assert_eq!(pgs.len(), 4);
     assert!(
         pgs.iter()
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
@@ -280,7 +287,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         send(&app, "GET", &alias, Some(&token), &[]).await.status(),
         StatusCode::OK
     );
-    for language in ["fr", "de"] {
+    for language in ["fr", "de", "pt"] {
         let invalid_index = pgs
             .iter()
             .find(|track| track["Language"] == language)
@@ -310,6 +317,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     );
     assert_eq!(fs::read(root.join("Feature.fr.sup")).unwrap(), malformed);
     assert_eq!(fs::read(root.join("Feature.de.sup")).unwrap(), bad_windows);
+    assert_eq!(
+        fs::read(root.join("Feature.pt.sup")).unwrap(),
+        unfinished_object
+    );
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
