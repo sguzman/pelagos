@@ -245,6 +245,7 @@ struct PlaylistQuery {
     audio_stream_index: Option<i64>,
     video_stream_index: Option<i64>,
     subtitle_stream_index: Option<i64>,
+    subtitle_method: Option<String>,
 }
 
 /// Recognize explicit pinned v12.3 codec/container constraints without
@@ -280,7 +281,19 @@ async fn validate_hls_track_selection(
     query: &PlaylistQuery,
     kind: &str,
 ) -> Result<Option<u8>, StatusCode> {
-    if (kind == "audio" && query.video_stream_index.is_some())
+    // The pinned v12.3 DynamicHlsController defaults SubtitleMethod to
+    // External. Burn-in is only the explicit Encode (=0) delivery method;
+    // never silently turn an external subtitle request into a video overlay.
+    let encode = query
+        .subtitle_method
+        .as_deref()
+        .is_some_and(|method| method.eq_ignore_ascii_case("encode") || method == "0");
+    let supported_method = query.subtitle_method.as_deref().is_none_or(|method| {
+        encode || method.eq_ignore_ascii_case("external") || method == "2"
+    });
+    if !supported_method
+        || (query.subtitle_stream_index.is_some_and(|index| index >= 0) && !encode)
+        || (kind == "audio" && query.video_stream_index.is_some())
         || (kind != "video" && query.subtitle_stream_index.is_some_and(|index| index != -1))
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
