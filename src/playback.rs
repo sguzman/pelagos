@@ -200,9 +200,16 @@ fn is_text_subtitle(codec: Option<&str>) -> bool {
         return false;
     };
     let codec = codec.to_ascii_lowercase();
-    !["pgs", "dvdsub", "vobsub", "dvbsub", "dvd_subtitle", "dvb_subtitle"]
-        .iter()
-        .any(|marker| codec.contains(marker))
+    ![
+        "pgs",
+        "dvdsub",
+        "vobsub",
+        "dvbsub",
+        "dvd_subtitle",
+        "dvb_subtitle",
+    ]
+    .iter()
+    .any(|marker| codec.contains(marker))
         && !matches!(codec.as_str(), "sup" | "sub")
 }
 
