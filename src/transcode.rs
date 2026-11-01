@@ -34,6 +34,16 @@ impl MpegTsQuality {
     }
 }
 
+/// Caller-scoped, bounded input window for embedded-subtitle burn-in.
+/// The index is relative to subtitle streams, not an FFprobe global index.
+#[derive(Debug, Clone, Copy)]
+pub struct SubtitleBurnInWindow {
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+    pub remaining_bytes: u64,
+    pub subtitle_index: u8,
+}
+
 /// A synchronous drop guard also removes partial output if the caller
 /// cancels its Rust future before a timeout or FFmpeg exit is observed.
 struct PartialOutput {
@@ -230,7 +240,6 @@ impl TranscodeController {
     /// Opt-in FFmpeg/libass burn-in for one embedded subtitle track of a
     /// selected video window. The index is relative to subtitle streams in
     /// the input (FFmpeg subtitles filter "si"), not a global stream ID.
-    /// No client routing or external subtitle negotiation is implied here.
     pub async fn try_run_window_with_burn_in(
         &self,
         source: &Path,
@@ -239,11 +248,35 @@ impl TranscodeController {
         duration_seconds: f64,
         subtitle_index: u8,
     ) -> io::Result<u64> {
-        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
-        if subtitle_index > 31 {
+        self.try_run_window_burn_in_capped(
+            source,
+            output,
+            SubtitleBurnInWindow {
+                start_seconds,
+                duration_seconds,
+                subtitle_index,
+                remaining_bytes: self.max_bytes,
+            },
+        )
+        .await
+    }
+
+    /// Keep a whole HLS VOD byte budget enforced *before* the FFmpeg writer
+    /// emits every chunk, including for a selected subtitle overlay.
+    pub async fn try_run_window_burn_in_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        request: SubtitleBurnInWindow,
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(request.start_seconds, request.duration_seconds)?;
+        if request.subtitle_index > 31
+            || request.remaining_bytes == 0
+            || request.remaining_bytes > MAX_TRANSCODE_BYTES
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "invalid embedded subtitle position",
+                "invalid subtitle selection or FFmpeg output budget",
             ));
         }
         let _permit = self.permits.try_acquire().map_err(|_| {
@@ -257,10 +290,10 @@ impl TranscodeController {
             source,
             output,
             self.deadline,
-            self.max_bytes,
+            self.max_bytes.min(request.remaining_bytes),
             EncoderOptions {
                 window: Some(window),
-                burn_in_subtitle: Some(subtitle_index),
+                burn_in_subtitle: Some(request.subtitle_index),
                 ..EncoderOptions::default()
             },
         )
