@@ -92,7 +92,8 @@ impl AppState {
     /// directories by default. Root must be an existing absolute canonical
     /// directory, not a symlink or a path containing dot components.
     pub fn with_fallback_font_dir(mut self, directory: PathBuf) -> std::io::Result<Self> {
-        if !directory.is_absolute() || !directory.is_dir()
+        if !directory.is_absolute()
+            || !directory.is_dir()
             || std::fs::canonicalize(&directory)? != directory
         {
             return Err(std::io::Error::new(
