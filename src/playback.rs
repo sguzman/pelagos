@@ -625,7 +625,7 @@ fn source_from_probe(
             }))
             .expect("local sidecar subtitle has a supported type and index");
             stream.is_external = true;
-            stream.is_text_subtitle_stream = true;
+            stream.is_text_subtitle_stream = sidecar.format != "sup";
             stream.delivery_method = Some("External");
             let extension = if sidecar.format == "sup" {
                 "pgssub"
