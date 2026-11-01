@@ -54,9 +54,7 @@ fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
                 .is_some_and(|directory| directory <= bytes.len())
     };
     match mime {
-        "font/ttf" => {
-            matches!(&bytes[..4], b"\x00\x01\x00\x00" | b"true" | b"typ1") && sfnt()
-        }
+        "font/ttf" => matches!(&bytes[..4], b"\x00\x01\x00\x00" | b"true" | b"typ1") && sfnt(),
         "font/otf" => {
             (matches!(&bytes[..4], b"OTTO" | b"\x00\x01\x00\x00") || &bytes[..4] == b"true")
                 && sfnt()
@@ -81,10 +79,7 @@ fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
             let declared = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
             let tables = usize::from(u16::from_be_bytes([bytes[12], bytes[13]]));
             let uncompressed = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
-            tables > 0
-                && tables <= 256
-                && uncompressed >= 12
-                && declared == bytes.len()
+            tables > 0 && tables <= 256 && uncompressed >= 12 && declared == bytes.len()
         }
         _ => false,
     }
