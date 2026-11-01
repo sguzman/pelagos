@@ -248,10 +248,9 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     let selected_url = format!("/Items/{id}/PlaybackInfo?subtitleStreamIndex={index}");
     let viewer_playback = request(&app, "GET", &selected_url, Some(&viewer)).await;
     assert_eq!(viewer_playback.status(), StatusCode::OK);
-    let viewer_info: serde_json::Value = serde_json::from_slice(
-        &to_bytes(viewer_playback.into_body(), 65_536).await.unwrap()
-    )
-    .unwrap();
+    let viewer_info: serde_json::Value =
+        serde_json::from_slice(&to_bytes(viewer_playback.into_body(), 65_536).await.unwrap())
+            .unwrap();
     let viewer_selected = viewer_info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
@@ -264,10 +263,9 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     );
     let admin_playback = request(&app, "GET", &selected_url, Some(&admin)).await;
     assert_eq!(admin_playback.status(), StatusCode::OK);
-    let admin_info: serde_json::Value = serde_json::from_slice(
-        &to_bytes(admin_playback.into_body(), 65_536).await.unwrap()
-    )
-    .unwrap();
+    let admin_info: serde_json::Value =
+        serde_json::from_slice(&to_bytes(admin_playback.into_body(), 65_536).await.unwrap())
+            .unwrap();
     let admin_selected = admin_info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
@@ -275,13 +273,13 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         .find(|track| track["Index"] == index && track["Type"] == "Subtitle")
         .unwrap();
     assert_eq!(admin_selected["DeliveryUrl"].as_str(), Some(url.as_str()));
-    let override_response = post_playback_with_subtitle_profile(
-        &app, id, &viewer, index, "External", "ass",
-    )
-    .await;
+    let override_response =
+        post_playback_with_subtitle_profile(&app, id, &viewer, index, "External", "ass").await;
     assert_eq!(override_response.status(), StatusCode::OK);
     let override_info: serde_json::Value = serde_json::from_slice(
-        &to_bytes(override_response.into_body(), 65_536).await.unwrap()
+        &to_bytes(override_response.into_body(), 65_536)
+            .await
+            .unwrap(),
     )
     .unwrap();
     let override_stream = override_info["MediaSources"][0]["MediaStreams"]
