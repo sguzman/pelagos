@@ -270,8 +270,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         assert!(available(root.path()).unwrap().is_empty());
         for index in 0..=MAX_DIRECTORY_ENTRIES {
-            std::fs::write(root.path().join(format!("unrelated-{index:03}.txt")), b"x")
-                .unwrap();
+            std::fs::write(root.path().join(format!("unrelated-{index:03}.txt")), b"x").unwrap();
         }
         assert!(matches!(
             available(root.path()),
