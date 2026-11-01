@@ -541,18 +541,12 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
             format!("{route}?startTimeTicks=1000"),
             StatusCode::NOT_IMPLEMENTED,
         ),
-        (
-            format!("{route}?audioStreamIndex=1"),
-            StatusCode::OK,
-        ),
+        (format!("{route}?audioStreamIndex=1"), StatusCode::OK),
         (
             format!("{route}?audioStreamIndex=0"),
             StatusCode::NOT_IMPLEMENTED,
         ),
-        (
-            format!("{route}?subtitleStreamIndex=-1"),
-            StatusCode::OK,
-        ),
+        (format!("{route}?subtitleStreamIndex=-1"), StatusCode::OK),
         (
             format!("{route}?subtitleStreamIndex=0"),
             StatusCode::NOT_IMPLEMENTED,

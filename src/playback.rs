@@ -483,7 +483,10 @@ fn stream_selection_is_noop(
             .streams
             .iter()
             .filter(|stream| stream["codec_type"] == "audio");
-        if audio_streams.next().and_then(|stream| number(&stream["index"])) != Some(index)
+        if audio_streams
+            .next()
+            .and_then(|stream| number(&stream["index"]))
+            != Some(index)
             || audio_streams.next().is_some()
         {
             return false;
@@ -751,10 +754,14 @@ mod tests {
         assert!(!stream_selection_is_noop(&report, Some(0), None));
         assert!(!stream_selection_is_noop(&report, Some(-1), None));
         assert!(!stream_selection_is_noop(&report, None, Some(0)));
-        report.streams.push(json!({"index":2,"codec_type":"audio","codec_name":"ac3"}));
+        report
+            .streams
+            .push(json!({"index":2,"codec_type":"audio","codec_name":"ac3"}));
         assert!(!stream_selection_is_noop(&report, Some(1), None));
         report.streams.pop();
-        report.streams.push(json!({"index":2,"codec_type":"subtitle","codec_name":"subrip"}));
+        report
+            .streams
+            .push(json!({"index":2,"codec_type":"subtitle","codec_name":"subrip"}));
         assert!(!stream_selection_is_noop(&report, None, Some(-1)));
     }
 
