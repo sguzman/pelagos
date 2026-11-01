@@ -1663,8 +1663,7 @@ async fn serve_external_subtitle(
             bytes
         };
         let converted = if convert_to_srt {
-            crate::subtitle_timing::vtt_sidecar_to_srt(&srt)
-                .ok_or(StatusCode::NOT_IMPLEMENTED)?
+            crate::subtitle_timing::vtt_sidecar_to_srt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else if format == "vtt" {
             convert_srt_to_webvtt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else {
