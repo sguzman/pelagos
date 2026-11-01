@@ -653,9 +653,7 @@ Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,STYLED TEXT VISIBLE
     let invalid_ass_route =
         format!("{base}&subtitleStreamIndex={bad_ass_index}&subtitleMethod=Encode");
     assert_eq!(
-        call(&app, &invalid_ass_route, Some(&token))
-            .await
-            .status(),
+        call(&app, &invalid_ass_route, Some(&token)).await.status(),
         StatusCode::NOT_IMPLEMENTED
     );
 
