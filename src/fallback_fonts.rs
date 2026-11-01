@@ -218,15 +218,18 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
 }
 
 // Jellyfin uses ordinal case-insensitive lookup for fallback font names.
-// An exact match takes precedence. Refuse ambiguous case-folded matches on
-// case-sensitive filesystems instead of unpredictably selecting a file.
+// Match useful non-ASCII filename casing as well as ASCII, without accepting
+// ambiguity: Rust's Unicode lowercase mapping is a conservative subset of
+// full .NET ordinal-ignore-case behavior, not a claim of complete parity.
+// An exact filename still takes precedence on case-sensitive filesystems.
 fn select_font(fonts: Vec<FontInfo>, requested: &str) -> Option<FontInfo> {
     if let Some(exact) = fonts.iter().find(|font| font.name == requested) {
         return Some(exact.clone());
     }
+    let folded = requested.to_lowercase();
     let mut matching = fonts
         .into_iter()
-        .filter(|font| font.name.eq_ignore_ascii_case(requested));
+        .filter(|font| font.name.to_lowercase() == folded);
     let first = matching.next()?;
     matching.next().is_none().then_some(first)
 }
@@ -419,6 +422,17 @@ mod tests {
         ];
         assert!(select_font(ambiguous.clone(), "face.ttf").is_none());
         assert_eq!(select_font(ambiguous, "Face.ttf").unwrap().name, "Face.ttf");
+        let accented = vec![FontInfo {
+            name: "Fuente_Ágil.ttf".to_owned(),
+            size: 28,
+            mime: "font/ttf",
+            date_created: None,
+            date_modified: None,
+        }];
+        assert_eq!(
+            select_font(accented, "FUENTE_ÁGIL.TTF").unwrap().name,
+            "Fuente_Ágil.ttf"
+        );
     }
 
     #[test]
