@@ -1093,7 +1093,30 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
         .unwrap();
     assert_eq!(embedded["IsTextSubtitleStream"], true);
     assert_eq!(embedded["IsExternal"], false);
+    assert_eq!(embedded["DeliveryMethod"], "External");
     let index = embedded["Index"].as_i64().unwrap();
+    assert_eq!(
+        embedded["DeliveryUrl"],
+        format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.srt")
+    );
+    let profile = serde_json::json!({
+        "DeviceProfile": {
+            "DirectPlayProfiles": [{"Type": "Video", "Container": "mp4"}],
+            "SubtitleProfiles": [{"Format": "srt", "Method": "External"}]
+        }
+    });
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            &format!("/Items/{item}/PlaybackInfo"),
+            Some(&viewer),
+            &profile.to_string()
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
     let route = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.srt");
     assert_eq!(
         request(&app, "GET", &route, None, "").await.status(),

@@ -422,6 +422,25 @@ fn source_from_probe(
     let mut media_streams: Vec<MediaStream> =
         result.streams.iter().filter_map(mapped_stream).collect();
     if kind == "video" {
+        // Only codecs supported by the bounded FFmpeg text extractor receive
+        // actionable URLs. Do not imply that graphical or unknown subtitles
+        // have a delivery path, and preserve their embedded source identity.
+        for stream in &mut media_streams {
+            if stream.stream_type == "Subtitle"
+                && stream.is_text_subtitle_stream
+                && matches!(
+                    stream.codec.as_deref(),
+                    Some("subrip" | "ass" | "ssa" | "mov_text" | "webvtt")
+                )
+                && (0..=i64::from(i32::MAX)).contains(&stream.index)
+            {
+                stream.delivery_method = Some("External");
+                stream.delivery_url = Some(format!(
+                    "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.srt",
+                    stream.index
+                ));
+            }
+        }
         for sidecar in external_subtitles(file, result) {
             let language = sidecar.language.as_deref();
             let codec = if sidecar.format == "vtt" {
@@ -570,7 +589,7 @@ fn profile_allows_external_subtitles(
         let Some(url) = stream
             .delivery_url
             .as_deref()
-            .filter(|_| stream.is_external)
+            .filter(|_| stream.delivery_method == Some("External"))
         else {
             return Ok(false);
         };
@@ -1540,6 +1559,42 @@ mod tests {
         assert!(convert_srt_to_webvtt(b"1\n00:00:70,000 --> 00:00:02,000\ninvalid\n").is_none());
         assert!(convert_srt_to_webvtt(b"not a timestamp\ninvalid\n").is_none());
         assert!(convert_srt_to_webvtt(&[0xFF, 0xFF]).is_none());
+    }
+
+    #[test]
+    fn only_convertible_embedded_subtitles_advertise_delivery() {
+        let fixture = tempfile::tempdir().unwrap();
+        let movie = fixture.path().join("Feature.mp4");
+        std::fs::write(&movie, b"movie").unwrap();
+        let report = probe::ProbeReport {
+            path: movie.clone(),
+            size_bytes: 5,
+            format: None,
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"h264"}),
+                json!({"index":1,"codec_type":"subtitle","codec_name":"mov_text"}),
+                json!({"index":2,"codec_type":"subtitle","codec_name":"hdmv_pgs_subtitle"}),
+                json!({"index":3,"codec_type":"subtitle","codec_name":"unknown_text_codec"}),
+            ],
+            chapters: vec![],
+        };
+        let source = source_from_probe("item", "video", &movie, &report);
+        let text = &source.media_streams[1];
+        assert_eq!(text.delivery_method, Some("External"));
+        assert!(!text.is_external);
+        assert_eq!(
+            text.delivery_url.as_deref(),
+            Some("/Videos/item/item/Subtitles/1/Stream.srt")
+        );
+        assert_eq!(source.media_streams[2].delivery_url, None);
+        assert_eq!(source.media_streams[3].delivery_url, None);
+        assert_eq!(
+            profile_allows_external_subtitles(
+                &[json!({"Format":"srt","Method":"External"})],
+                &source
+            ),
+            Ok(false)
+        );
     }
 
     #[test]
