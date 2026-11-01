@@ -16,7 +16,7 @@ use tokio::{
 
 use crate::{
     probe,
-    transcode::{MpegTsQuality, TranscodeController},
+    transcode::{MpegTsQuality, SubtitleBurnInWindow, TranscodeController},
 };
 
 const SEGMENT_NAME: &str = "segment00000.ts";
@@ -306,6 +306,12 @@ pub async fn generate_segmented_vod(
     generate_segmented_vod_from(controller, ffprobe, source, output_dir, target_seconds, 0.0).await
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct SegmentedOptions {
+    quality: Option<MpegTsQuality>,
+    subtitle_index: Option<u8>,
+}
+
 /// Encode a bounded VOD from an explicit seek position. The source is
 /// probed before admitting work; an invalid/end-of-file offset cannot
 /// publish an empty playlist or spawn a per-segment FFmpeg job.
@@ -317,26 +323,53 @@ pub async fn generate_segmented_vod_from(
     target_seconds: u32,
     start_seconds: f64,
 ) -> io::Result<HlsSegmentedArtifact> {
-    generate_segmented_vod_with_quality(
+    generate_segmented_vod_configured(
         controller,
         ffprobe,
         source,
         output_dir,
         target_seconds,
         start_seconds,
-        None,
+        SegmentedOptions::default(),
     )
     .await
 }
 
-async fn generate_segmented_vod_with_quality(
+/// Build an independently validated, private single-rendition MPEG-TS VOD
+/// with a fixed, selected embedded text subtitle rendered into each video
+/// window. Adaptive switching and graphic-subtitle burn-in are separate work.
+pub async fn generate_segmented_vod_with_burn_in_from(
     controller: &TranscodeController,
     ffprobe: &Path,
     source: &Path,
     output_dir: &Path,
     target_seconds: u32,
     start_seconds: f64,
-    quality: Option<MpegTsQuality>,
+    subtitle_index: u8,
+) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_configured(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        start_seconds,
+        SegmentedOptions {
+            subtitle_index: Some(subtitle_index),
+            ..SegmentedOptions::default()
+        },
+    )
+    .await
+}
+
+async fn generate_segmented_vod_configured(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
+    options: SegmentedOptions,
 ) -> io::Result<HlsSegmentedArtifact> {
     if !(1..=10).contains(&target_seconds) {
         return Err(io::Error::new(
@@ -429,9 +462,24 @@ async fn generate_segmented_vod_with_quality(
                 "HLS segment budget exhausted",
             ));
         }
-        let size = controller
-            .try_run_window_capped(source, &path, start, duration, budget, quality)
-            .await?;
+        let size = if let Some(subtitle_index) = options.subtitle_index {
+            controller
+                .try_run_window_burn_in_capped(
+                    source,
+                    &path,
+                    SubtitleBurnInWindow {
+                        start_seconds: start,
+                        duration_seconds: duration,
+                        remaining_bytes: budget,
+                        subtitle_index,
+                    },
+                )
+                .await?
+        } else {
+            controller
+                .try_run_window_capped(source, &path, start, duration, budget, options.quality)
+                .await?
+        };
         total_bytes = total_bytes.checked_add(size).ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidData, "HLS output byte overflow")
         })?;
@@ -645,14 +693,17 @@ pub async fn generate_adaptive_segmented_vod_from(
     let mut candidates: Vec<(u64, String, HlsSegmentedArtifact)> = Vec::new();
     for (index, quality) in qualities.iter().enumerate() {
         let name = format!("candidate{index:02}");
-        let rendition = generate_segmented_vod_with_quality(
+        let rendition = generate_segmented_vod_configured(
             controller,
             ffprobe,
             source,
             &output_dir.join(&name),
             target_seconds,
             start_seconds,
-            Some(*quality),
+            SegmentedOptions {
+                quality: Some(*quality),
+                ..SegmentedOptions::default()
+            },
         )
         .await?;
         // Measured window durations must agree across the adaptive ladder.
