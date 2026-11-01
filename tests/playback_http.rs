@@ -1072,7 +1072,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     );
     for (parameters, expected) in [
         ("startPositionTicks=10000000", StatusCode::NOT_IMPLEMENTED),
-        ("endPositionTicks=10000000", StatusCode::NOT_IMPLEMENTED),
+        ("endPositionTicks=10000000", StatusCode::OK),
         ("index=999", StatusCode::NOT_IMPLEMENTED),
         ("mediaSourceId=wrong", StatusCode::NOT_IMPLEMENTED),
         ("startPositionTicks=-1", StatusCode::BAD_REQUEST),
@@ -1090,6 +1090,39 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             expected
         );
     }
+    // The narrow pinned text-subtitle window can clamp a spanning cue,
+    // rebase its times or preserve its original clock, and return a correct HEAD.
+    let clipped_url = format!(
+        "/Videos/{item}/{item}/Subtitles/2/0/Stream.vtt?startPositionTicks=15000000&endPositionTicks=25000000"
+    );
+    let clipped = request(&app, "GET", &clipped_url, Some(&viewer), "").await;
+    assert_eq!(clipped.status(), StatusCode::OK);
+    let relative = to_bytes(clipped.into_body(), 1024).await.unwrap();
+    assert_eq!(
+        relative.as_ref(),
+        b"WEBVTT\n\n00:00:00.000 --> 00:00:00.500\nHello!\n\n"
+    );
+    let absolute_url = format!("{clipped_url}&copyTimestamps=true&addVttTimeMap=true");
+    let absolute = request(&app, "GET", &absolute_url, Some(&viewer), "").await;
+    assert_eq!(absolute.status(), StatusCode::OK);
+    let absolute_bytes = to_bytes(absolute.into_body(), 1024).await.unwrap();
+    assert!(std::str::from_utf8(&absolute_bytes)
+        .unwrap()
+        .contains("00:00:01.500 --> 00:00:02.000\nHello!"));
+    let head_response = request(&app, "HEAD", &absolute_url, Some(&viewer), "").await;
+    assert_eq!(head_response.status(), StatusCode::OK);
+    assert_eq!(
+        head_response.headers()[header::CONTENT_LENGTH],
+        absolute_bytes.len().to_string()
+    );
+    let clipped_srt = format!(
+        "/Videos/{item}/{item}/Subtitles/2/0/Stream.srt?startPositionTicks=15000000&endPositionTicks=25000000"
+    );
+    let srt_response = request(&app, "GET", &clipped_srt, Some(&viewer), "").await;
+    assert_eq!(srt_response.status(), StatusCode::OK);
+    let srt_bytes = to_bytes(srt_response.into_body(), 1024).await.unwrap();
+    assert_eq!(srt_bytes.as_ref(), b"1\n00:00:00,000 --> 00:00:00,500\nHello!\n\n");
+
     let override_zero =
         format!("/Videos/{item}/{item}/Subtitles/2/1/Stream.vtt?startPositionTicks=0");
     assert_eq!(

@@ -1271,11 +1271,6 @@ async fn serve_external_subtitle(
         if !matches!(format, "srt" | "vtt") {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        if !matches!(format, "srt" | "vtt") {
-            // The bounded embedded extractor emits only SRT, optionally
-            // converted to VTT. Never mislabel its bytes as ASS or SSA.
-            return Err(StatusCode::NOT_IMPLEMENTED);
-        }
         if !(0..=i64::from(i32::MAX)).contains(&index) {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -1414,9 +1409,19 @@ impl SubtitleQuery {
         {
             return Err(StatusCode::BAD_REQUEST);
         }
-        if self.start_position_ticks.unwrap_or(route_start) != 0
-            || self.end_position_ticks.is_some()
-            || self.item_id.as_deref().is_some_and(|value| value != item)
+        let start = self.start_position_ticks.unwrap_or(route_start);
+        if start != 0 && self.end_position_ticks.is_none() {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        if let Some(end) = self.end_position_ticks {
+            if end <= start {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            if !matches!(format, "srt" | "vtt") || end - start > 600_000_000 {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+        }
+        if self.item_id.as_deref().is_some_and(|value| value != item)
             || self
                 .media_source_id
                 .as_deref()
@@ -1454,8 +1459,8 @@ fn add_vtt_timestamp_map(bytes: &[u8]) -> Result<Vec<u8>, StatusCode> {
 }
 
 /// Route and deprecated query selectors are constrained to the exact
-/// authorized source. Nonzero shifts/trim ranges are rejected until real
-/// conversion is available; never silently ignore client constraints.
+/// authorized source. Only simple short cue windows are supported for
+/// nonzero positions; unsupported timing features fail closed.
 async fn subtitle_response(
     state: Arc<AppState>,
     (item, media_source, index, ticks): (String, String, i64, i64),
@@ -1465,6 +1470,7 @@ async fn subtitle_response(
     query: SubtitleQuery,
 ) -> Result<Response, StatusCode> {
     let map = query.validate(&item, &media_source, index, format, ticks)?;
+    let clip = query.end_position_ticks.is_some();
     let mut response = serve_external_subtitle(
         state,
         item,
@@ -1472,22 +1478,46 @@ async fn subtitle_response(
         index,
         format,
         headers,
-        head && !map,
+        head && !map && !clip,
     )
     .await?;
-    if map {
+    if map || clip {
         let payload = to_bytes(
             std::mem::replace(response.body_mut(), Body::empty()),
             4 * 1024 * 1024 + 4096,
         )
         .await
         .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
-        let mapped = add_vtt_timestamp_map(&payload)?;
-        let length = mapped.len();
+        let mut output = payload.to_vec();
+        if let Some(end) = query.end_position_ticks {
+            let start = query.start_position_ticks.unwrap_or(ticks);
+            let vtt = if format == "srt" {
+                convert_srt_to_webvtt(&output).ok_or(StatusCode::NOT_IMPLEMENTED)?
+            } else {
+                output
+            };
+            let clipped = crate::subtitle_timing::clip_vtt(
+                &vtt,
+                start as u64,
+                end as u64,
+                query.copy_timestamps == Some(true),
+            )
+            .ok_or(StatusCode::NOT_IMPLEMENTED)?;
+            output = if format == "srt" {
+                crate::subtitle_timing::vtt_to_srt(&clipped)
+                    .ok_or(StatusCode::NOT_IMPLEMENTED)?
+            } else {
+                clipped
+            };
+        }
+        if map {
+            output = add_vtt_timestamp_map(&output)?;
+        }
+        let length = output.len();
         *response.body_mut() = if head {
             Body::empty()
         } else {
-            Body::from(mapped)
+            Body::from(output)
         };
         response.headers_mut().insert(
             CONTENT_LENGTH,
@@ -2043,7 +2073,7 @@ mod tests {
             serde_json::from_value(json!({"endPositionTicks": 100})).unwrap();
         assert_eq!(
             invalid.validate("item", "item", 2, "vtt", 0),
-            Err(StatusCode::NOT_IMPLEMENTED)
+            Ok(false)
         );
         let negative: SubtitleQuery =
             serde_json::from_value(json!({"startPositionTicks": -1})).unwrap();

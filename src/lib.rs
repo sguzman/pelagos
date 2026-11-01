@@ -15,6 +15,7 @@ pub mod latest;
 pub mod media;
 pub mod naming;
 pub mod playback;
+pub(crate) mod subtitle_timing;
 pub mod playstate;
 pub mod probe;
 pub(crate) mod query_filters;
