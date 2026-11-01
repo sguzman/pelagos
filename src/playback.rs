@@ -388,6 +388,72 @@ fn pgs_invalid_range(size: u64) -> Result<Response, StatusCode> {
         .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     Ok(response)
 }
+fn pgs_requested_range(
+    headers: &HeaderMap,
+    size: u64,
+) -> Result<Option<streaming::ByteRange>, ()> {
+    // An unsupported If-Range validator cannot safely authorize a partial
+    // response, so send the entire raw representation instead.
+    if headers.contains_key(IF_RANGE) {
+        return Ok(None);
+    }
+    let mut values = headers.get_all(RANGE).iter();
+    match (values.next(), values.next()) {
+        (None, None) => Ok(None),
+        (Some(raw), None) => raw
+            .to_str()
+            .ok()
+            .and_then(|value| streaming::parse_range(value, size))
+            .map(Some)
+            .ok_or(()),
+        _ => Err(()),
+    }
+}
+
+fn pgs_success_response(
+    body: Body,
+    size: u64,
+    range: Option<streaming::ByteRange>,
+) -> Result<Response, StatusCode> {
+    let length = match &range {
+        Some(range) => range.end - range.start + 1,
+        None => size,
+    };
+    let mut response = Response::new(body);
+    *response.status_mut() = if range.is_some() {
+        StatusCode::PARTIAL_CONTENT
+    } else {
+        StatusCode::OK
+    };
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    response
+        .headers_mut()
+        .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    response.headers_mut().insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    response.headers_mut().insert(
+        CONTENT_LENGTH,
+        HeaderValue::from_str(&length.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    if let Some(range) = range {
+        response.headers_mut().insert(
+            CONTENT_RANGE,
+            HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size))
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+    }
+    Ok(response)
+}
+
 #[derive(Debug)]
 struct ExternalSubtitle {
     index: i64,
@@ -1720,21 +1786,7 @@ async fn serve_external_subtitle(
         // PGS is a raw graphical subtitle format; clients incrementally
         // fetch its bytes. Honor one bounded RFC 9110 range, never multi-
         // ranges, and ignore Range if its If-Range precondition is unknown.
-        let range = if headers.contains_key(IF_RANGE) {
-            Ok(None)
-        } else {
-            let mut values = headers.get_all(RANGE).iter();
-            match (values.next(), values.next()) {
-                (None, None) => Ok(None),
-                (Some(raw), None) => raw
-                    .to_str()
-                    .ok()
-                    .and_then(|value| streaming::parse_range(value, size))
-                    .map(Some)
-                    .ok_or(()),
-                _ => Err(()),
-            }
-        };
+        let range = pgs_requested_range(&headers, size);
         let range = match range {
             Ok(range) => range,
             Err(()) => {
@@ -1756,39 +1808,7 @@ async fn serve_external_subtitle(
         } else {
             Body::from_stream(ReaderStream::new(reader.take(length)))
         };
-        let mut response = Response::new(body);
-        *response.status_mut() = if range.is_some() {
-            StatusCode::PARTIAL_CONTENT
-        } else {
-            StatusCode::OK
-        };
-        response.headers_mut().insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/octet-stream"),
-        );
-        response
-            .headers_mut()
-            .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
-        response
-            .headers_mut()
-            .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
-        response.headers_mut().insert(
-            "x-content-type-options",
-            HeaderValue::from_static("nosniff"),
-        );
-        response.headers_mut().insert(
-            CONTENT_LENGTH,
-            HeaderValue::from_str(&length.to_string())
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-        );
-        if let Some(range) = range {
-            response.headers_mut().insert(
-                CONTENT_RANGE,
-                HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size))
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-            );
-        }
-        return Ok(response);
+        return pgs_success_response(body, size, range);
     }
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
