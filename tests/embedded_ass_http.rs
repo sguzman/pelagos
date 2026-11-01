@@ -146,15 +146,12 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "subrip")
         .expect("adjacent SRT sidecar advertised");
     let sidecar_index = sidecar["Index"].as_i64().unwrap();
-    let profile = post_playback_with_subtitle_profile(
-        &app, id, &viewer, sidecar_index, "External", "webvtt",
-    )
-    .await;
+    let profile =
+        post_playback_with_subtitle_profile(&app, id, &viewer, sidecar_index, "External", "webvtt")
+            .await;
     assert_eq!(profile.status(), StatusCode::OK);
-    let profile_info: serde_json::Value = serde_json::from_slice(
-        &to_bytes(profile.into_body(), 65_536).await.unwrap()
-    )
-    .unwrap();
+    let profile_info: serde_json::Value =
+        serde_json::from_slice(&to_bytes(profile.into_body(), 65_536).await.unwrap()).unwrap();
     assert_eq!(
         profile_info["MediaSources"][0]["DefaultSubtitleStreamIndex"],
         sidecar_index
@@ -167,14 +164,19 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         .unwrap();
     assert_eq!(selected_sidecar["IsExternal"], true);
     assert_eq!(selected_sidecar["Codec"], "subrip");
-    let vtt_url = format!(
-        "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.vtt"
+    let vtt_url = format!("/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.vtt");
+    assert_eq!(
+        selected_sidecar["DeliveryUrl"].as_str(),
+        Some(vtt_url.as_str())
     );
-    assert_eq!(selected_sidecar["DeliveryUrl"].as_str(), Some(vtt_url.as_str()));
     let converted = request(&app, "GET", &vtt_url, Some(&viewer)).await;
     assert_eq!(converted.status(), StatusCode::OK);
     let converted = to_bytes(converted.into_body(), 65_536).await.unwrap();
-    assert!(std::str::from_utf8(&converted).unwrap().contains("Sidecar cue"));
+    assert!(
+        std::str::from_utf8(&converted)
+            .unwrap()
+            .contains("Sidecar cue")
+    );
 
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
