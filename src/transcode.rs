@@ -456,7 +456,7 @@ async fn transcode_mpegts_inner(
     output: &Path,
     deadline: Duration,
     max_bytes: u64,
-    options: EncoderOptions,
+    options: EncoderOptions<'_>,
 ) -> io::Result<u64> {
     let EncoderOptions {
         quality,
