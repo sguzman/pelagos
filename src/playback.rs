@@ -615,17 +615,16 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         .collect()
 }
 
-/// Resolve a selected external SubRip index against the same bounded,
-/// deterministic sidecar inventory used by PlaybackInfo. Opening its bytes
-/// remains the responsibility of a descriptor-confined caller.
-pub(crate) fn hls_srt_sidecar_filename(
+/// Resolve selected external SRT/WebVTT indices against the same bounded
+/// inventory used by PlaybackInfo; the caller must confine descriptor opens.
+pub(crate) fn hls_text_sidecar_filename(
     source: &Path,
     report: &probe::ProbeReport,
     index: i64,
 ) -> Option<String> {
     external_subtitles(source, report)
         .into_iter()
-        .find(|entry| entry.index == index && entry.format == "srt")
+        .find(|entry| entry.index == index && matches!(entry.format, "srt" | "vtt"))
         .map(|entry| entry.filename)
 }
 
