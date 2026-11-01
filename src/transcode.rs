@@ -34,6 +34,31 @@ impl MpegTsQuality {
     }
 }
 
+/// Only fixed, internally chosen names reach libavfilter. The caller
+/// supplies already-validated subtitle bytes, never an arbitrary filename.
+#[derive(Debug, Clone, Copy)]
+pub enum ExternalTextFormat {
+    Srt,
+    Ass,
+    Ssa,
+}
+
+impl ExternalTextFormat {
+    fn filename(self) -> &'static str {
+        match self {
+            Self::Srt => "input.srt",
+            Self::Ass => "input.ass",
+            Self::Ssa => "input.ssa",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ExternalTextTrack<'a> {
+    pub bytes: &'a [u8],
+    pub format: ExternalTextFormat,
+}
+
 /// Caller-scoped, bounded input window for embedded-subtitle burn-in.
 /// The index is relative to subtitle streams, not an FFprobe global index.
 #[derive(Debug, Clone, Copy)]
@@ -232,7 +257,7 @@ impl TranscodeController {
                 quality,
                 window: Some(window),
                 burn_in_subtitle: None,
-                external_srt: None,
+                external_text: None,
             },
         )
         .await
@@ -313,16 +338,42 @@ impl TranscodeController {
         remaining_bytes: u64,
         subtitle: &[u8],
     ) -> io::Result<u64> {
+        self.try_run_window_external_text_capped(
+            source,
+            output,
+            start_seconds,
+            duration_seconds,
+            remaining_bytes,
+            ExternalTextTrack {
+                bytes: subtitle,
+                format: ExternalTextFormat::Srt,
+            },
+        )
+        .await
+    }
+
+    /// Preserve a validated ASS/SSA script and its styling during opt-in
+    /// external burn-in. All external formats use the same fixed-name,
+    /// size-bounded, admission-controlled FFmpeg transport.
+    pub async fn try_run_window_external_text_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        subtitle: ExternalTextTrack<'_>,
+    ) -> io::Result<u64> {
         let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
-        if subtitle.is_empty()
-            || subtitle.len() > 4 * 1024 * 1024
-            || std::str::from_utf8(subtitle).is_err()
+        if subtitle.bytes.is_empty()
+            || subtitle.bytes.len() > 4 * 1024 * 1024
+            || std::str::from_utf8(subtitle.bytes).is_err()
             || remaining_bytes == 0
             || remaining_bytes > MAX_TRANSCODE_BYTES
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "invalid external SubRip payload or FFmpeg byte budget",
+                "invalid external subtitle payload or FFmpeg byte budget",
             ));
         }
         let _permit = self.permits.try_acquire().map_err(|_| {
@@ -339,7 +390,7 @@ impl TranscodeController {
             self.max_bytes.min(remaining_bytes),
             EncoderOptions {
                 window: Some(window),
-                external_srt: Some(subtitle),
+                external_text: Some(subtitle),
                 ..EncoderOptions::default()
             },
         )
@@ -365,7 +416,7 @@ struct EncoderOptions<'a> {
     quality: Option<MpegTsQuality>,
     window: Option<TranscodeWindow>,
     burn_in_subtitle: Option<u8>,
-    external_srt: Option<&'a [u8]>,
+    external_text: Option<ExternalTextTrack<'a>>,
 }
 
 /// A bounded seeking window, never constructed from untrusted FFmpeg strings.
@@ -462,7 +513,7 @@ async fn transcode_mpegts_inner(
         quality,
         window,
         burn_in_subtitle,
-        external_srt,
+        external_text,
     } = options;
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -487,14 +538,14 @@ async fn transcode_mpegts_inner(
     // interpolate the user's media pathname into libavfilter's syntax.
     // Instead, use a private directory and an invariant relative filename
     // pointing read-only at the already approved source.
-    let burn_in_dir = if burn_in_subtitle.is_some() || external_srt.is_some() {
+    let burn_in_dir = if burn_in_subtitle.is_some() || external_text.is_some() {
         #[cfg(unix)]
         {
             let resolved = fs::canonicalize(source).await?;
             let dir = tempfile::tempdir()?;
             std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
-            if let Some(subtitle) = external_srt {
-                std::fs::write(dir.path().join("input.srt"), subtitle)?;
+            if let Some(subtitle) = external_text {
+                std::fs::write(dir.path().join(subtitle.format.filename()), subtitle.bytes)?;
             }
             Some(dir)
         }
@@ -557,14 +608,15 @@ async fn transcode_mpegts_inner(
                 .arg("-b:a")
                 .arg(format!("{}k", quality.audio_kbps));
         }
-        if burn_in_subtitle.is_some() || external_srt.is_some() {
+        if burn_in_subtitle.is_some() || external_text.is_some() {
             let dir = burn_in_dir.as_ref().expect("subtitle directory exists");
             command.current_dir(dir.path());
             // -ss seeks the input before decoding. Restore original media
             // time before libass evaluates the subtitle cue timeline.
-            let subtitle_filter = match burn_in_subtitle {
-                Some(index) => format!("subtitles=input.mkv:si={index}"),
-                None => String::from("subtitles=input.srt"),
+            let subtitle_filter = match (burn_in_subtitle, external_text) {
+                (Some(index), _) => format!("subtitles=input.mkv:si={index}"),
+                (_, Some(track)) => format!("subtitles={}", track.format.filename()),
+                _ => unreachable!("subtitle filter requires an input"),
             };
             let overlay = match window {
                 Some(window) if window.start_seconds > 0.0 => format!(
