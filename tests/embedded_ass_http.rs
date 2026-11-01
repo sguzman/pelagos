@@ -192,10 +192,9 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
 
     // Real external ASS/SSA sidecars remain native but can now be
     // pipe-converted into SRT or WebVTT for limited client profiles.
-    for (codec, native_extension, caption) in [
-        ("ass", "ass", "Hello ASS"),
-        ("ssa", "ssa", "Sidecar SSA"),
-    ] {
+    for (codec, native_extension, caption) in
+        [("ass", "ass", "Hello ASS"), ("ssa", "ssa", "Sidecar SSA")]
+    {
         let stream = info["MediaSources"][0]["MediaStreams"]
             .as_array()
             .unwrap()
@@ -203,23 +202,26 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             .find(|stream| stream["IsExternal"] == true && stream["Codec"] == codec)
             .unwrap();
         let sidecar_index = stream["Index"].as_i64().unwrap();
-        let native_url = format!(
-            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{native_extension}"
-        );
+        let native_url =
+            format!("/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{native_extension}");
         let native = request(&app, "GET", &native_url, Some(&viewer)).await;
         assert_eq!(native.status(), StatusCode::OK);
         let native_body = to_bytes(native.into_body(), 65_536).await.unwrap();
         assert!(std::str::from_utf8(&native_body).unwrap().contains(caption));
         for (format, extension) in [("srt", "srt"), ("webvtt", "vtt")] {
             let negotiated = post_playback_with_subtitle_profile(
-                &app, id, &viewer, sidecar_index, "External", format,
+                &app,
+                id,
+                &viewer,
+                sidecar_index,
+                "External",
+                format,
             )
             .await;
             assert_eq!(negotiated.status(), StatusCode::OK);
-            let data: serde_json::Value = serde_json::from_slice(
-                &to_bytes(negotiated.into_body(), 65_536).await.unwrap()
-            )
-            .unwrap();
+            let data: serde_json::Value =
+                serde_json::from_slice(&to_bytes(negotiated.into_body(), 65_536).await.unwrap())
+                    .unwrap();
             let selected = data["MediaSources"][0]["MediaStreams"]
                 .as_array()
                 .unwrap()
@@ -228,9 +230,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
                 .unwrap();
             assert_eq!(selected["Codec"], codec);
             assert_eq!(selected["IsExternal"], true);
-            let url = format!(
-                "/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{extension}"
-            );
+            let url = format!("/Videos/{id}/{id}/Subtitles/{sidecar_index}/Stream.{extension}");
             assert_eq!(selected["DeliveryUrl"].as_str(), Some(url.as_str()));
             assert_eq!(
                 request(&app, "GET", &url, None).await.status(),
