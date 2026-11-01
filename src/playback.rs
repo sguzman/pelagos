@@ -1135,6 +1135,20 @@ async fn playback_info(
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
     }
+    // FFprobe labels legacy SSA-in-Matroska as codec "ass". Confirm the
+    // script header separately before advertising native .ass to clients.
+    // A failed/oversized auxiliary probe fails closed to the SRT fallback.
+    let native_ass = if probed
+        .streams
+        .iter()
+        .any(|stream| stream["codec_type"] == "subtitle" && stream["codec_name"] == "ass")
+    {
+        probe::native_ass_stream_indices(&file, state.probe_executable())
+            .await
+            .unwrap_or_default()
+    } else {
+        HashSet::new()
+    };
     // Read-only sidecar directory enumeration can touch hundreds of metadata
     // entries. Keep it off Tokio's I/O worker threads.
     let (mut source, probed) = tokio::task::spawn_blocking(move || {
@@ -1143,6 +1157,19 @@ async fn playback_info(
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Preserve actual FFprobe codec information, but do not claim native
+    // ASS delivery for an unverified or legacy SSA script header.
+    for stream in &mut source.media_streams {
+        if !stream.is_external
+            && stream.stream_type == "Subtitle"
+            && stream.codec.as_deref() == Some("ass")
+            && !native_ass.contains(&stream.index)
+            && let Some(url) = stream.delivery_url.as_deref()
+            && let Some(prefix) = url.strip_suffix("/Stream.ass")
+        {
+            stream.delivery_url = Some(format!("{prefix}/Stream.srt"));
+        }
+    }
     if let Some(index) = req.subtitle_stream_index {
         if index == -1 {
             // No embedded subtitle can be stripped from direct-play bytes.
@@ -1310,43 +1337,6 @@ fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
     (count > 0).then(|| output.into_bytes())
 }
 
-// FFprobe reports both modern ASS and legacy SSA-in-Matroska as codec
-// "ass". The native ASS route may expose only actual v4.00+ scripts;
-// rejecting legacy v4.00 avoids mislabeled SSA responses. This checks
-// extracted bounded text, not arbitrary media metadata or rendering fidelity.
-fn is_native_ass_script(bytes: &[u8]) -> bool {
-    let Ok(script) = std::str::from_utf8(bytes) else {
-        return false;
-    };
-    let mut script_info = false;
-    let mut found_type = false;
-    let mut found_events = false;
-    for line in script.trim_start_matches('\u{feff}').lines() {
-        let line = line.trim();
-        if line.eq_ignore_ascii_case("[Script Info]") {
-            script_info = true;
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            script_info = false;
-            if line.eq_ignore_ascii_case("[Events]") {
-                found_events = true;
-            }
-            continue;
-        }
-        if script_info
-            && let Some((name, value)) = line.split_once(':')
-            && name.trim().eq_ignore_ascii_case("ScriptType")
-        {
-            if found_type || !value.trim().eq_ignore_ascii_case("v4.00+") {
-                return false;
-            }
-            found_type = true;
-        }
-    }
-    found_type && found_events
-}
-
 // Bound on-demand embedded subtitle extraction without a persistent process.
 static SUBTITLE_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
@@ -1403,7 +1393,7 @@ async fn extract_embedded_text(
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !status.success()
             || payload.is_empty()
-            || (native_ass && !is_native_ass_script(&payload))
+            || (native_ass && !probe::probe::is_native_ass_script(&payload))
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -2534,8 +2524,8 @@ mod tests {
     #[test]
     fn native_ass_transport_rejects_legacy_ssa_and_unknown_script_types() {
         let modern = b"[Script Info]\nScriptType: v4.00+\n[V4+ Styles]\n[Events]\nDialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,Hi";
-        assert!(is_native_ass_script(modern));
-        assert!(is_native_ass_script(
+        assert!(probe::is_native_ass_script(modern));
+        assert!(probe::is_native_ass_script(
             b"\xef\xbb\xbf[Script Info]\r\nScriptType: v4.00+\r\n[Events]\r\n"
         ));
         for invalid in [
@@ -2547,7 +2537,7 @@ mod tests {
             &b"not a script"[..],
             &[0xff, 0xfe, 0x00][..],
         ] {
-            assert!(!is_native_ass_script(invalid), "{invalid:?}");
+            assert!(!probe::is_native_ass_script(invalid), "{invalid:?}");
         }
     }
 
