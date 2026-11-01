@@ -277,6 +277,15 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         assert!(text.contains(caption));
         assert!(text.starts_with("WEBVTT\nX-TIMESTAMP-MAP="));
     }
+    // Native and converted delivery must leave adjacent source files intact.
+    assert_eq!(
+        fs::read(root.join("Feature.es.ass")).unwrap(),
+        SYNTHETIC_ASS.as_bytes()
+    );
+    assert_eq!(
+        fs::read(root.join("Feature.fr.ssa")).unwrap(),
+        SYNTHETIC_SSA.as_bytes()
+    );
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
