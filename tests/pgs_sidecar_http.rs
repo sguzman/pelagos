@@ -15,8 +15,14 @@ use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
 const PGS: &[u8] = &[
-    b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 2, 0xaa, 0xbb, b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2,
-    0x80, 0, 0,
+    // 32x32 presentation without bitmap objects, window and palette
+    // metadata, followed by a display-set terminator.
+    b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 11,
+    0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0,
+    b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x17, 0, 10,
+    1, 0, 0, 0, 0, 0, 0, 32, 0, 32,
+    b'P', b'G', 0, 0, 0, 3, 0, 0, 0, 3, 0x14, 0, 2, 0, 0,
+    b'P', b'G', 0, 0, 0, 4, 0, 0, 0, 4, 0x80, 0, 0,
 ];
 
 async fn send(
@@ -77,6 +83,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     let mut malformed = PGS.to_vec();
     malformed.extend_from_slice(b"trailing non-PGS bytes");
     fs::write(root.join("Feature.fr.sup"), &malformed).unwrap();
+    let mut bad_windows = PGS.to_vec();
+    // The WDS declares two windows but provides only one record.
+    bad_windows[13 + 11 + 13] = 2;
+    fs::write(root.join("Feature.de.sup"), &bad_windows).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -114,7 +124,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .iter()
         .filter(|stream| stream["Codec"] == "pgssub")
         .collect::<Vec<_>>();
-    assert_eq!(pgs.len(), 2);
+    assert_eq!(pgs.len(), 3);
     assert!(
         pgs.iter()
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
@@ -273,16 +283,22 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         send(&app, "GET", &alias, Some(&token), &[]).await.status(),
         StatusCode::OK
     );
-    let invalid_index = pgs.iter().find(|track| track["Language"] == "fr").unwrap()["Index"]
-        .as_i64()
-        .unwrap();
-    let invalid = format!("/Videos/{id}/{id}/Subtitles/{invalid_index}/Stream.pgssub");
-    assert_eq!(
-        send(&app, "GET", &invalid, Some(&token), &[])
-            .await
-            .status(),
-        StatusCode::NOT_IMPLEMENTED
-    );
+    for language in ["fr", "de"] {
+        let invalid_index = pgs
+            .iter()
+            .find(|track| track["Language"] == language)
+            .unwrap()["Index"]
+            .as_i64()
+            .unwrap();
+        let invalid = format!("/Videos/{id}/{id}/Subtitles/{invalid_index}/Stream.pgssub");
+        assert_eq!(
+            send(&app, "GET", &invalid, Some(&token), &[])
+                .await
+                .status(),
+            StatusCode::NOT_IMPLEMENTED,
+            "{language}"
+        );
+    }
     assert_eq!(
         send(
             &app,
@@ -296,6 +312,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(root.join("Feature.fr.sup")).unwrap(), malformed);
+    assert_eq!(fs::read(root.join("Feature.de.sup")).unwrap(), bad_windows);
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
