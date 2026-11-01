@@ -14,7 +14,7 @@ use axum::{
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE},
+        header::{ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, IF_RANGE, RANGE},
     },
     response::Response,
     routing::get,
@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::Command,
     sync::Semaphore,
 };
@@ -355,6 +355,32 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
 // Raw PGS SUP files may be larger than ordinary 4 MiB text sidecars, but
 // remain bounded and are delivered as byte ranges without decoding.
 const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
+
+/// A raw Blu-ray PGS packet begins with "PG", PTS/DTS, a known segment
+/// type and a bounded segment payload. This does not decode/render bitmaps.
+fn pgs_header_valid(bytes: &[u8; 13], file_size: u64) -> bool {
+    let len = u64::from(u16::from_be_bytes([bytes[11], bytes[12]]));
+    &bytes[..2] == b"PG"
+        && matches!(bytes[10], 0x14 | 0x15 | 0x16 | 0x17 | 0x80)
+        && 13_u64.checked_add(len).is_some_and(|end| end <= file_size)
+}
+
+fn pgs_invalid_range(size: u64) -> Result<Response, StatusCode> {
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
+    response.headers_mut().insert(
+        CONTENT_RANGE,
+        HeaderValue::from_str(&format!("bytes */{size}"))
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    response
+        .headers_mut()
+        .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    Ok(response)
+}
 #[derive(Debug)]
 struct ExternalSubtitle {
     index: i64,
@@ -1585,6 +1611,7 @@ async fn serve_external_subtitle(
                     && (sidecar.format == format
                         || (sidecar.format == "srt" && format == "vtt")
                         || (sidecar.format == "vtt" && format == "srt")
+                        || (sidecar.format == "sup" && format == "pgssub")
                         || (matches!(sidecar.format, "ass" | "ssa")
                             && matches!(format, "srt" | "vtt")))
             })
@@ -1661,6 +1688,101 @@ async fn serve_external_subtitle(
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    if sidecar.format == "sup" {
+        if size < 13 || size > MAX_SUP_BYTES {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let mut reader = tokio::fs::File::from_std(opened);
+        let mut prefix = [0_u8; 13];
+        reader
+            .read_exact(&mut prefix)
+            .await
+            .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
+        if !pgs_header_valid(&prefix, size) {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        // PGS is a raw graphical subtitle format; clients incrementally
+        // fetch its bytes. Honor one bounded RFC 9110 range, never multi-
+        // ranges, and ignore Range if its If-Range precondition is unknown.
+        let range = if headers.contains_key(IF_RANGE) {
+            Ok(None)
+        } else {
+            let mut values = headers.get_all(RANGE).iter();
+            match (values.next(), values.next()) {
+                (None, None) => Ok(None),
+                (Some(raw), None) => raw
+                    .to_str()
+                    .ok()
+                    .and_then(|value| streaming::parse_range(value, size))
+                    .map(Some)
+                    .ok_or(()),
+                _ => Err(()),
+            }
+        };
+        let range = match range {
+            Ok(range) => range,
+            Err(()) => {
+                reauthorize_video_source(
+                    state,
+                    headers,
+                    item,
+                    &source,
+                    &source_metadata,
+                )
+                .await?;
+                return pgs_invalid_range(size);
+            }
+        };
+        let (start, length) = match &range {
+            Some(range) => (range.start, range.end - range.start + 1),
+            None => (0, size),
+        };
+        reader
+            .seek(std::io::SeekFrom::Start(start))
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        reauthorize_video_source(state, headers, item, &source, &source_metadata).await?;
+        let body = if head {
+            Body::empty()
+        } else {
+            Body::from_stream(ReaderStream::new(reader.take(length)))
+        };
+        let mut response = Response::new(body);
+        *response.status_mut() = if range.is_some() {
+            StatusCode::PARTIAL_CONTENT
+        } else {
+            StatusCode::OK
+        };
+        response.headers_mut().insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/octet-stream"),
+        );
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("private, no-store"),
+        );
+        response.headers_mut().insert(
+            ACCEPT_RANGES,
+            HeaderValue::from_static("bytes"),
+        );
+        response.headers_mut().insert(
+            "x-content-type-options",
+            HeaderValue::from_static("nosniff"),
+        );
+        response.headers_mut().insert(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&length.to_string())
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+        if let Some(range) = range {
+            response.headers_mut().insert(
+                CONTENT_RANGE,
+                HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size))
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            );
+        }
+        return Ok(response);
+    }
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
