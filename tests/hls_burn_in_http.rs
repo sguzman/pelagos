@@ -521,6 +521,41 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     assert_eq!(fs::read(&sidecar).unwrap(), utf16);
     assert_eq!(fs::read(&source).unwrap(), original);
 
+    // Separately indexed external WebVTT uses the already verified
+    // cue-to-SRT conversion, not a second FFmpeg filter syntax.
+    let vtt = library.join("Feature.fr.vtt");
+    fs::write(
+        &vtt,
+        b"WEBVTT\n\n00:00:00.200 --> 00:00:01.800\nEXTERNAL WEBVTT VISIBLE\n\n",
+    )
+    .unwrap();
+    let playback_info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    assert_eq!(playback_info.status(), StatusCode::OK);
+    let playback_info: Value =
+        serde_json::from_str(&body_string(playback_info).await).unwrap();
+    let vtt_index = playback_info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "webvtt")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let vtt_url = format!("{base}&subtitleStreamIndex={vtt_index}&subtitleMethod=Encode");
+    let vtt_response = call(&app, &vtt_url, Some(&token)).await;
+    assert_eq!(vtt_response.status(), StatusCode::OK);
+    let vtt_manifest = body_string(vtt_response).await;
+    let vtt_bytes = segment_bytes(&app, id, &vtt_manifest, &token, 0).await;
+    let vtt_bright = bright_pixels(&vtt_bytes, &temp.path().join("external-vtt.ts"));
+    assert!(vtt_bright > black + 20);
+    assert_eq!(fs::read(&source).unwrap(), original);
+
+    fs::write(&vtt, b"WEBVTT\n\nSTYLE\n::cue { color: yellow; }\n\n").unwrap();
+    assert_eq!(
+        call(&app, &vtt_url, Some(&token)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+
     fs::write(&sidecar, b"this is not a valid SRT cue").unwrap();
     assert_eq!(
         call(&app, &burn, Some(&token)).await.status(),
