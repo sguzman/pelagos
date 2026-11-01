@@ -186,6 +186,25 @@ async fn fallback_font_list(
     Ok(Json(fonts.iter().map(FontFile::from).collect()))
 }
 
+// Pinned Jellyfin v12.3 SubtitleController returns HTTP 200 with an
+// empty body for an absent fallback font, not 204. The upstream comments
+// call out compatibility with SubtitlesOctopus. We deliberately still
+// reject unsafe route names, but follow that behavior for safe names.
+fn empty_font_response() -> Response {
+    let mut response = Response::new(Body::empty());
+    response
+        .headers_mut()
+        .insert(CONTENT_LENGTH, HeaderValue::from_static("0"));
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    response.headers_mut().insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    response
+}
+
 async fn serve_font(
     state: Arc<AppState>,
     name: String,
@@ -196,31 +215,34 @@ async fn serve_font(
     if !safe_name(&name) {
         return Err(StatusCode::NOT_FOUND);
     }
-    let root = state
-        .fallback_font_dir()
-        .map(Path::to_path_buf)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let Some(root) = state.fallback_font_dir().map(Path::to_path_buf) else {
+        return Ok(empty_font_response());
+    };
     let _permit = font_read_permit()?;
-    let (data, mime) = tokio::task::spawn_blocking(move || {
-        let font = available(&root)?
-            .into_iter()
-            .find(|font| font.name == name)
-            .ok_or(StatusCode::NOT_FOUND)?;
-        let (file, _, size) = streaming::open_confined(&root, Path::new(&name))?;
+    let found = tokio::task::spawn_blocking(move || {
+        let Some(font) = available(&root)?.into_iter().find(|font| font.name == name) else {
+            return Ok::<_, StatusCode>(None);
+        };
+        let Ok((file, _, size)) = streaming::open_confined(&root, Path::new(&name)) else {
+            return Ok(None);
+        };
         if size != font.size {
-            return Err(StatusCode::NOT_FOUND);
+            return Ok(None);
         }
         let mut bytes = Vec::new();
         file.take(attachments::MAX_FONT_BYTES as u64 + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| StatusCode::NOT_FOUND)?;
         if bytes.len() as u64 != size || !attachments::font_header_matches(font.mime, &bytes) {
-            return Err(StatusCode::NOT_IMPLEMENTED);
+            return Ok(None);
         }
-        Ok::<_, StatusCode>((bytes, font.mime))
+        Ok(Some((bytes, font.mime)))
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    let Some((data, mime)) = found else {
+        return Ok(empty_font_response());
+    };
     let length = data.len();
     let mut response = Response::new(if head {
         Body::empty()
