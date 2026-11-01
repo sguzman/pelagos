@@ -1787,9 +1787,10 @@ async fn subtitle_playlist(
         stream.index == index
             && stream.stream_type == "Subtitle"
             && stream.delivery_method == Some("External")
-            && stream.delivery_url.as_deref().is_some_and(|url| {
-                url.ends_with(".srt") || url.ends_with(".vtt")
-            })
+            && stream
+                .delivery_url
+                .as_deref()
+                .is_some_and(|url| url.ends_with(".srt") || url.ends_with(".vtt"))
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
@@ -1816,10 +1817,9 @@ async fn subtitle_playlist(
         CONTENT_TYPE,
         HeaderValue::from_static("application/vnd.apple.mpegurl"),
     );
-    response.headers_mut().insert(
-        CACHE_CONTROL,
-        HeaderValue::from_static("private, no-store"),
-    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     response.headers_mut().insert(
         CONTENT_LENGTH,
         HeaderValue::from_str(&text.len().to_string())
@@ -1867,7 +1867,15 @@ async fn get_subtitle_segment(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "vtt",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_subtitle_segment(
@@ -1876,7 +1884,15 @@ async fn head_subtitle_segment(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "vtt",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
