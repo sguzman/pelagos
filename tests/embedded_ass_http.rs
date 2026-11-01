@@ -238,7 +238,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         .method("POST")
         .uri("/Sessions/Capabilities/Full")
         .header("Content-Type", "application/json")
-        .header("X-Emby-Token", &viewer)
+        .header("X-Emby-Token", viewer.as_str())
         .body(Body::from(session_profile.to_string()))
         .unwrap();
     assert_eq!(
