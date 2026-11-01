@@ -278,7 +278,9 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         .unwrap();
     let invalid_url = format!("/Videos/{id}/{id}/Subtitles/{invalid_index}/Stream.srt");
     assert_eq!(
-        request(&app, "GET", &invalid_url, Some(&viewer)).await.status(),
+        request(&app, "GET", &invalid_url, Some(&viewer))
+            .await
+            .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     let playlist_url =
