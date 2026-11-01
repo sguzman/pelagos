@@ -37,6 +37,35 @@ async fn request(app: &Router, method: &str, url: &str, token: Option<&str>) -> 
         .unwrap()
 }
 
+async fn post_playback_with_subtitle_profile(
+    app: &Router,
+    item: &str,
+    token: &str,
+    index: i64,
+    method: &str,
+    format: &str,
+) -> Response {
+    let body = serde_json::json!({
+        "SubtitleStreamIndex": index,
+        "DeviceProfile": {
+            "DirectPlayProfiles": [
+                {"Type":"Video","Container":"mkv","VideoCodec":"mpeg4"}
+            ],
+            "SubtitleProfiles": [
+                {"Method":method,"Format":format}
+            ]
+        }
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/Items/{item}/PlaybackInfo"))
+        .header("Content-Type", "application/json")
+        .header("X-Emby-Token", token)
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    app.clone().oneshot(request).await.unwrap()
+}
+
 #[tokio::test]
 async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
@@ -116,6 +145,45 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     let index = embedded["Index"].as_i64().unwrap();
     let url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.ass");
     assert_eq!(embedded["DeliveryUrl"].as_str(), Some(url.as_str()));
+    // The same selected embedded ASS index can be separately delivered
+    // through the format explicitly permitted by this client's profile.
+    for (method, format, extension, expected) in [
+        ("External", "ass", "ass", StatusCode::OK),
+        ("External", "srt", "srt", StatusCode::OK),
+        ("External", "webvtt", "vtt", StatusCode::OK),
+        ("External", "-ass", "srt", StatusCode::OK),
+        ("External", "ssa", "ass", StatusCode::NOT_IMPLEMENTED),
+        ("Embed", "srt", "ass", StatusCode::NOT_IMPLEMENTED),
+    ] {
+        let response = post_playback_with_subtitle_profile(
+            &app, id, &viewer, index, method, format,
+        )
+        .await;
+        assert_eq!(response.status(), expected, "{method}/{format}");
+        if expected != StatusCode::OK {
+            continue;
+        }
+        let info: serde_json::Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), 65_536).await.unwrap()
+        )
+        .unwrap();
+        assert_eq!(
+            info["MediaSources"][0]["DefaultSubtitleStreamIndex"],
+            index
+        );
+        let selected = info["MediaSources"][0]["MediaStreams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|track| track["Index"] == index && track["Type"] == "Subtitle")
+            .unwrap();
+        assert_eq!(selected["Codec"], "ass");
+        assert_eq!(selected["IsExternal"], false);
+        assert_eq!(
+            selected["DeliveryUrl"],
+            format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.{extension}")
+        );
+    }
     assert_eq!(
         request(&app, "GET", &url, None).await.status(),
         StatusCode::UNAUTHORIZED
