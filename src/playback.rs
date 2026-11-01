@@ -1241,6 +1241,11 @@ async fn serve_external_subtitle(
         if !embedded {
             return Err(StatusCode::NOT_FOUND);
         }
+        if !matches!(format, "srt" | "vtt") {
+            // The bounded embedded extractor emits only SRT, optionally
+            // converted to VTT. Never mislabel its bytes as ASS or SSA.
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
         if !(0..=i64::from(i32::MAX)).contains(&index) {
             return Err(StatusCode::BAD_REQUEST);
         }

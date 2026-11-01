@@ -1307,6 +1307,13 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
             .unwrap()
             .contains("Extracted cue!")
     );
+    let unsupported_embedded = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.ass");
+    assert_eq!(
+        request(&app, "GET", &unsupported_embedded, Some(&viewer), "")
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         request(&app, "GET", &route, Some(&viewer), "")
