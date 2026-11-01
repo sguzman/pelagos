@@ -179,9 +179,28 @@ fn safe_attachment_filename(value: &Value) -> Option<String> {
     let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
     let reserved = matches!(
         stem.as_str(),
-        "CON" | "PRN" | "AUX" | "NUL"
-            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
-            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
     );
     if name == "."
         || name == ".."
@@ -345,8 +364,7 @@ struct ExternalSubtitle {
 fn sidecar_language_tag(part: &str) -> Option<String> {
     let mut sections = part.split('-');
     let primary = sections.next()?;
-    if !(2..=3).contains(&primary.len())
-        || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+    if !(2..=3).contains(&primary.len()) || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
     {
         return None;
     }
@@ -359,9 +377,8 @@ fn sidecar_language_tag(part: &str) -> Option<String> {
         (part.len() == 2 && part.bytes().all(|byte| byte.is_ascii_alphabetic()))
             || (part.len() == 3 && part.bytes().all(|byte| byte.is_ascii_digit()))
     };
-    let is_script = |part: &str| {
-        part.len() == 4 && part.bytes().all(|byte| byte.is_ascii_alphabetic())
-    };
+    let is_script =
+        |part: &str| part.len() == 4 && part.bytes().all(|byte| byte.is_ascii_alphabetic());
     let valid = match (script_or_region, region) {
         (None, None) => true,
         (Some(part), None) => is_region(part) || is_script(part),
@@ -1535,12 +1552,9 @@ fn add_vtt_timestamp_map(bytes: &[u8]) -> Result<Vec<u8>, StatusCode> {
         .ok_or(StatusCode::NOT_IMPLEMENTED)?;
     // Preserve an optional WebVTT header title rather than putting it
     // after the timestamp-map value (which produces an invalid map).
-    let valid_header = header == "WEBVTT"
-        || header.starts_with("WEBVTT ")
-        || header.starts_with("WEBVTT\t");
-    if !valid_header
-        || header.len() > 256
-        || header.chars().any(|ch| ch.is_control() && ch != '\t')
+    let valid_header =
+        header == "WEBVTT" || header.starts_with("WEBVTT ") || header.starts_with("WEBVTT\t");
+    if !valid_header || header.len() > 256 || header.chars().any(|ch| ch.is_control() && ch != '\t')
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
@@ -1549,9 +1563,7 @@ fn add_vtt_timestamp_map(bytes: &[u8]) -> Result<Vec<u8>, StatusCode> {
     if header.contains('\n') {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let output = format!(
-        "{header}\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n{body}"
-    );
+    let output = format!("{header}\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n{body}");
     if output.len() > 4 * 1024 * 1024 + 4096 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
@@ -2382,9 +2394,7 @@ mod tests {
             "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello!\n\n00:01:00.050 --> 00:01:01.000\nBye\n\n"
         );
         assert!(convert_srt_to_webvtt(b"1\n00:00:70,000 --> 00:00:02,000\ninvalid\n").is_none());
-        assert!(
-            convert_srt_to_webvtt(b"1\n00:00:02,000 --> 00:00:01,000\nReversed\n").is_none()
-        );
+        assert!(convert_srt_to_webvtt(b"1\n00:00:02,000 --> 00:00:01,000\nReversed\n").is_none());
         assert!(
             convert_srt_to_webvtt(b"1\n00:00:01,000 --> 00:00:01,000\nZero duration\n").is_none()
         );
@@ -2514,9 +2524,11 @@ mod tests {
         assert!(subtitle.iter().any(|stream| {
             stream.language.as_deref() == Some("es-mx") && !stream.is_hearing_impaired
         }));
-        assert!(subtitle
-            .iter()
-            .any(|stream| stream.language.as_deref() == Some("zh-hant-tw")));
+        assert!(
+            subtitle
+                .iter()
+                .any(|stream| stream.language.as_deref() == Some("zh-hant-tw"))
+        );
     }
 
     #[test]
@@ -2710,7 +2722,10 @@ mod tests {
             )
             .expect("font stream is otherwise deliverable")
         };
-        assert_eq!(make("subtitle-font.ttf").file_name.as_deref(), Some("subtitle-font.ttf"));
+        assert_eq!(
+            make("subtitle-font.ttf").file_name.as_deref(),
+            Some("subtitle-font.ttf")
+        );
         for unsafe_name in [
             "../secret.ttf",
             "folder/font.ttf",
@@ -2727,7 +2742,10 @@ mod tests {
         ] {
             let mapped = make(unsafe_name);
             assert_eq!(mapped.file_name, None, "{unsafe_name:?}");
-            assert_eq!(mapped.delivery_url, "/Videos/media-id/media-id/Attachments/1");
+            assert_eq!(
+                mapped.delivery_url,
+                "/Videos/media-id/media-id/Attachments/1"
+            );
         }
     }
 
