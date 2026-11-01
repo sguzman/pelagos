@@ -821,6 +821,9 @@ fn negotiate_selected_subtitle_delivery(
     } else if original.ends_with("/Stream.srt") {
         // Both a native SRT sidecar and embedded SRT can become WebVTT.
         &["vtt"]
+    } else if stream.is_external && original.ends_with("/Stream.vtt") {
+        // Do not advertise this conversion for unrelated embedded codecs.
+        &["srt"]
     } else {
         &[]
     };
@@ -1563,6 +1566,7 @@ async fn serve_external_subtitle(
                 sidecar.index == index
                     && (sidecar.format == format
                         || (sidecar.format == "srt" && format == "vtt")
+                        || (sidecar.format == "vtt" && format == "srt")
                         || (matches!(sidecar.format, "ass" | "ssa")
                             && matches!(format, "srt" | "vtt")))
             })
@@ -1629,6 +1633,7 @@ async fn serve_external_subtitle(
     }
     let sidecar = sidecar.ok_or(StatusCode::NOT_FOUND)?;
     let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
+    let convert_to_srt = sidecar.format == "vtt" && format == "srt";
     let convert_script = matches!(sidecar.format, "ass" | "ssa") && matches!(format, "srt" | "vtt");
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
@@ -1640,7 +1645,7 @@ async fn serve_external_subtitle(
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let (body, response_length) = if convert_to_vtt || convert_script {
+    let (body, response_length) = if convert_to_vtt || convert_to_srt || convert_script {
         // Compute identical payload length for GET and HEAD; never touch
         // or rewrite the user's adjacent subtitle file.
         let mut bytes = Vec::new();
@@ -1657,7 +1662,10 @@ async fn serve_external_subtitle(
         } else {
             bytes
         };
-        let converted = if format == "vtt" {
+        let converted = if convert_to_srt {
+            crate::subtitle_timing::vtt_sidecar_to_srt(&srt)
+                .ok_or(StatusCode::NOT_IMPLEMENTED)?
+        } else if format == "vtt" {
             convert_srt_to_webvtt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else {
             srt
