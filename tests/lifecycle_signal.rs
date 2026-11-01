@@ -68,9 +68,15 @@ fn run_child_signal(signal: &str) {
     }
     assert!(stopped.unwrap().success());
     let mut logs = String::new();
-    child.stderr.take().unwrap().read_to_string(&mut logs).unwrap();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut logs)
+        .unwrap();
     assert!(
-        logs.contains("Pelagos listening") && logs.contains(&format!("listening_address={address}")),
+        logs.contains("Pelagos listening")
+            && logs.contains(&format!("listening_address={address}")),
         "missing startup address/diagnostics after {signal}: {logs}"
     );
     assert!(
