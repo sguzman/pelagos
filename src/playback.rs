@@ -1343,6 +1343,60 @@ async fn head_external_vtt(
     serve_external_subtitle(state, item, media_source, index, "vtt", headers, true).await
 }
 
+// Pinned Jellyfin v12.3 also exposes timestamp-scoped subtitle URLs.
+// Zero ticks is the identity operation; nonzero seek rebasing is not yet
+// available in this bounded subtitle delivery subset.
+async fn timed_subtitle(
+    state: Arc<AppState>,
+    item: String,
+    media_source: String,
+    index: i64,
+    start_ticks: i64,
+    format: &'static str,
+    headers: HeaderMap,
+    head: bool,
+) -> Result<Response, StatusCode> {
+    if start_ticks < 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if start_ticks != 0 {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    serve_external_subtitle(state, item, media_source, index, format, headers, head).await
+}
+
+async fn get_timed_srt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    timed_subtitle(state, item, media_source, index, start, "srt", headers, false).await
+}
+
+async fn head_timed_srt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    timed_subtitle(state, item, media_source, index, start, "srt", headers, true).await
+}
+
+async fn get_timed_vtt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    timed_subtitle(state, item, media_source, index, start, "vtt", headers, false).await
+}
+
+async fn head_timed_vtt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    timed_subtitle(state, item, media_source, index, start, "vtt", headers, true).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -1356,6 +1410,14 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.vtt",
             get(get_external_vtt).head(head_external_vtt),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.srt",
+            get(get_timed_srt).head(head_timed_srt),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.vtt",
+            get(get_timed_vtt).head(head_timed_vtt),
         )
 }
 

@@ -958,6 +958,10 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         .status(),
         StatusCode::NOT_FOUND
     );
+    let timed_vtt = format!("/Videos/{item}/{item}/Subtitles/3/0/Stream.vtt");
+    let response = request(&app, "HEAD", &timed_vtt, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_LENGTH], webvtt.len().to_string());
     assert_eq!(
         request(
             &app,
@@ -998,6 +1002,17 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             .unwrap()
             .is_empty()
     );
+    let timed = format!("/Videos/{item}/{item}/Subtitles/2/0/Stream.srt");
+    let response = request(&app, "GET", &timed, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(to_bytes(response.into_body(), 1_024).await.unwrap().as_ref(), subtitle);
+    for (ticks, expected) in [("-1", StatusCode::BAD_REQUEST), ("1000000", StatusCode::NOT_IMPLEMENTED)] {
+        let uri = format!("/Videos/{item}/{item}/Subtitles/2/{ticks}/Stream.srt");
+        assert_eq!(
+            request(&app, "GET", &uri, Some(&viewer), "").await.status(),
+            expected
+        );
+    }
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(
         vtt_url,
