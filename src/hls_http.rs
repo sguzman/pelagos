@@ -468,7 +468,9 @@ async fn reauthorize_publication(
         return Err(StatusCode::NOT_FOUND);
     }
     if let Some(sidecar) = query.sidecar {
-        let bytes = read_confined_srt(&source, &sidecar.filename).await?;
+        let bytes = read_confined_srt(&source, &sidecar.filename)
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         if digest != sidecar.digest {
             return Err(StatusCode::NOT_FOUND);
@@ -863,7 +865,9 @@ async fn serve_segment(
         return Err(StatusCode::NOT_FOUND);
     }
     if let Some(sidecar) = publication.sidecar.as_ref() {
-        let bytes = read_confined_srt(&source, &sidecar.filename).await?;
+        let bytes = read_confined_srt(&source, &sidecar.filename)
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         if digest != sidecar.digest {
             return Err(StatusCode::NOT_FOUND);
