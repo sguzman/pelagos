@@ -331,6 +331,21 @@ mod tests {
         let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 0xaa, 0xbb]);
         assert!(packets_valid(&mut single.as_slice(), single.len() as u64));
 
+        // A valid colored-run escape may span three ODS fragments.
+        // Decode only after the final fragment, using the complete RLE data.
+        let mut split_run = packet(0x15, &[0, 2, 0, 0x80, 0, 0, 7, 0, 3, 0, 1, 0]);
+        split_run.extend(packet(0x15, &[0, 2, 0, 0, 0x83]));
+        split_run.extend(packet(0x15, &[0, 2, 0, 0x40, 7]));
+        split_run.extend(packet(0x80, &[]));
+        assert!(packets_valid(&mut split_run.as_slice(), split_run.len() as u64));
+        // Correct fragment sizes cannot disguise a dangling RLE escape.
+        let mut dangling_run = packet(0x15, &[0, 3, 0, 0x80, 0, 0, 6, 0, 3, 0, 1, 0]);
+        dangling_run.extend(packet(0x15, &[0, 3, 0, 0x40, 0x83]));
+        assert!(!packets_valid(
+            &mut dangling_run.as_slice(),
+            dangling_run.len() as u64
+        ));
+
         // Incomplete, unmatched, repeated and oversized final fragments all
         // fail closed, including when a display set is otherwise well framed.
         let mut unfinished = first.clone();
