@@ -1502,15 +1502,32 @@ impl SubtitleQuery {
 
 fn add_vtt_timestamp_map(bytes: &[u8]) -> Result<Vec<u8>, StatusCode> {
     let source = std::str::from_utf8(bytes).map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
-    let source = source.trim_start_matches('\u{feff}');
-    let rest = source
-        .strip_prefix("WEBVTT")
+    let normalized = source
+        .trim_start_matches('\u{feff}')
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
+    let (header, body) = normalized
+        .split_once("\n\n")
         .ok_or(StatusCode::NOT_IMPLEMENTED)?;
-    if rest.contains("X-TIMESTAMP-MAP=") {
+    // Preserve an optional WebVTT header title rather than putting it
+    // after the timestamp-map value (which produces an invalid map).
+    let valid_header = header == "WEBVTT"
+        || header.starts_with("WEBVTT ")
+        || header.starts_with("WEBVTT\t");
+    if !valid_header
+        || header.len() > 256
+        || header.chars().any(|ch| ch.is_control() && ch != '\t')
+    {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let mut output = String::from("WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000");
-    output.push_str(rest);
+    // Multiple header metadata lines, including an existing timestamp map,
+    // require an upstream-compatible parser rather than blind insertion.
+    if header.contains('\n') {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let output = format!(
+        "{header}\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n{body}"
+    );
     if output.len() > 4 * 1024 * 1024 + 4096 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
@@ -2308,6 +2325,28 @@ mod tests {
             add_vtt_timestamp_map(b"WEBVTT\n\nCue").unwrap(),
             b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\nCue"
         );
+    }
+
+    #[test]
+    fn timestamp_map_keeps_webvtt_header_title_and_rejects_bad_headers() {
+        assert_eq!(
+            add_vtt_timestamp_map(b"WEBVTT - Sample captions\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nHi!\r\n").unwrap(),
+            b"WEBVTT - Sample captions\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n00:00:01.000 --> 00:00:02.000\nHi!\n"
+        );
+        assert_eq!(
+            add_vtt_timestamp_map(b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:1,LOCAL:00:00:00.000\n\nHi"),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        for malformed in [
+            &b"WEBVTTX\n\ntext"[..],
+            &b"WEBVTT\ntext"[..],
+            &b"WEBVTT\nOTHER:header\n\ntext"[..],
+        ] {
+            assert_eq!(
+                add_vtt_timestamp_map(malformed),
+                Err(StatusCode::NOT_IMPLEMENTED)
+            );
+        }
     }
 
     #[test]
