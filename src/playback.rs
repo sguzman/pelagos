@@ -486,6 +486,80 @@ fn profile_contains(list: &str, actual: &str) -> bool {
     if negative { !found } else { found }
 }
 
+/// Only advertise an external sidecar through a requested subtitle
+/// capability when the pinned SubtitleProfile explicitly permits External
+/// delivery for the actual native file and language. No conversion is implied.
+fn profile_allows_external_subtitles(
+    profiles: &[Value],
+    source: &MediaSource,
+) -> Result<bool, StatusCode> {
+    for rule in profiles {
+        let properties = rule.as_object().ok_or(StatusCode::BAD_REQUEST)?;
+        if properties.keys().any(|key| {
+            !["Format", "Method", "Language", "Container", "DidlMode"].contains(&key.as_str())
+        }) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        for field in ["Format", "Language", "Container", "DidlMode"] {
+            if let Some(value) = properties.get(field).filter(|value| !value.is_null())
+                && value.as_str().is_none_or(|text| {
+                    text.len() > 512 || text.chars().any(char::is_control)
+                })
+            {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+        if let Some(method) = properties.get("Method") {
+            match method {
+                Value::String(name) if matches!(
+                    name.as_str(), "Encode" | "Embed" | "External" | "Hls" | "Drop"
+                ) => {}
+                Value::Number(number) if (0..=4).contains(&number.as_i64().unwrap_or(-1)) => {}
+                _ => return Err(StatusCode::BAD_REQUEST),
+            }
+        }
+    }
+    for stream in source
+        .media_streams
+        .iter()
+        .filter(|stream| stream.stream_type == "Subtitle")
+    {
+        let Some(url) = stream.delivery_url.as_deref().filter(|_| stream.is_external) else {
+            return Ok(false);
+        };
+        let ext = if url.ends_with(".srt") {
+            "srt"
+        } else if url.ends_with(".vtt") {
+            "vtt"
+        } else {
+            return Ok(false);
+        };
+        let matched = profiles.iter().any(|rule| {
+            let method = &rule["Method"];
+            let external = method == "External" || method == 2;
+            if !external {
+                return false;
+            }
+            let allowed_container = rule["Container"].as_str().unwrap_or("");
+            let allowed_language = rule["Language"].as_str().unwrap_or("");
+            let allowed_format = rule["Format"].as_str().unwrap_or("");
+            let codec = stream.codec.as_deref().unwrap_or("");
+            let compatible_format = if allowed_format.starts_with('-') {
+                profile_contains(allowed_format, ext) && profile_contains(allowed_format, codec)
+            } else {
+                profile_contains(allowed_format, ext) || profile_contains(allowed_format, codec)
+            };
+            compatible_format
+                && profile_contains(allowed_container, &source.container)
+                && profile_contains(allowed_language, stream.language.as_deref().unwrap_or("und"))
+        });
+        if !matched {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// This is a conservative, bounded direct-file subset, not full DLNA
 /// negotiation. A client profile which requires unimplemented codec or
 /// container constraints is refused rather than silently ignored.
@@ -534,12 +608,9 @@ fn profile_allows_direct_file(
             }
             if field == "SubtitleProfiles"
                 && !profiles.is_empty()
-                && source
-                    .media_streams
-                    .iter()
-                    .any(|stream| stream.stream_type == "Subtitle")
+                && !profile_allows_external_subtitles(profiles, source)?
             {
-                return Err(StatusCode::NOT_IMPLEMENTED);
+                return Ok(false);
             }
         }
     }
@@ -1180,6 +1251,40 @@ mod tests {
         report.format = None;
         let unknown = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
         assert_eq!(unknown.bitrate, None);
+    }
+
+    #[test]
+    fn pinned_subtitle_profiles_allow_only_native_external_formats() {
+        let fixture = tempfile::tempdir().unwrap();
+        let movie = fixture.path().join("Feature.mp4");
+        std::fs::write(&movie, b"fixture").unwrap();
+        std::fs::write(fixture.path().join("Feature.eng.srt"), b"subtitle").unwrap();
+        std::fs::write(fixture.path().join("Feature.fr.vtt"), b"WEBVTT").unwrap();
+        let report = probe::ProbeReport {
+            path: movie.clone(),
+            size_bytes: 7,
+            format: Some(json!({"bit_rate":"1000000"})),
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"h264"}),
+                json!({"index":1,"codec_type":"audio","codec_name":"aac"}),
+            ],
+            chapters: vec![],
+        };
+        let source = source_from_probe("id", "video", &movie, &report);
+        assert_eq!(source.media_streams.len(), 4);
+        for (profile, expected) in [
+            (json!([
+                {"Method":"External","Format":"srt","Language":"eng"},
+                {"Method":2,"Format":"vtt","Language":"fr"}
+            ]), Ok(true)),
+            (json!([{"Method":"Embed","Format":"srt"}]), Ok(false)),
+            (json!([{"Method":"External","Format":"srt"}]), Ok(false)),
+            (json!([{"Method":"External","Format":"-srt"}]), Ok(false)),
+            (json!([{"Method":"External","Format":"vtt","Language":"eng"}]), Ok(false)),
+            (json!([{"Method":"External","Format":"srt","Unknown":true}]), Err(StatusCode::BAD_REQUEST)),
+        ] {
+            assert_eq!(profile_allows_external_subtitles(profile.as_array().unwrap(), &source), expected);
+        }
     }
 
     #[test]
