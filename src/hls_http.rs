@@ -109,8 +109,7 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
             return Err(StatusCode::NOT_FOUND);
         }
         let normalized = if filename.to_ascii_lowercase().ends_with(".vtt") {
-            crate::subtitle_timing::vtt_sidecar_to_srt(&bytes)
-                .ok_or(StatusCode::NOT_IMPLEMENTED)?
+            crate::subtitle_timing::vtt_sidecar_to_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else {
             playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
         };
