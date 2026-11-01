@@ -803,13 +803,7 @@ mod tests {
         let mut frames = Vec::new();
         for output in [&plain, &burned] {
             let decoded = Command::new("ffmpeg")
-                .args([
-                    "-nostdin",
-                    "-hide_banner",
-                    "-loglevel",
-                    "error",
-                    "-i",
-                ])
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
                 .arg(output)
                 .args([
                     "-frames:v",
