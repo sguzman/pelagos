@@ -86,13 +86,13 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     fs::write(root.join("Feature.de.sup"), &bad_windows).unwrap();
     let mut unfinished_object = PGS[..24].to_vec();
     unfinished_object.extend_from_slice(&[
-        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0, 8, 0xaa,
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 2, 0, 1, 0xaa,
     ]);
     unfinished_object.extend_from_slice(&PGS[24..]);
     fs::write(root.join("Feature.pt.sup"), &unfinished_object).unwrap();
     let mut completed_object = PGS[..24].to_vec();
     completed_object.extend_from_slice(&[
-        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0, 8, 0xaa,
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 2, 0, 1, 0xaa,
     ]);
     completed_object.extend_from_slice(&[
         b'P', b'G', 0, 0, 0, 3, 0, 0, 0, 3, 0x15, 0, 5, 0, 1, 0, 0x40, 0xbb,
