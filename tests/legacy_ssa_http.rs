@@ -174,10 +174,7 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     );
     let content_length = native.headers()[header::CONTENT_LENGTH].clone();
     let native = to_bytes(native.into_body(), 65_536).await.unwrap();
-    assert_eq!(
-        content_length.to_str().unwrap(),
-        native.len().to_string()
-    );
+    assert_eq!(content_length.to_str().unwrap(), native.len().to_string());
     let head = Request::builder()
         .method("HEAD")
         .uri(&ssa)
