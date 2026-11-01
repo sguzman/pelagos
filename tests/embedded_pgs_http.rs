@@ -14,7 +14,11 @@ use pelagos::{
 use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
-const RAW_PGS: &[u8] = &[b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0, 0];
+const RAW_PGS: &[u8] = &[
+    b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x16, 0, 11,
+    0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0,
+    b'P', b'G', 0, 0, 0, 0, 0, 0, 0, 0, 0x80, 0, 0,
+];
 
 async fn request(
     app: &Router,
@@ -136,7 +140,10 @@ async fn embedded_matroska_pgs_stream_is_extracted_raw_and_read_by_ranges() {
     let response = request(&app, "GET", &url, Some(&token), Some("bytes=2-7")).await;
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()[header::CONTENT_LENGTH], "6");
-    assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 2-7/13");
+    assert_eq!(
+        response.headers()[header::CONTENT_RANGE],
+        format!("bytes 2-7/{}", RAW_PGS.len())
+    );
     assert_eq!(
         to_bytes(response.into_body(), 1024).await.unwrap().as_ref(),
         &RAW_PGS[2..=7]
@@ -145,7 +152,15 @@ async fn embedded_matroska_pgs_stream_is_extracted_raw_and_read_by_ranges() {
     let response = request(&app, "HEAD", &timed, Some(&token), Some("bytes=-3")).await;
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()[header::CONTENT_LENGTH], "3");
-    assert_eq!(response.headers()[header::CONTENT_RANGE], "bytes 10-12/13");
+    assert_eq!(
+        response.headers()[header::CONTENT_RANGE],
+        format!(
+            "bytes {}-{}/{}",
+            RAW_PGS.len() - 3,
+            RAW_PGS.len() - 1,
+            RAW_PGS.len()
+        )
+    );
     assert!(to_bytes(response.into_body(), 64).await.unwrap().is_empty());
     assert_eq!(
         request(&app, "GET", &url, Some(&token), Some("bytes=99-"))
