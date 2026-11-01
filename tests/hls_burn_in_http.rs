@@ -197,12 +197,14 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
         .status(),
         StatusCode::NOT_IMPLEMENTED
     );
+    // An /Audio route cannot use this video item ID; it must preserve
+    // the existing item-type 404 instead of starting any burn-in job.
     let audio_burn = format!(
         "/Audio/{id}/main.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
     );
     assert_eq!(
         call(&app, &audio_burn, Some(&token)).await.status(),
-        StatusCode::NOT_IMPLEMENTED
+        StatusCode::NOT_FOUND
     );
 
     let plain_response = call(&app, &plain_url, Some(&token)).await;
