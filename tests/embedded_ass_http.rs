@@ -251,9 +251,8 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         }
         // The same text conversion is usable by the bounded short-VOD HLS
         // subtitle playlist and its header-authenticated segment routes.
-        let manifest_url = format!(
-            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/subtitles.m3u8?segmentLength=2"
-        );
+        let manifest_url =
+            format!("/Videos/{id}/{id}/Subtitles/{sidecar_index}/subtitles.m3u8?segmentLength=2");
         assert_eq!(
             request(&app, "GET", &manifest_url, None).await.status(),
             StatusCode::UNAUTHORIZED
@@ -266,9 +265,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             .lines()
             .find(|line| line.starts_with("stream.vtt?"))
             .unwrap();
-        let segment_url = format!(
-            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/{segment}"
-        );
+        let segment_url = format!("/Videos/{id}/{id}/Subtitles/{sidecar_index}/{segment}");
         let segment = request(&app, "GET", &segment_url, Some(&viewer)).await;
         assert_eq!(segment.status(), StatusCode::OK);
         let segment = to_bytes(segment.into_body(), 65_536).await.unwrap();
