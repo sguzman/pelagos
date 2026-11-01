@@ -502,18 +502,20 @@ fn profile_allows_external_subtitles(
         }
         for field in ["Format", "Language", "Container", "DidlMode"] {
             if let Some(value) = properties.get(field).filter(|value| !value.is_null())
-                && value.as_str().is_none_or(|text| {
-                    text.len() > 512 || text.chars().any(char::is_control)
-                })
+                && value
+                    .as_str()
+                    .is_none_or(|text| text.len() > 512 || text.chars().any(char::is_control))
             {
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
         if let Some(method) = properties.get("Method") {
             match method {
-                Value::String(name) if matches!(
-                    name.as_str(), "Encode" | "Embed" | "External" | "Hls" | "Drop"
-                ) => {}
+                Value::String(name)
+                    if matches!(
+                        name.as_str(),
+                        "Encode" | "Embed" | "External" | "Hls" | "Drop"
+                    ) => {}
                 Value::Number(number) if (0..=4).contains(&number.as_i64().unwrap_or(-1)) => {}
                 _ => return Err(StatusCode::BAD_REQUEST),
             }
@@ -524,7 +526,11 @@ fn profile_allows_external_subtitles(
         .iter()
         .filter(|stream| stream.stream_type == "Subtitle")
     {
-        let Some(url) = stream.delivery_url.as_deref().filter(|_| stream.is_external) else {
+        let Some(url) = stream
+            .delivery_url
+            .as_deref()
+            .filter(|_| stream.is_external)
+        else {
             return Ok(false);
         };
         let ext = if url.ends_with(".srt") {
@@ -551,7 +557,10 @@ fn profile_allows_external_subtitles(
             };
             compatible_format
                 && profile_contains(allowed_container, &source.container)
-                && profile_contains(allowed_language, stream.language.as_deref().unwrap_or("und"))
+                && profile_contains(
+                    allowed_language,
+                    stream.language.as_deref().unwrap_or("und"),
+                )
         });
         if !matched {
             return Ok(false);
@@ -1273,17 +1282,29 @@ mod tests {
         let source = source_from_probe("id", "video", &movie, &report);
         assert_eq!(source.media_streams.len(), 4);
         for (profile, expected) in [
-            (json!([
-                {"Method":"External","Format":"srt","Language":"eng"},
-                {"Method":2,"Format":"vtt","Language":"fr"}
-            ]), Ok(true)),
+            (
+                json!([
+                    {"Method":"External","Format":"srt","Language":"eng"},
+                    {"Method":2,"Format":"vtt","Language":"fr"}
+                ]),
+                Ok(true),
+            ),
             (json!([{"Method":"Embed","Format":"srt"}]), Ok(false)),
             (json!([{"Method":"External","Format":"srt"}]), Ok(false)),
             (json!([{"Method":"External","Format":"-srt"}]), Ok(false)),
-            (json!([{"Method":"External","Format":"vtt","Language":"eng"}]), Ok(false)),
-            (json!([{"Method":"External","Format":"srt","Unknown":true}]), Err(StatusCode::BAD_REQUEST)),
+            (
+                json!([{"Method":"External","Format":"vtt","Language":"eng"}]),
+                Ok(false),
+            ),
+            (
+                json!([{"Method":"External","Format":"srt","Unknown":true}]),
+                Err(StatusCode::BAD_REQUEST),
+            ),
         ] {
-            assert_eq!(profile_allows_external_subtitles(profile.as_array().unwrap(), &source), expected);
+            assert_eq!(
+                profile_allows_external_subtitles(profile.as_array().unwrap(), &source),
+                expected
+            );
         }
     }
 

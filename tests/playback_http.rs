@@ -849,8 +849,15 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         }
     });
     assert_eq!(
-        request(&app, "POST", &format!("/Items/{item}/PlaybackInfo"), Some(&viewer), &supported_profile.to_string())
-            .await.status(),
+        request(
+            &app,
+            "POST",
+            &format!("/Items/{item}/PlaybackInfo"),
+            Some(&viewer),
+            &supported_profile.to_string()
+        )
+        .await
+        .status(),
         StatusCode::OK
     );
     let blocked_profile = serde_json::json!({
@@ -860,8 +867,15 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         }
     });
     assert_eq!(
-        request(&app, "POST", &format!("/Items/{item}/PlaybackInfo"), Some(&viewer), &blocked_profile.to_string())
-            .await.status(),
+        request(
+            &app,
+            "POST",
+            &format!("/Items/{item}/PlaybackInfo"),
+            Some(&viewer),
+            &blocked_profile.to_string()
+        )
+        .await
+        .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     let url = streams[2]["DeliveryUrl"].as_str().unwrap();
