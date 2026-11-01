@@ -1393,7 +1393,7 @@ async fn extract_embedded_text(
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !status.success()
             || payload.is_empty()
-            || (native_ass && !probe::probe::is_native_ass_script(&payload))
+            || (native_ass && !probe::is_native_ass_script(&payload))
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
