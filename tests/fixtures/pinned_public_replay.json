@@ -1,0 +1,67 @@
+{
+  "pinned_reference": "jellyfin/jellyfin@06de749d435e2d0be0c5119a41f2300fdd7143e5",
+  "cases": [
+    {
+      "name": "public-system-info",
+      "method": "GET",
+      "path": "/System/Info/Public",
+      "auth": "none",
+      "status": 200,
+      "content_type_prefix": "application/json",
+      "json_types": {
+        "/Id": "string",
+        "/Version": "string",
+        "/ServerName": "string",
+        "/StartupWizardCompleted": "bool",
+        "/OperatingSystem": "string"
+      }
+    },
+    {
+      "name": "authenticated-system-info-is-private",
+      "method": "GET",
+      "path": "/System/Info",
+      "auth": "none",
+      "status": 401
+    },
+    {
+      "name": "authenticated-system-info-contract",
+      "method": "GET",
+      "path": "/System/Info",
+      "auth": "synthetic-viewer",
+      "status": 200,
+      "content_type_prefix": "application/json",
+      "json_types": {
+        "/Id": "string",
+        "/ProductName": "string",
+        "/SupportsLibraryMonitor": "bool",
+        "/WebSocketPortNumber": "number"
+      }
+    },
+    {
+      "name": "authenticated-me-is-private",
+      "method": "GET",
+      "path": "/Users/Me",
+      "auth": "none",
+      "status": 401
+    },
+    {
+      "name": "authenticated-me-contract",
+      "method": "GET",
+      "path": "/Users/Me",
+      "auth": "synthetic-viewer",
+      "status": 200,
+      "content_type_prefix": "application/json",
+      "json_types": {
+        "/Id": "string",
+        "/Name": "string"
+      }
+    },
+    {
+      "name": "missing-controller-route",
+      "method": "GET",
+      "path": "/NotAnApiController",
+      "auth": "none",
+      "status": 404
+    }
+  ]
+}
