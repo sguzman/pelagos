@@ -233,6 +233,37 @@ struct PlaylistQuery {
     renditions: Option<u8>,
     media_source_id: Option<String>,
     enable_adaptive_bitrate_streaming: Option<bool>,
+    // Pinned v12.3 DynamicHlsController negotiation parameters. Only the
+    // current encoder's H.264/AAC MPEG-TS output can be honored.
+    segment_container: Option<String>,
+    audio_codec: Option<String>,
+    video_codec: Option<String>,
+    require_avc: Option<bool>,
+}
+
+/// Recognize explicit pinned v12.3 codec/container constraints without
+/// silently accepting an output this bounded FFmpeg pipeline cannot produce.
+fn validate_hls_output_request(
+    query: &PlaylistQuery,
+    kind: &str,
+) -> Result<(), StatusCode> {
+    if query
+        .segment_container
+        .as_deref()
+        .is_some_and(|container| !matches!(container, "ts" | "mpegts"))
+        || query
+            .audio_codec
+            .as_deref()
+            .is_some_and(|codec| codec != "aac")
+        || query
+            .video_codec
+            .as_deref()
+            .is_some_and(|codec| kind != "video" || codec != "h264")
+        || (query.require_avc == Some(true) && kind != "video")
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    Ok(())
 }
 
 async fn video_main(
@@ -306,6 +337,7 @@ async fn generate_hls_playlist(
     headers: HeaderMap,
     master: bool,
 ) -> Result<Response, StatusCode> {
+    validate_hls_output_request(&query, expected_kind)?;
     let target_seconds = query.segment_length.unwrap_or(10);
     if !(1..=10).contains(&target_seconds) {
         return Err(StatusCode::BAD_REQUEST);
@@ -904,6 +936,38 @@ pub fn router() -> Router<Arc<AppState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinned_hls_codec_and_container_constraints_are_fail_closed() {
+        let mut query = PlaylistQuery::default();
+        assert_eq!(validate_hls_output_request(&query, "video"), Ok(()));
+        assert_eq!(validate_hls_output_request(&query, "audio"), Ok(()));
+        query.segment_container = Some("ts".to_owned());
+        query.audio_codec = Some("aac".to_owned());
+        query.video_codec = Some("h264".to_owned());
+        query.require_avc = Some(true);
+        assert_eq!(validate_hls_output_request(&query, "video"), Ok(()));
+        assert_eq!(
+            validate_hls_output_request(&query, "audio"),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        query.video_codec = None;
+        query.require_avc = None;
+        assert_eq!(validate_hls_output_request(&query, "audio"), Ok(()));
+        for invalid_container in ["mp4", "fmp4", ""] {
+            query.segment_container = Some(invalid_container.to_owned());
+            assert_eq!(
+                validate_hls_output_request(&query, "video"),
+                Err(StatusCode::NOT_IMPLEMENTED)
+            );
+        }
+        query.segment_container = Some("mpegts".to_owned());
+        query.audio_codec = Some("mp3".to_owned());
+        assert_eq!(
+            validate_hls_output_request(&query, "video"),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+    }
 
     #[tokio::test]
     async fn bounded_hls_generation_queue_coalesces_and_recovers_after_cancellation() {

@@ -1190,6 +1190,34 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
         text_body(request(&app, "GET", &pinned_source_route, Some(&alice)).await).await,
         alice_master
     );
+    // Match the pinned controller's explicit output codec/container options.
+    // The already completed publication is safe to reuse because the encoder
+    // has exactly the requested format.
+    let compatible_format = format!(
+        "{route}&audioCodec=aac&videoCodec=h264&segmentContainer=ts&requireAvc=true"
+    );
+    assert_eq!(
+        text_body(request(&app, "GET", &compatible_format, Some(&alice)).await).await,
+        alice_master
+    );
+    for invalid_options in [
+        "audioCodec=mp3",
+        "videoCodec=hevc",
+        "segmentContainer=fmp4",
+        "videoCodec=aac",
+    ] {
+        assert_eq!(
+            request(
+                &app,
+                "GET",
+                &format!("{route}&{invalid_options}"),
+                Some(&alice)
+            )
+            .await
+            .status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
     let mismatched_source = format!("{route}&mediaSourceId=unknown-source");
     assert_eq!(
         request(&app, "GET", &mismatched_source, Some(&alice))
