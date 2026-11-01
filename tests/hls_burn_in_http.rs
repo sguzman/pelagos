@@ -531,8 +531,7 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     .unwrap();
     let playback_info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
     assert_eq!(playback_info.status(), StatusCode::OK);
-    let playback_info: Value =
-        serde_json::from_str(&body_string(playback_info).await).unwrap();
+    let playback_info: Value = serde_json::from_str(&body_string(playback_info).await).unwrap();
     let vtt_index = playback_info["MediaSources"][0]["MediaStreams"]
         .as_array()
         .unwrap()
