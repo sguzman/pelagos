@@ -797,9 +797,11 @@ fn negotiate_embedded_ass_delivery(
     let Some(selected_index) = source.default_subtitle_stream_index else {
         return Ok(());
     };
-    let Some(position) = source.media_streams.iter().position(|stream| {
-        stream.stream_type == "Subtitle" && stream.index == selected_index
-    }) else {
+    let Some(position) = source
+        .media_streams
+        .iter()
+        .position(|stream| stream.stream_type == "Subtitle" && stream.index == selected_index)
+    else {
         return Ok(());
     };
     let stream = &source.media_streams[position];
@@ -2570,9 +2572,16 @@ mod tests {
             let mut source = source_from_probe("item", "video", &movie, &report);
             source.default_subtitle_stream_index = Some(1);
             let profile = json!({"SubtitleProfiles":rules});
-            assert_eq!(negotiate_embedded_ass_delivery(&profile, &mut source), Ok(()));
+            assert_eq!(
+                negotiate_embedded_ass_delivery(&profile, &mut source),
+                Ok(())
+            );
             let selected = &source.media_streams[1];
-            assert_eq!(selected.delivery_url.as_deref(), Some(expected), "{profile:?}");
+            assert_eq!(
+                selected.delivery_url.as_deref(),
+                Some(expected),
+                "{profile:?}"
+            );
             assert_eq!(selected.codec.as_deref(), Some("ass"));
             assert!(!selected.is_external);
             assert_eq!(source.default_subtitle_stream_index, Some(1));
