@@ -65,7 +65,9 @@ async fn replay(router: &Router, corpus: &ReplayCorpus, user_token: &str) {
     for case in &corpus.cases {
         assert!(case.path.starts_with('/'), "{}: invalid path", case.name);
         assert!(!case.name.is_empty());
-        let mut builder = Request::builder().method(case.method.as_str()).uri(&case.path);
+        let mut builder = Request::builder()
+            .method(case.method.as_str())
+            .uri(&case.path);
         for (key, value) in &case.headers {
             builder = builder.header(key, value);
         }
