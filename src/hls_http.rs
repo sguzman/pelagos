@@ -1386,6 +1386,18 @@ mod tests {
                 })
                 .is_none()
         );
+        // Selected subtitle overlays must never reuse unburned or
+        // differently selected output, even for the same user and source.
+        for index in [0, 1, 31] {
+            assert!(
+                registry
+                    .cached(&CacheLookup {
+                        subtitle_stream_index: Some(index),
+                        ..key
+                    })
+                    .is_none()
+            );
+        }
         assert!(
             registry
                 .cached(&CacheLookup {
