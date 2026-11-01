@@ -17,6 +17,7 @@ use uuid::Uuid;
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 const DB_NAME: &str = "pelagos-auth.sqlite3";
+const AUTH_SCHEMA_VERSION: i64 = 1;
 const MAX_PASSWORD_BYTES: usize = 1024;
 
 #[derive(Clone, Debug, Serialize)]
@@ -94,9 +95,18 @@ fn database(state_dir: &Path) -> Result<Connection> {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     }
-    db.execute_batch(
-        "PRAGMA foreign_keys=ON;
-         PRAGMA busy_timeout=5000;
+    db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;")?;
+    let version: i64 = db.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    if version > AUTH_SCHEMA_VERSION {
+        return Err(format!("auth schema version {version} is newer than supported").into());
+    }
+    if version == 0 {
+        // Atomically upgrade existing unversioned Pelagos auth stores:
+        // preserve accounts and sessions while installing a schema marker.
+        // If a known table shape is incompatible, roll back rather than
+        // falsely declaring the database migrated.
+        db.execute_batch(
+        "BEGIN IMMEDIATE;
          CREATE TABLE IF NOT EXISTS pelagos_users(
              id TEXT PRIMARY KEY NOT NULL,
              username TEXT NOT NULL,
@@ -155,8 +165,23 @@ fn database(state_dir: &Path) -> Result<Connection> {
          );
          CREATE TABLE IF NOT EXISTS pelagos_download_grants(
              user_id TEXT PRIMARY KEY NOT NULL REFERENCES pelagos_users(id) ON DELETE CASCADE
-         );",
-    )?;
+         );
+         SELECT id,username,username_key,password_hash,is_admin,disabled FROM pelagos_users LIMIT 0;
+         SELECT digest,user_id,created_unix FROM pelagos_tokens LIMIT 0;
+         SELECT id,digest,client,device_id,device_name,application_version FROM pelagos_sessions LIMIT 0;
+         SELECT session_id,playable_media_types,supported_commands,supports_media_control,
+                supports_persistent_identifier FROM pelagos_session_capabilities LIMIT 0;
+         SELECT session_id,last_seen_unix FROM pelagos_session_activity LIMIT 0;
+         SELECT session_id,device_profile_json,app_store_url,icon_url FROM pelagos_session_capability_extras LIMIT 0;
+         SELECT id,name,custom_name,app_name,app_version,last_user_id,last_authenticated_unix
+                FROM pelagos_devices LIMIT 0;
+         SELECT id,device_id FROM pelagos_device_option_ids LIMIT 0;
+         SELECT user_id,root FROM pelagos_library_access LIMIT 0;
+         SELECT user_id FROM pelagos_download_grants LIMIT 0;
+         PRAGMA user_version=1;
+         COMMIT;",
+        )?;
+    }
     Ok(db)
 }
 
@@ -1203,6 +1228,73 @@ pub fn visible_library_roots(state_dir: &Path, user: &User) -> Result<Option<Has
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auth_schema_upgrade_is_atomic_preserves_legacy_users_and_rejects_future_versions() {
+        let dir = tempfile::tempdir().unwrap();
+        let admin = create_user(dir.path(), "admin", "safe-migration-test-password").unwrap();
+        let path = dir.path().join(DB_NAME);
+        let old = Connection::open(&path).unwrap();
+        assert_eq!(
+            old.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            AUTH_SCHEMA_VERSION
+        );
+        // Simulate a database written by the previously unversioned release.
+        old.execute_batch("PRAGMA user_version=0;").unwrap();
+        drop(old);
+        let upgraded = database(dir.path()).unwrap();
+        assert_eq!(
+            upgraded
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            AUTH_SCHEMA_VERSION
+        );
+        let id: String = upgraded
+            .query_row(
+                "SELECT id FROM pelagos_users WHERE username='admin'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(id, admin.id);
+        upgraded.execute_batch("PRAGMA user_version=2;").unwrap();
+        drop(upgraded);
+        assert!(database(dir.path()).is_err());
+        let untouched = Connection::open(&path).unwrap();
+        assert_eq!(
+            untouched
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn incompatible_unversioned_auth_schema_rolls_back_without_stamping_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(DB_NAME);
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch("CREATE TABLE pelagos_users(id TEXT PRIMARY KEY);")
+            .unwrap();
+        drop(old);
+        assert!(database(dir.path()).is_err());
+        let current = Connection::open(&path).unwrap();
+        assert_eq!(
+            current
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        let created: i64 = current
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name='pelagos_tokens'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(created, 0, "partial migration was not rolled back");
+    }
 
     #[test]
     fn creates_admin_only_for_first_user_and_persists_password_hash() {
