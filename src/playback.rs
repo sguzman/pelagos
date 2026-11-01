@@ -2813,8 +2813,8 @@ mod tests {
             source.media_streams[1].delivery_url.as_deref(),
             Some("/Videos/item/item/Subtitles/1/Stream.srt")
         );
-        // Never advertise an unsupported conversion of an external ASS
-        // sidecar merely because a client declares SRT support.
+        // A confined external ASS sidecar can now be converted to SRT
+        // when the selected device explicitly requests that format.
         source.default_subtitle_stream_index = Some(2);
         assert_eq!(
             negotiate_selected_subtitle_delivery(&native_profile, &mut source),
@@ -2829,14 +2829,14 @@ mod tests {
         assert!(ass.is_external);
         assert_eq!(
             ass.delivery_url.as_deref(),
-            Some("/Videos/item/item/Subtitles/2/Stream.ass")
+            Some("/Videos/item/item/Subtitles/2/Stream.srt")
         );
         assert_eq!(
             profile_allows_external_subtitles(
                 native_profile["SubtitleProfiles"].as_array().unwrap(),
                 &source
             ),
-            Ok(false)
+            Ok(true)
         );
     }
 
