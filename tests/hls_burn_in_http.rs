@@ -482,8 +482,9 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     assert_ne!(burned, plain);
     // The pinned master route and media route must share this token- and
     // selected-sidecar-scoped publication, not trigger a second transcode.
-    let master_url =
-        format!("/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode");
+    let master_url = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
     let master_response = call(&app, &master_url, Some(&token)).await;
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = body_string(master_response).await;
