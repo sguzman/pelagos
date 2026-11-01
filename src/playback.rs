@@ -2139,13 +2139,16 @@ async fn subtitle_playlist(
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    // Do not advertise HLS segments for unsupported WebVTT structure or
-    // incomplete ASS/SSA scripts based on filename extensions alone.
-    // Check only the selected confined sidecar within the existing bounds.
+    // Do not advertise HLS segments based solely on a filename extension.
+    // Preflight the selected confined SRT/VTT or ASS/SSA sidecar using the
+    // same bounded parser required to deliver its WebVTT cue windows.
     if let Some(stream) = media.media_streams.iter().find(|stream| {
         stream.index == index
             && stream.is_external
-            && matches!(stream.codec.as_deref(), Some("ass" | "ssa" | "webvtt"))
+            && matches!(
+                stream.codec.as_deref(),
+                Some("subrip" | "ass" | "ssa" | "webvtt")
+            )
     }) {
         let sidecar = sidecars
             .iter()
@@ -2171,6 +2174,7 @@ async fn subtitle_playlist(
             Some("ass") => probe::is_native_ass_script(&bytes),
             Some("ssa") => probe::is_native_ssa_script(&bytes),
             Some("webvtt") => crate::subtitle_timing::vtt_sidecar_to_srt(&bytes).is_some(),
+            Some("subrip") => convert_srt_to_webvtt(&bytes).is_some(),
             _ => false,
         };
         if bytes.len() > 4 * 1024 * 1024 || !valid {
