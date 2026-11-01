@@ -156,7 +156,8 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .uri(format!("/Items/{id}/PlaybackInfo"))
         .header("X-Emby-Token", token.as_str())
         .header("Content-Type", "application/json")
-        .body(Body::from(incompatible.to_string())).unwrap();
+        .body(Body::from(incompatible.to_string()))
+        .unwrap();
     assert_eq!(
         app.clone().oneshot(request).await.unwrap().status(),
         StatusCode::NOT_IMPLEMENTED
@@ -198,7 +199,11 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
             response.headers()[header::CONTENT_LENGTH],
             expected.len().to_string()
         );
-        let (start, end) = range.strip_prefix("bytes=").unwrap().split_once('-').unwrap();
+        let (start, end) = range
+            .strip_prefix("bytes=")
+            .unwrap()
+            .split_once('-')
+            .unwrap();
         let first = if start.is_empty() {
             PGS.len() - expected.len()
         } else {
