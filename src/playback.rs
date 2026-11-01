@@ -125,6 +125,7 @@ pub struct MediaSource {
     bitrate: Option<i64>,
     video_type: Option<&'static str>,
     default_audio_stream_index: Option<i64>,
+    default_subtitle_stream_index: Option<i64>,
     supports_direct_play: bool,
     supports_direct_stream: bool,
     supports_transcoding: bool,
@@ -498,6 +499,7 @@ fn source_from_probe(
         bitrate: measured_bitrate(result).filter(|rate| i32::try_from(*rate).is_ok()),
         video_type: (kind == "video").then_some("VideoFile"),
         default_audio_stream_index,
+        default_subtitle_stream_index: None,
         supports_direct_play: true,
         supports_direct_stream: false,
         supports_transcoding: false,
@@ -905,7 +907,7 @@ async fn playback_info(
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    if !stream_selection_is_noop(&probed, req.audio_stream_index, req.subtitle_stream_index) {
+    if !stream_selection_is_noop(&probed, req.audio_stream_index, None) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     // Without an FFmpeg/remux fallback, never claim a static source can fit
@@ -925,12 +927,35 @@ async fn playback_info(
     }
     // Read-only sidecar directory enumeration can touch hundreds of metadata
     // entries. Keep it off Tokio's I/O worker threads.
-    let (source, probed) = tokio::task::spawn_blocking(move || {
+    let (mut source, probed) = tokio::task::spawn_blocking(move || {
         let source = source_from_probe(&item_id, kind, &file, &probed);
         (source, probed)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(index) = req.subtitle_stream_index {
+        if index == -1 {
+            // No embedded subtitle can be stripped from direct-play bytes.
+            if probed
+                .streams
+                .iter()
+                .any(|stream| stream["codec_type"] == "subtitle")
+            {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+        } else if let Some(selected) = source.media_streams.iter().find(|stream| {
+            stream.index == index
+                && stream.stream_type == "Subtitle"
+                && stream.delivery_method == Some("External")
+                && stream.delivery_url.is_some()
+        }) {
+            // A separately deliverable text track needs no rewrite of the
+            // video file. Advertise the selected stream to the client.
+            source.default_subtitle_stream_index = Some(selected.index);
+        } else {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    }
     // An explicit playback profile overrides the token's previously reported
     // capabilities. Session profiles are never shared across users or tokens.
     let profile = match req.device_profile {
