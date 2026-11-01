@@ -380,3 +380,127 @@ Dialogue: 0,0:00:00.10,0:00:01.90,Default,,0,0,0,,ASS SECOND TRACK
     assert!(ass_bright > srt_bright + 20);
     assert_eq!(fs::read(&source).unwrap(), untouched);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let source = library.join("Feature.avi");
+    let sidecar = library.join("Feature.es.srt");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x128:r=5:d=4",
+            "-c:v",
+            "mpeg4",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "source fixture FFmpeg: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let first_srt =
+        b"1\n00:00:00,200 --> 00:00:01,800\nEXTERNAL FIRST CAPTION\n\n2\n00:00:02,200 --> 00:00:03,800\nEXTERNAL SECOND CAPTION\n\n";
+    fs::write(&sidecar, first_srt).unwrap();
+    let original = fs::read(&source).unwrap();
+
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "srt-overlay-admin-password").unwrap();
+    auth::create_user(&state_dir, "viewer", "srt-overlay-viewer-password").unwrap();
+    let token = auth::authenticate(&state_dir, "viewer", "srt-overlay-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir.clone(),
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    assert_eq!(items.status(), StatusCode::OK);
+    let items: Value = serde_json::from_str(&body_string(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let response = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let info: Value = serde_json::from_str(&body_string(response).await).unwrap();
+    let sidecar_stream = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "subrip")
+        .unwrap();
+    let index = sidecar_stream["Index"].as_i64().unwrap();
+    let base = format!("/Videos/{id}/main.m3u8?segmentLength=2");
+    let burn = format!("{base}&subtitleStreamIndex={index}&subtitleMethod=Encode");
+    assert_eq!(
+        call(&app, &format!("{base}&subtitleStreamIndex={index}"), Some(&token))
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    let plain_response = call(&app, &base, Some(&token)).await;
+    assert_eq!(plain_response.status(), StatusCode::OK);
+    let plain = body_string(plain_response).await;
+    let burned_response = call(&app, &burn, Some(&token)).await;
+    assert_eq!(burned_response.status(), StatusCode::OK);
+    let burned = body_string(burned_response).await;
+    assert_ne!(burned, plain);
+    let plain_bytes = segment_bytes(&app, id, &plain, &token, 0).await;
+    let first_bytes = segment_bytes(&app, id, &burned, &token, 0).await;
+    let second_bytes = segment_bytes(&app, id, &burned, &token, 1).await;
+    let black = bright_pixels(&plain_bytes, &temp.path().join("external-plain.ts"));
+    let first = bright_pixels(&first_bytes, &temp.path().join("external-first.ts"));
+    let second = bright_pixels(&second_bytes, &temp.path().join("external-second.ts"));
+    assert!(first > black + 20);
+    assert!(second > black + 20);
+    assert_eq!(fs::read(&source).unwrap(), original);
+
+    let first_segment = burned
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap();
+    let segment_url = format!("/Videos/{id}/{first_segment}");
+    assert_eq!(
+        call(&app, &segment_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    fs::write(
+        &sidecar,
+        b"1\n00:00:00,200 --> 00:00:01,800\nUPDATED FIRST CAPTION\n\n2\n00:00:02,200 --> 00:00:03,800\nUPDATED SECOND CAPTION\n\n",
+    )
+    .unwrap();
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let updated_response = call(&app, &burn, Some(&token)).await;
+    assert_eq!(updated_response.status(), StatusCode::OK);
+    let updated = body_string(updated_response).await;
+    assert_ne!(updated, burned);
+    assert_eq!(fs::read(&source).unwrap(), original);
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &burn, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+}
