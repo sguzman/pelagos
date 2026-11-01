@@ -11,7 +11,6 @@ use axum::{
 use pelagos::{
     app::{self, AppState},
     auth, catalog,
-    catalog_api::stable_id,
 };
 use tower::ServiceExt;
 
@@ -50,6 +49,10 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
     catalog::index(&state, &hidden).unwrap();
     auth::create_user(&state, "admin", "test-admin-password-only").unwrap();
     auth::create_user(&state, "viewer", "test-viewer-password-only").unwrap();
+    let admin = auth::authenticate(&state, "admin", "test-admin-password-only", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     let token = auth::authenticate(&state, "viewer", "test-viewer-password-only", "server")
         .unwrap()
         .unwrap()
@@ -59,24 +62,25 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
         "server".to_owned(),
         state.clone(),
     )));
-    let allowed_id = stable_id(allowed.to_str().unwrap(), "clip.mp4");
-    let hidden_id = stable_id(hidden.to_str().unwrap(), "private.mp4");
-    let symlink_id = stable_id(allowed.to_str().unwrap(), "linked.mp4");
+    let all = send(&router, "/Items", Some(&admin), None).await;
+    assert_eq!(all.status(), StatusCode::OK);
+    let all_body = to_bytes(all.into_body(), 65_536).await.unwrap();
+    let listing: serde_json::Value = serde_json::from_slice(&all_body).unwrap();
+    let items = listing["Items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(!items.iter().any(|item| item["Name"] == "linked"));
+    let allowed_id = items.iter().find(|item| item["Name"] == "clip").unwrap()["Id"]
+        .as_str().unwrap().to_owned();
+    let hidden_id = items.iter().find(|item| item["Name"] == "private").unwrap()["Id"]
+        .as_str().unwrap().to_owned();
     let stream = format!("/Videos/{allowed_id}/stream?static=true");
     let hidden_stream = format!("/Videos/{hidden_id}/stream?static=true");
-    let symlink_stream = format!("/Videos/{symlink_id}/stream?static=true");
     assert_eq!(
         send(&router, &stream, None, None).await.status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
         send(&router, &hidden_stream, Some(&token), None)
-            .await
-            .status(),
-        StatusCode::NOT_FOUND
-    );
-    assert_eq!(
-        send(&router, &symlink_stream, Some(&token), None)
             .await
             .status(),
         StatusCode::NOT_FOUND
