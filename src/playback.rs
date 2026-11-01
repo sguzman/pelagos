@@ -1196,7 +1196,7 @@ async fn extract_embedded_srt(
 
 /// Recheck durable token/grant scope and indexed source revision after
 /// asynchronous probing, encoding or filesystem work and before delivery.
-async fn reauthorize_subtitle_source(
+pub(crate) async fn reauthorize_video_source(
     state: Arc<AppState>,
     headers: HeaderMap,
     item: String,
@@ -1280,7 +1280,7 @@ async fn serve_external_subtitle(
         };
         // Revalidate the original user/session, grants and media revision
         // after FFmpeg completes but before returning extracted bytes.
-        reauthorize_subtitle_source(
+        reauthorize_video_source(
             state.clone(),
             headers.clone(),
             item.clone(),
@@ -1357,7 +1357,7 @@ async fn serve_external_subtitle(
     };
     // Sidecar decoding/reading can also span grant or source revision
     // changes. Revalidate before releasing even a previously opened file.
-    reauthorize_subtitle_source(state.clone(), headers, item, &source, &source_metadata).await?;
+    reauthorize_video_source(state.clone(), headers, item, &source, &source_metadata).await?;
     let mut response = Response::new(body);
     response.headers_mut().insert(
         CONTENT_TYPE,
@@ -1805,7 +1805,7 @@ async fn subtitle_playlist(
         position = end;
     }
     text.push_str("#EXT-X-ENDLIST\n");
-    reauthorize_subtitle_source(state, headers, item, &file, &revision).await?;
+    reauthorize_video_source(state, headers, item, &file, &revision).await?;
     let mut response = Response::new(if head {
         Body::empty()
     } else {
@@ -2192,7 +2192,7 @@ mod tests {
         let original = std::fs::metadata(&movie).unwrap();
         let source = std::fs::canonicalize(&movie).unwrap();
         assert_eq!(
-            reauthorize_subtitle_source(
+            reauthorize_video_source(
                 state.clone(),
                 headers.clone(),
                 item.clone(),
@@ -2204,7 +2204,7 @@ mod tests {
         );
         auth::revoke_library(&state_dir, "viewer", &library).unwrap();
         assert_eq!(
-            reauthorize_subtitle_source(
+            reauthorize_video_source(
                 state.clone(),
                 headers.clone(),
                 item.clone(),
@@ -2217,7 +2217,7 @@ mod tests {
         auth::grant_library(&state_dir, "viewer", &library).unwrap();
         std::fs::write(&movie, b"updated media revision").unwrap();
         assert_eq!(
-            reauthorize_subtitle_source(state, headers, item, &source, &original,).await,
+            reauthorize_video_source(state, headers, item, &source, &original,).await,
             Err(StatusCode::NOT_FOUND)
         );
     }

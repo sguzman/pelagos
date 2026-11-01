@@ -112,6 +112,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(streaming::router())
         .merge(crate::hls_http::router())
         .merge(playback::router())
+        .merge(crate::attachments::router())
         .merge(search::router())
         .merge(shows::router())
         .merge(user_data::router())
