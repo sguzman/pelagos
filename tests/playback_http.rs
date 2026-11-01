@@ -786,6 +786,8 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     fs::write(library.join("Feature.mp4"), b"video fixture").unwrap();
     let subtitle = b"1\n00:00:01,000 --> 00:00:02,000\nHello!\n";
     fs::write(library.join("Feature.eng.srt"), subtitle).unwrap();
+    let webvtt = b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBonjour!\n";
+    fs::write(library.join("Feature.fr.vtt"), webvtt).unwrap();
     let outside = fixture.path().join("outside.srt");
     fs::write(&outside, b"SECRET OUTSIDE LIBRARY").unwrap();
     symlink(&outside, library.join("Feature.es.srt")).unwrap();
@@ -828,11 +830,15 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     let value: serde_json::Value =
         serde_json::from_slice(&to_bytes(info.into_body(), 65_536).await.unwrap()).unwrap();
     let streams = value["MediaSources"][0]["MediaStreams"].as_array().unwrap();
-    assert_eq!(streams.len(), 3);
+    assert_eq!(streams.len(), 4);
     assert_eq!(streams[2]["Index"], 2);
     assert_eq!(streams[2]["Language"], "eng");
     assert_eq!(streams[2]["IsExternal"], true);
     assert_eq!(streams[2]["IsTextSubtitleStream"], true);
+    assert_eq!(streams[3]["Index"], 3);
+    assert_eq!(streams[3]["Codec"], "webvtt");
+    assert_eq!(streams[3]["Language"], "fr");
+    assert_eq!(streams[3]["IsExternal"], true);
     let url = streams[2]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(url, format!("/Videos/{item}/{item}/Subtitles/2/Stream.srt"));
     assert_eq!(
@@ -883,6 +889,30 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             &format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt"),
             Some(&viewer),
             ""
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
+    assert_eq!(vtt_url, format!("/Videos/{item}/{item}/Subtitles/3/Stream.vtt"));
+    let response = request(&app, "GET", vtt_url, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "text/vtt; charset=utf-8");
+    assert_eq!(
+        to_bytes(response.into_body(), 1_024)
+            .await
+            .unwrap()
+            .as_ref(),
+        webvtt
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{item}/{item}/Subtitles/2/Stream.vtt"),
+            Some(&viewer),
+            "",
         )
         .await
         .status(),

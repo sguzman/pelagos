@@ -248,6 +248,7 @@ struct ExternalSubtitle {
     index: i64,
     filename: String,
     language: Option<String>,
+    format: &'static str,
 }
 
 fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<ExternalSubtitle> {
@@ -296,25 +297,28 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         else {
             continue;
         };
-        let language = if suffix.eq_ignore_ascii_case("srt") {
-            None
+        let (format, language) = if suffix == "srt" {
+            ("srt", None)
+        } else if suffix == "vtt" {
+            ("vtt", None)
         } else {
-            let Some(language) = suffix.strip_suffix(".srt") else {
+            let Some((language, format)) = suffix.rsplit_once('.') else {
                 continue;
             };
-            if !(2..=3).contains(&language.len())
+            if !matches!(format, "srt" | "vtt")
+                || !(2..=3).contains(&language.len())
                 || !language.bytes().all(|byte| byte.is_ascii_alphabetic())
             {
                 continue;
             }
-            Some(language.to_ascii_lowercase())
+            (format, Some(language.to_ascii_lowercase()))
         };
         if entry.file_type().is_ok_and(|kind| kind.is_file())
             && entry
                 .metadata()
                 .is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
         {
-            names.push((filename, language));
+            names.push((filename, language, format));
         }
     }
     names.sort_unstable_by(|a, b| a.0.cmp(&b.0));
@@ -322,10 +326,11 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         .into_iter()
         .take(16)
         .enumerate()
-        .map(|(offset, (filename, language))| ExternalSubtitle {
+        .map(|(offset, (filename, language, format))| ExternalSubtitle {
             index: first_index + offset as i64,
             filename,
             language,
+            format,
         })
         .collect()
 }
@@ -359,10 +364,11 @@ fn source_from_probe(
     if kind == "video" {
         for sidecar in external_subtitles(file, result) {
             let language = sidecar.language.as_deref();
+            let codec = if sidecar.format == "vtt" { "webvtt" } else { "subrip" };
             let mut stream = mapped_stream(&serde_json::json!({
                 "index": sidecar.index,
                 "codec_type": "subtitle",
-                "codec_name": "subrip",
+                "codec_name": codec,
                 "tags": {"language": language}
             }))
             .expect("local sidecar subtitle has a supported type and index");
@@ -370,8 +376,8 @@ fn source_from_probe(
             stream.is_text_subtitle_stream = true;
             stream.delivery_method = Some("External");
             stream.delivery_url = Some(format!(
-                "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.srt",
-                sidecar.index
+                "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{}",
+                sidecar.index, sidecar.format
             ));
             media_streams.push(stream);
         }
@@ -827,11 +833,12 @@ async fn post_playback(
 
 // Only identity subtitle requests are supported. Timestamp conversion,
 // subtitle transcoding, and graphical subtitles need separate implementations.
-async fn serve_external_srt(
+async fn serve_external_subtitle(
     state: Arc<AppState>,
     item: String,
     media_source: String,
     index: i64,
+    format: &'static str,
     headers: HeaderMap,
     head: bool,
 ) -> Result<Response, StatusCode> {
@@ -848,7 +855,7 @@ async fn serve_external_srt(
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     let sidecar = external_subtitles(&source, &report)
         .into_iter()
-        .find(|sidecar| sidecar.index == index)
+        .find(|sidecar| sidecar.index == index && sidecar.format == format)
         .ok_or(StatusCode::NOT_FOUND)?;
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
@@ -869,7 +876,11 @@ async fn serve_external_srt(
     };
     response.headers_mut().insert(
         CONTENT_TYPE,
-        HeaderValue::from_static("application/x-subrip"),
+        HeaderValue::from_static(if format == "vtt" {
+            "text/vtt; charset=utf-8"
+        } else {
+            "application/x-subrip"
+        }),
     );
     response
         .headers_mut()
@@ -886,7 +897,7 @@ async fn get_external_srt(
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_srt(state, item, media_source, index, headers, false).await
+    serve_external_subtitle(state, item, media_source, index, "srt", headers, false).await
 }
 
 async fn head_external_srt(
@@ -894,7 +905,23 @@ async fn head_external_srt(
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_srt(state, item, media_source, index, headers, true).await
+    serve_external_subtitle(state, item, media_source, index, "srt", headers, true).await
+}
+
+async fn get_external_vtt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_external_subtitle(state, item, media_source, index, "vtt", headers, false).await
+}
+
+async fn head_external_vtt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_external_subtitle(state, item, media_source, index, "vtt", headers, true).await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -906,6 +933,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.srt",
             get(get_external_srt).head(head_external_srt),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.vtt",
+            get(get_external_vtt).head(head_external_vtt),
         )
 }
 
