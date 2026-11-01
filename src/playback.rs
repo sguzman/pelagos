@@ -615,6 +615,28 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         .collect()
 }
 
+/// Resolve a selected external SubRip index against the same bounded,
+/// deterministic sidecar inventory used by PlaybackInfo. Opening its bytes
+/// remains the responsibility of a descriptor-confined caller.
+pub(crate) fn hls_srt_sidecar_filename(
+    source: &Path,
+    report: &probe::ProbeReport,
+    index: i64,
+) -> Option<String> {
+    external_subtitles(source, report)
+        .into_iter()
+        .find(|entry| entry.index == index && entry.format == "srt")
+        .map(|entry| entry.filename)
+}
+
+/// Normalize only the already-supported bounded SubRip cue grammar to UTF-8.
+/// Existing UTF-16 BOM support is useful for an FFmpeg text-overlay input,
+/// but malformed cue timing must not be passed to the renderer.
+pub(crate) fn hls_normalized_srt(source: &[u8]) -> Option<Vec<u8>> {
+    convert_srt_to_webvtt(source)?;
+    Some(crate::subtitle_timing::decode_text_subtitle(source)?.into_bytes())
+}
+
 fn source_from_probe(
     item_id: &str,
     kind: &str,
