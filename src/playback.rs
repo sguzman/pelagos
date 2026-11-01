@@ -469,6 +469,38 @@ fn profile_allows_direct_file(
     Ok(matched)
 }
 
+/// A selected track can be honored without remuxing only when it is
+/// already the sole track of its kind. A disabled subtitle selection is a
+/// no-op only when no embedded subtitles are present. All other selections
+/// require per-track playback negotiation that static file serving lacks.
+fn stream_selection_is_noop(
+    report: &probe::ProbeReport,
+    audio_stream_index: Option<i64>,
+    subtitle_stream_index: Option<i64>,
+) -> bool {
+    if let Some(index) = audio_stream_index {
+        let mut audio_streams = report
+            .streams
+            .iter()
+            .filter(|stream| stream["codec_type"] == "audio");
+        if audio_streams.next().and_then(|stream| number(&stream["index"])) != Some(index)
+            || audio_streams.next().is_some()
+        {
+            return false;
+        }
+    }
+    if let Some(index) = subtitle_stream_index
+        && (index != -1
+            || report
+                .streams
+                .iter()
+                .any(|stream| stream["codec_type"] == "subtitle"))
+    {
+        return false;
+    }
+    true
+}
+
 /// Lookup only authorized, indexed audio/video and resolve them within the root.
 pub(crate) async fn media_file(
     state: &AppState,
@@ -521,15 +553,13 @@ async fn playback_info(
         return Err(StatusCode::BAD_REQUEST);
     }
     if req.start_time_ticks.is_some_and(|ticks| ticks > 0)
-        || req.audio_stream_index.is_some()
-        || req.subtitle_stream_index.is_some()
         || req.auto_open_live_stream == Some(true)
         || req
             .media_source_id
             .as_deref()
             .is_some_and(|id| id != item_id)
     {
-        // No timestamp seeks, per-stream selection, or live media sessions yet.
+        // No timestamp seeks or live media sessions yet.
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let (_, allowed) = auth_api::library_scope(state.clone(), headers).await?;
@@ -549,6 +579,9 @@ async fn playback_info(
     let probed = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    if !stream_selection_is_noop(&probed, req.audio_stream_index, req.subtitle_stream_index) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     // Without an FFmpeg/remux fallback, never claim a static source can fit
     // requested stream bandwidth or output-channel limits when it cannot.
     if let Some(limit) = req.max_audio_channels {
@@ -699,6 +732,30 @@ mod tests {
         assert!(!media.supports_direct_stream);
         assert!(media.supports_direct_play);
         assert_eq!(media.direct_stream_url, "/Videos/abc/stream?static=true");
+    }
+
+    #[test]
+    fn single_track_selection_only_allows_semantic_noops() {
+        let mut report = probe::ProbeReport {
+            path: PathBuf::from("movie.mp4"),
+            size_bytes: 128,
+            format: None,
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"h264"}),
+                json!({"index":1,"codec_type":"audio","codec_name":"aac"}),
+            ],
+            chapters: vec![],
+        };
+        assert!(stream_selection_is_noop(&report, Some(1), Some(-1)));
+        assert!(stream_selection_is_noop(&report, None, None));
+        assert!(!stream_selection_is_noop(&report, Some(0), None));
+        assert!(!stream_selection_is_noop(&report, Some(-1), None));
+        assert!(!stream_selection_is_noop(&report, None, Some(0)));
+        report.streams.push(json!({"index":2,"codec_type":"audio","codec_name":"ac3"}));
+        assert!(!stream_selection_is_noop(&report, Some(1), None));
+        report.streams.pop();
+        report.streams.push(json!({"index":2,"codec_type":"subtitle","codec_name":"subrip"}));
+        assert!(!stream_selection_is_noop(&report, None, Some(-1)));
     }
 
     #[test]

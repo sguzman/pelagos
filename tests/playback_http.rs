@@ -520,6 +520,18 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         .status(),
         StatusCode::OK
     );
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &format!("{route}?audioStreamIndex=1&subtitleStreamIndex=-1"),
+            Some(&token),
+            r#"{"AudioStreamIndex":99,"SubtitleStreamIndex":3}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
     for (uri, expected) in [
         (
             format!("{route}?startTimeTicks=-1"),
@@ -531,7 +543,15 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         ),
         (
             format!("{route}?audioStreamIndex=1"),
+            StatusCode::OK,
+        ),
+        (
+            format!("{route}?audioStreamIndex=0"),
             StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            format!("{route}?subtitleStreamIndex=-1"),
+            StatusCode::OK,
         ),
         (
             format!("{route}?subtitleStreamIndex=0"),
