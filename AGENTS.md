@@ -1,6 +1,6 @@
 # Pelagos 🌊🦀 — autonomous development instructions
 
-This is the standing contract for Codex and other delegated development agents. The user can simply say **"continue"** to authorize the next sensible, bounded iteration. Select work from the existing specification without repeatedly asking the user to choose. Do not invent features or dilute the acceptance contract to produce a completion claim.
+This is the standing contract for Codex and other delegated development agents. The user can simply say **"continue"** to authorize a **sustained autonomous work session** targeting approximately 60 minutes of active engineering, or the longest productive execution allowed by the environment. This is a target, not a guarantee that a session/runtime will permit an hour. Select work from the existing specification without repeatedly asking the user to choose. Do not invent features or dilute the acceptance contract to produce a completion claim.
 
 ## Scope and source of truth
 
@@ -13,12 +13,16 @@ This is the standing contract for Codex and other delegated development agents. 
 
 ## Autonomy: meaning of “continue”
 
+**Continue is a multi-task work session, not permission to implement just one check and stop.** After each bounded, tested increment, proceed to the next feasible ledger task in the *same* session. Work for as long as productive execution is permitted, stopping only for a user interruption, verified full-project completion, an actual runtime/tool limit, or blockers that prevent **all** remaining independent work. Do not idle or manufacture busywork to fill the duration, and do not sacrifice validation for elapsed time.
+
 1. Record the session's initial commit SHA and the initial `docs/progress.json` before modifying files; inspect `git status --short` and preserve uncommitted work. Only attribute changes since this baseline to the session.
 2. Continue the current documented incomplete task or independently select the next highest-value, bounded item with clear evidence-based acceptance. Prefer dependencies and code paths useful to actual unmodified Jellyfin clients. Make sensible architectural choices within the existing contract.
 3. Implement behavior **and** regression/HTTP tests. For upstream compatibility, compare against the pinned Jellyfin protocol/baseline where possible; tests of fabricated requests alone do not prove real-client parity. Record precisely what is and is not verified.
 4. Run relevant quality gates. Fix failures under your control. Use real GitHub CI run IDs and device/client evidence only after obtaining them. A pending or inaccessible run is **not** a pass; a synthetic test cannot satisfy a real-device acceptance check.
 5. Only mark a ledger check accepted when the evidence meets that check's *entire* wording. Regenerate/check derived documentation. If externally blocked, leave it incomplete and switch to another independent useful task when possible; summarize genuine blockers instead of guessing.
-6. Complete iterations with a concise report, then stop. The next **“continue”** authorizes the next iteration. Do not create busywork after genuine 100% verified completion.
+6. **After each verified increment, keep going:** commit/push when authorized, select the next incomplete independent acceptance check, implement it and verify it. Multiple commits in one work session are encouraged; a completed task, a green test run, or a nice progress delta is **not** a stopping condition.
+7. Monitor execution/context budget and reserve enough capacity to leave a consistent worktree, report actual verification, and preserve a clear next checkpoint. If blocked on credentials, real TV hardware, CI, upstream dependencies, or licensing, switch to another safe, independent task where possible instead of stopping immediately.
+8. End the session with one concise consolidated report, not a final response after every small task. State any genuine early stop condition. Do not create busywork after genuine 100% verified completion.
 
 ## Verification
 
@@ -35,7 +39,9 @@ cargo run --quiet --bin pelagos-api-matrix -- --check
 
 Install/ensure `ffmpeg` and `ffprobe` for the media test suite as CI does. Distinguish local checks, GitHub Actions evidence, pinned-server comparison and real unmodified-client acceptance. Do not claim any test passed that was not run.
 
-## Required per-iteration report
+## Required end-of-session report
+
+Report once **after the sustained multi-task session**, using the initial session baseline to calculate the cumulative delta across all accepted work. Intermediate commits and task transitions should not trigger an early final report. If a runtime limit ends the session before the target duration, acknowledge that limitation without implying the full target was met.
 
 Be brief. Report **only touched milestone(s), phase(s), task(s) and related features**; do not list unchanged tasks at 100%.
 
