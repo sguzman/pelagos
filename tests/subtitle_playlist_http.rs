@@ -143,6 +143,12 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         request(&app, "GET", &first, None).await.status(),
         StatusCode::UNAUTHORIZED
     );
+    let first_response = request(&app, "GET", &first, Some(&viewer)).await;
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let first_content = to_bytes(first_response.into_body(), 65_536).await.unwrap();
+    let first_text = std::str::from_utf8(&first_content).unwrap();
+    assert!(first_text.contains("00:00:01.000 --> 00:00:02.000 align:start"));
+    assert!(first_text.contains("Hello!"));
     let response = request(&app, "GET", &second, Some(&viewer)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let length = response.headers()[header::CONTENT_LENGTH].clone();
@@ -158,6 +164,14 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     assert_eq!(head.status(), StatusCode::OK);
     assert_eq!(head.headers()[header::CONTENT_LENGTH], length);
     assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
+    let third = format!("/Videos/{id}/{id}/Subtitles/{index}/{}", segments[2]);
+    let final_response = request(&app, "GET", &third, Some(&viewer)).await;
+    assert_eq!(final_response.status(), StatusCode::OK);
+    let final_body = to_bytes(final_response.into_body(), 65_536).await.unwrap();
+    assert_eq!(
+        final_body.as_ref(),
+        b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n"
+    );
     assert_eq!(fs::read(&movie).unwrap(), original);
     auth::revoke_library(&state_dir, "viewer", &root).unwrap();
     assert_eq!(
