@@ -822,8 +822,9 @@ async fn report_session_capabilities_full(
     save_session_capabilities(state, headers, query.id, report).await
 }
 
-/// Bound the untrusted nested device profile structure. This only stores a
-/// negotiation offer; transcoding/direct-play decisions do not use it yet.
+/// Bound the untrusted session-reported device profile. PlaybackInfo
+/// consumes a conservative direct-play/subtitle subset; storing this profile
+/// never implies support for transcoding or full device negotiation.
 fn bounded_device_profile(value: &serde_json::Value, depth: usize, count: &mut usize) -> bool {
     *count += 1;
     if depth > 16 || *count > 4096 {
