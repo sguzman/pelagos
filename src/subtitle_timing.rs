@@ -97,23 +97,23 @@ fn supported_cue_settings(settings: &str) -> bool {
             return false;
         };
         let (slot, valid) = match name {
-            "align" => (0, matches!(value, "start" | "center" | "end" | "left" | "right")),
+            "align" => (
+                0,
+                matches!(value, "start" | "center" | "end" | "left" | "right"),
+            ),
             "vertical" => (1, matches!(value, "rl" | "lr")),
             "size" => (2, cue_percent(value)),
             "line" => {
                 let (line, anchor) = value.split_once(',').unwrap_or((value, ""));
-                let valid_anchor = anchor.is_empty()
-                    || matches!(anchor, "start" | "center" | "end");
+                let valid_anchor =
+                    anchor.is_empty() || matches!(anchor, "start" | "center" | "end");
                 let valid_line = cue_percent(line) || line.parse::<i32>().is_ok();
                 (3, valid_anchor && valid_line)
             }
             "position" => {
                 let (position, anchor) = value.split_once(',').unwrap_or((value, ""));
                 let valid_anchor = anchor.is_empty()
-                    || matches!(
-                        anchor,
-                        "line-left" | "center" | "line-right" | "auto"
-                    );
+                    || matches!(anchor, "line-left" | "center" | "line-right" | "auto");
                 (4, cue_percent(position) && valid_anchor)
             }
             _ => return false,
@@ -299,10 +299,10 @@ mod tests {
             vtt_to_srt(&result).unwrap(),
             b"1\n00:00:00,000 --> 00:00:01,000\nHello!\n\n"
         );
-        assert!(vtt_to_srt(
-            b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 unknown:setting\nHello!\n\n"
-        )
-        .is_none());
+        assert!(
+            vtt_to_srt(b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 unknown:setting\nHello!\n\n")
+                .is_none()
+        );
         assert!(
             clip_vtt(
                 b"WEBVTT\n\nSTYLE\n::cue{color:red}\n\n",
@@ -327,7 +327,11 @@ mod tests {
     fn cue_settings_accept_valid_positions_and_reject_malformed_values() {
         let valid = b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000 align:start line:-2 position:50%,line-left size:80% vertical:rl\nCaption\n\n";
         let window = clip_vtt(valid, 10_000_000, 30_000_000, false).unwrap();
-        assert!(std::str::from_utf8(&window).unwrap().contains("position:50%,line-left"));
+        assert!(
+            std::str::from_utf8(&window)
+                .unwrap()
+                .contains("position:50%,line-left")
+        );
         assert_eq!(
             vtt_to_srt(&window).unwrap(),
             b"1\n00:00:00,000 --> 00:00:02,000\nCaption\n\n"
@@ -345,10 +349,11 @@ mod tests {
             "size:90%,size:50%",
             "no-colon",
         ] {
-            let source = format!(
-                "WEBVTT\n\n00:00:01.000 --> 00:00:03.000 {invalid}\nCaption\n\n"
+            let source = format!("WEBVTT\n\n00:00:01.000 --> 00:00:03.000 {invalid}\nCaption\n\n");
+            assert!(
+                clip_vtt(source.as_bytes(), 0, 30_000_000, false).is_none(),
+                "{invalid}"
             );
-            assert!(clip_vtt(source.as_bytes(), 0, 30_000_000, false).is_none(), "{invalid}");
         }
     }
 
