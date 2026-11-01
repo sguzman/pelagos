@@ -232,6 +232,7 @@ impl TranscodeController {
                 quality,
                 window: Some(window),
                 burn_in_subtitle: None,
+                external_srt: None,
             },
         )
         .await
@@ -300,6 +301,51 @@ impl TranscodeController {
         .await
     }
 
+    /// Burn a bounded, caller-validated external UTF-8 SubRip track into a
+    /// single FFmpeg media window. Subtitle bytes are staged to a fixed-name
+    /// private file; neither its original name nor its path enters a filter.
+    pub async fn try_run_window_external_srt_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        subtitle: &[u8],
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        if subtitle.is_empty()
+            || subtitle.len() > 4 * 1024 * 1024
+            || std::str::from_utf8(subtitle).is_err()
+            || remaining_bytes == 0
+            || remaining_bytes > MAX_TRANSCODE_BYTES
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid external SubRip payload or FFmpeg byte budget",
+            ));
+        }
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_inner(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes.min(remaining_bytes),
+            EncoderOptions {
+                window: Some(window),
+                external_srt: Some(subtitle),
+                ..EncoderOptions::default()
+            },
+        )
+        .await
+    }
+
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
@@ -315,10 +361,11 @@ impl TranscodeController {
 /// Internal, validated FFmpeg encoder options. Grouping keeps all
 /// transport call sites on a single fixed-argument process interface.
 #[derive(Debug, Clone, Copy, Default)]
-struct EncoderOptions {
+struct EncoderOptions<'a> {
     quality: Option<MpegTsQuality>,
     window: Option<TranscodeWindow>,
     burn_in_subtitle: Option<u8>,
+    external_srt: Option<&'a [u8]>,
 }
 
 /// A bounded seeking window, never constructed from untrusted FFmpeg strings.
@@ -415,6 +462,7 @@ async fn transcode_mpegts_inner(
         quality,
         window,
         burn_in_subtitle,
+        external_srt,
     } = options;
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -439,12 +487,15 @@ async fn transcode_mpegts_inner(
     // interpolate the user's media pathname into libavfilter's syntax.
     // Instead, use a private directory and an invariant relative filename
     // pointing read-only at the already approved source.
-    let burn_in_dir = if burn_in_subtitle.is_some() {
+    let burn_in_dir = if burn_in_subtitle.is_some() || external_srt.is_some() {
         #[cfg(unix)]
         {
             let resolved = fs::canonicalize(source).await?;
             let dir = tempfile::tempdir()?;
             std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
+            if let Some(subtitle) = external_srt {
+                std::fs::write(dir.path().join("input.srt"), subtitle)?;
+            }
             Some(dir)
         }
         #[cfg(not(unix))]
@@ -506,18 +557,21 @@ async fn transcode_mpegts_inner(
                 .arg("-b:a")
                 .arg(format!("{}k", quality.audio_kbps));
         }
-        if let Some(index) = burn_in_subtitle {
+        if burn_in_subtitle.is_some() || external_srt.is_some() {
             let dir = burn_in_dir.as_ref().expect("subtitle directory exists");
             command.current_dir(dir.path());
-            // Input-side -ss resets video timestamps. Restore the original
-            // validated media time for libass, then return to a zero-based
-            // output timeline for independently decodable MPEG-TS windows.
+            // -ss seeks the input before decoding. Restore original media
+            // time before libass evaluates the subtitle cue timeline.
+            let subtitle_filter = match burn_in_subtitle {
+                Some(index) => format!("subtitles=input.mkv:si={index}"),
+                None => String::from("subtitles=input.srt"),
+            };
             let overlay = match window {
                 Some(window) if window.start_seconds > 0.0 => format!(
-                    "setpts=PTS+{:.3}/TB,subtitles=input.mkv:si={index},setpts=PTS-STARTPTS",
+                    "setpts=PTS+{:.3}/TB,{subtitle_filter},setpts=PTS-STARTPTS",
                     window.start_seconds
                 ),
-                _ => format!("subtitles=input.mkv:si={index}"),
+                _ => subtitle_filter,
             };
             command.arg("-vf").arg(overlay);
         }
