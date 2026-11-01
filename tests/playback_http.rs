@@ -340,6 +340,58 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         .status(),
         StatusCode::OK
     );
+    // The profile fallback is stored on the authenticated device session,
+    // never inherited by another token, and loses to an explicit request.
+    let low_bandwidth_profile = serde_json::json!({
+        "DeviceProfile": {
+            "MaxStreamingBitrate": 3_000_000,
+            "DirectPlayProfiles": [
+                {"Type":"Video","Container":"mp4","VideoCodec":"h264","AudioCodec":"aac"}
+            ]
+        }
+    });
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            "/Sessions/Capabilities/Full",
+            Some(&token),
+            &low_bandwidth_profile.to_string(),
+        )
+        .await
+        .status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&token), "{}")
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(&router, "GET", &route, Some(&token), "")
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &route,
+            Some(&token),
+            r#"{"MaxStreamingBitrate":4000000}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&router, "POST", &route, Some(&sibling_token), "{}")
+            .await
+            .status(),
+        StatusCode::OK
+    );
     assert_eq!(
         request(
             &router,
