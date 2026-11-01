@@ -221,7 +221,10 @@ mod tests {
         let mut complete = first.clone();
         complete.extend(&last);
         complete.extend(packet(0x80, &[]));
-        assert!(packets_valid(&mut complete.as_slice(), complete.len() as u64));
+        assert!(packets_valid(
+            &mut complete.as_slice(),
+            complete.len() as u64
+        ));
 
         let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 8, 0, 8, 0xaa, 0xbb]);
         assert!(packets_valid(&mut single.as_slice(), single.len() as u64));
@@ -237,7 +240,14 @@ mod tests {
         let mut oversized = first.clone();
         oversized.extend(packet(0x15, &[0, 1, 0, 0x40, 0xbb, 0xcc]));
         let short_declared = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 7, 0, 8, 0, 8, 0xaa, 0xbb]);
-        for bad in [first, unfinished, wrong_id, repeated, oversized, short_declared] {
+        for bad in [
+            first,
+            unfinished,
+            wrong_id,
+            repeated,
+            oversized,
+            short_declared,
+        ] {
             assert!(!packets_valid(&mut bad.as_slice(), bad.len() as u64));
         }
     }
