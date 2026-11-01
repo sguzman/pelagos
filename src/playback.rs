@@ -1280,11 +1280,11 @@ async fn serve_external_subtitle(
         response.headers_mut().insert(
             CONTENT_TYPE,
             HeaderValue::from_static(match format {
-            "vtt" => "text/vtt; charset=utf-8",
-            "ass" => "text/x-ass; charset=utf-8",
-            "ssa" => "text/x-ssa; charset=utf-8",
-            _ => "application/x-subrip",
-        }),
+                "vtt" => "text/vtt; charset=utf-8",
+                "ass" => "text/x-ass; charset=utf-8",
+                "ssa" => "text/x-ssa; charset=utf-8",
+                _ => "application/x-subrip",
+            }),
         );
         response
             .headers_mut()
@@ -1584,7 +1584,15 @@ async fn get_external_ass(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "ass", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "ass",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_external_ass(
@@ -1593,7 +1601,15 @@ async fn head_external_ass(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "ass", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "ass",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 async fn get_external_ssa(
@@ -1602,7 +1618,15 @@ async fn get_external_ssa(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "ssa", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "ssa",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_external_ssa(
@@ -1611,7 +1635,15 @@ async fn head_external_ssa(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "ssa", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "ssa",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 async fn get_timed_ass(
