@@ -297,10 +297,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     );
     // A properly completed pair of RLE object fragments stays deliverable
     // without any mutation or attempted bitmap decoding.
-    let complete_index = pgs
-        .iter()
-        .find(|track| track["Language"] == "nl")
-        .unwrap()["Index"]
+    let complete_index = pgs.iter().find(|track| track["Language"] == "nl").unwrap()["Index"]
         .as_i64()
         .unwrap();
     let complete_url = format!("/Videos/{id}/{id}/Subtitles/{complete_index}/Stream.pgssub");
