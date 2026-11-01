@@ -827,7 +827,10 @@ fn negotiate_selected_subtitle_delivery(
     if profile_allows_external_subtitles(profiles, source)? {
         return Ok(());
     }
-    let prefix = original.rsplit_once('.').expect("validated subtitle suffix").0;
+    let prefix = original
+        .rsplit_once('.')
+        .expect("validated subtitle suffix")
+        .0;
     for format in fallback_formats {
         source.media_streams[position].delivery_url = Some(format!("{prefix}.{format}"));
         if profile_allows_external_subtitles(profiles, source)? {
@@ -2628,8 +2631,13 @@ mod tests {
             let mut source = source_from_probe("item", "video", &movie, report);
             source.default_subtitle_stream_index = Some(1);
             let profile = json!({"SubtitleProfiles":[{"Method":"External","Format":"vtt"}]});
-            assert_eq!(negotiate_selected_subtitle_delivery(&profile, &mut source), Ok(()));
-            let selected = source.media_streams.iter()
+            assert_eq!(
+                negotiate_selected_subtitle_delivery(&profile, &mut source),
+                Ok(())
+            );
+            let selected = source
+                .media_streams
+                .iter()
                 .find(|stream| stream.stream_type == "Subtitle" && stream.index == 1)
                 .unwrap();
             assert_eq!(
@@ -2642,7 +2650,10 @@ mod tests {
         let mut source = source_from_probe("item", "video", &movie, &sidecar_report);
         source.default_subtitle_stream_index = Some(1);
         let native_profile = json!({"SubtitleProfiles":[{"Method":"External","Format":"srt"}]});
-        assert_eq!(negotiate_selected_subtitle_delivery(&native_profile, &mut source), Ok(()));
+        assert_eq!(
+            negotiate_selected_subtitle_delivery(&native_profile, &mut source),
+            Ok(())
+        );
         assert_eq!(
             source.media_streams[1].delivery_url.as_deref(),
             Some("/Videos/item/item/Subtitles/1/Stream.srt")
