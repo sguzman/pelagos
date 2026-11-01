@@ -16,7 +16,10 @@ use tokio::{
 
 use crate::{
     probe,
-    transcode::{MpegTsQuality, SubtitleBurnInWindow, TranscodeController},
+    transcode::{
+        ExternalTextFormat, ExternalTextTrack, MpegTsQuality, SubtitleBurnInWindow,
+        TranscodeController,
+    },
 };
 
 const SEGMENT_NAME: &str = "segment00000.ts";
@@ -310,7 +313,7 @@ pub async fn generate_segmented_vod(
 struct SegmentedOptions<'a> {
     quality: Option<MpegTsQuality>,
     subtitle_index: Option<u8>,
-    external_srt: Option<&'a [u8]>,
+    external_text: Option<ExternalTextTrack<'a>>,
 }
 
 /// Encode a bounded VOD from an explicit seek position. The source is
@@ -375,6 +378,32 @@ pub async fn generate_segmented_vod_with_external_srt_from(
     start_seconds: f64,
     srt_bytes: &[u8],
 ) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_with_external_text_from(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        start_seconds,
+        ExternalTextTrack {
+            bytes: srt_bytes,
+            format: ExternalTextFormat::Srt,
+        },
+    )
+    .await
+}
+
+/// Build a private, probed MPEG-TS VOD from already-confined SRT, ASS or SSA.
+/// ASS/SSA scripts are passed with their original style records intact.
+pub async fn generate_segmented_vod_with_external_text_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
+    track: ExternalTextTrack<'_>,
+) -> io::Result<HlsSegmentedArtifact> {
     generate_segmented_vod_configured(
         controller,
         ffprobe,
@@ -383,7 +412,7 @@ pub async fn generate_segmented_vod_with_external_srt_from(
         target_seconds,
         start_seconds,
         SegmentedOptions {
-            external_srt: Some(srt_bytes),
+            external_text: Some(track),
             ..SegmentedOptions::default()
         },
     )
@@ -490,10 +519,10 @@ async fn generate_segmented_vod_configured(
                 "HLS segment budget exhausted",
             ));
         }
-        let size = if let Some(subtitle) = options.external_srt {
+        let size = if let Some(track) = options.external_text {
             controller
-                .try_run_window_external_srt_capped(
-                    source, &path, start, duration, budget, subtitle,
+                .try_run_window_external_text_capped(
+                    source, &path, start, duration, budget, track,
                 )
                 .await?
         } else if let Some(subtitle_index) = options.subtitle_index {
