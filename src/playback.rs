@@ -1691,7 +1691,7 @@ async fn serve_external_subtitle(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
     if sidecar.format == "sup" {
-        if size < 13 || size > MAX_SUP_BYTES {
+        if !(13..=MAX_SUP_BYTES).contains(&size) {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         let mut reader = tokio::fs::File::from_std(opened);
