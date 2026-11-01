@@ -1461,6 +1461,29 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
             .unwrap()
             .contains("Extracted cue!")
     );
+    // Real FFmpeg mov_text extraction is also reachable through the
+    // bounded pinned HLS subtitle playlist's segment URLs.
+    let playlist_url =
+        format!("/Videos/{item}/{item}/Subtitles/{index}/subtitles.m3u8?segmentLength=1");
+    let playlist_response = request(&app, "GET", &playlist_url, Some(&viewer), "").await;
+    assert_eq!(playlist_response.status(), StatusCode::OK);
+    let playlist_bytes = to_bytes(playlist_response.into_body(), 16_384).await.unwrap();
+    let playlist = std::str::from_utf8(&playlist_bytes).unwrap();
+    let segment_urls = playlist
+        .lines()
+        .filter(|line| line.starts_with("stream.vtt?"))
+        .collect::<Vec<_>>();
+    assert!(segment_urls.len() >= 2);
+    assert!(segment_urls.len() <= 3);
+    for (offset, segment) in segment_urls.iter().take(2).enumerate() {
+        let path = format!("/Videos/{item}/{item}/Subtitles/{index}/{segment}");
+        let response = request(&app, "GET", &path, Some(&viewer), "").await;
+        assert_eq!(response.status(), StatusCode::OK, "segment {offset}");
+        let body = to_bytes(response.into_body(), 16_384).await.unwrap();
+        let text = std::str::from_utf8(&body).unwrap();
+        assert!(text.starts_with("WEBVTT\nX-TIMESTAMP-MAP="));
+        assert!(text.contains("Extracted cue!"), "segment {offset}: {text}");
+    }
     let unsupported_embedded = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.ass");
     assert_eq!(
         request(&app, "GET", &unsupported_embedded, Some(&viewer), "")
@@ -1469,6 +1492,12 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
         StatusCode::NOT_IMPLEMENTED
     );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        request(&app, "GET", &playlist_url, Some(&viewer), "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         request(&app, "GET", &route, Some(&viewer), "")
             .await
