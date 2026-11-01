@@ -18,6 +18,7 @@ use std::{
     io::Read,
     path::Path,
     sync::{Arc, OnceLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
@@ -40,11 +41,12 @@ struct FontInfo {
     name: String,
     size: u64,
     mime: &'static str,
+    date_created: Option<String>,
+    date_modified: Option<String>,
 }
 
-/// Dates are null until Pelagos has a pinned, platform-independent UTC
-/// formatter for actual filesystem creation/change timestamps. Never invent
-/// modification dates merely to make the DTO appear complete.
+/// Dates come only from the opened filesystem descriptor. When a platform
+/// does not expose creation time, DateCreated stays null instead of fake.
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct FontFile {
@@ -59,10 +61,41 @@ impl From<&FontInfo> for FontFile {
         Self {
             name: font.name.clone(),
             size: font.size,
-            date_created: None,
-            date_modified: None,
+            date_created: font.date_created.clone(),
+            date_modified: font.date_modified.clone(),
         }
     }
+}
+
+// Bounded, platform-independent UTC conversion from nonnegative SystemTime.
+// Keep the representation parseable by v12.3 clients without locale APIs.
+fn system_time_utc(value: SystemTime) -> Option<String> {
+    let duration = value.duration_since(UNIX_EPOCH).ok()?;
+    let seconds = i64::try_from(duration.as_secs()).ok()?;
+    let days = seconds / 86_400;
+    let day_seconds = seconds % 86_400;
+    let z = days.checked_add(719_468)?;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    if month <= 2 {
+        year += 1;
+    }
+    if !(1970..=9999).contains(&year) {
+        return None;
+    }
+    let hour = day_seconds / 3_600;
+    let minute = (day_seconds % 3_600) / 60;
+    let second = day_seconds % 60;
+    let ticks = duration.subsec_nanos() / 100;
+    Some(format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{ticks:07}Z"
+    ))
 }
 
 fn safe_name(name: &str) -> bool {
@@ -148,6 +181,7 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
         if total.saturating_add(size) >= MAX_TOTAL_BYTES {
             break;
         }
+        let metadata = file.metadata().ok();
         let mut bytes = Vec::new();
         let read = file
             .take(attachments::MAX_FONT_BYTES as u64 + 1)
@@ -165,7 +199,19 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
             break;
         }
         total = next_total;
-        listed.push(FontInfo { name, size, mime });
+        listed.push(FontInfo {
+            name,
+            size,
+            mime,
+            date_created: metadata
+                .as_ref()
+                .and_then(|meta| meta.created().ok())
+                .and_then(system_time_utc),
+            date_modified: metadata
+                .as_ref()
+                .and_then(|meta| meta.modified().ok())
+                .and_then(system_time_utc),
+        });
     }
     listed.sort_unstable_by(|a, b| a.size.cmp(&b.size).then_with(|| a.name.cmp(&b.name)));
     Ok(listed)
@@ -308,17 +354,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn filesystem_timestamps_format_as_utc_without_local_time_dependencies() {
+        assert_eq!(
+            system_time_utc(UNIX_EPOCH).as_deref(),
+            Some("1970-01-01T00:00:00.0000000Z")
+        );
+        let leap = UNIX_EPOCH + std::time::Duration::from_secs(951_825_600);
+        assert_eq!(
+            system_time_utc(leap).as_deref(),
+            Some("2000-02-29T00:00:00.0000000Z")
+        );
+        let fractional = UNIX_EPOCH
+            + std::time::Duration::from_secs(1)
+            + std::time::Duration::from_nanos(123_456_700);
+        assert_eq!(
+            system_time_utc(fractional).as_deref(),
+            Some("1970-01-01T00:00:01.1234567Z")
+        );
+        assert!(system_time_utc(UNIX_EPOCH - std::time::Duration::from_secs(1)).is_none());
+    }
+
+    #[test]
     fn fallback_font_names_lookup_ignore_ascii_case_without_ambiguity() {
         let fonts = vec![
             FontInfo {
                 name: "Family.ttf".to_owned(),
                 size: 28,
                 mime: "font/ttf",
+                date_created: None,
+                date_modified: None,
             },
             FontInfo {
                 name: "Other.otf".to_owned(),
                 size: 32,
                 mime: "font/otf",
+                date_created: None,
+                date_modified: None,
             },
         ];
         assert_eq!(
@@ -335,11 +406,15 @@ mod tests {
                 name: "Face.ttf".to_owned(),
                 size: 28,
                 mime: "font/ttf",
+                date_created: None,
+                date_modified: None,
             },
             FontInfo {
                 name: "FACE.TTF".to_owned(),
                 size: 28,
                 mime: "font/ttf",
+                date_created: None,
+                date_modified: None,
             },
         ];
         assert!(select_font(ambiguous.clone(), "face.ttf").is_none());
