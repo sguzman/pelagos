@@ -391,7 +391,7 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     let library = temp.path().join("Movies");
     let state_dir = temp.path().join("state");
     fs::create_dir_all(&library).unwrap();
-    let source = library.join("Feature.avi");
+    let source = library.join("Feature.mkv");
     let sidecar = library.join("Feature.es.srt");
     let created = Command::new("ffmpeg")
         .args([
@@ -403,8 +403,18 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
             "lavfi",
             "-i",
             "color=c=black:s=320x128:r=5:d=4",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=4",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
             "-c:v",
             "mpeg4",
+            "-c:a",
+            "aac",
             "-y",
         ])
         .arg(&source)
@@ -478,6 +488,24 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     let second = bright_pixels(&second_bytes, &temp.path().join("external-second.ts"));
     assert!(first > black + 20);
     assert!(second > black + 20);
+    // FFmpeg subtitle rendering must not silently discard a source audio
+    // stream while producing otherwise playable H.264 MPEG-TS transport.
+    let audio_probe = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ])
+        .arg(temp.path().join("external-first.ts"))
+        .output()
+        .unwrap();
+    assert!(audio_probe.status.success());
+    assert!(String::from_utf8_lossy(&audio_probe.stdout).contains("aac"));
     assert_eq!(fs::read(&source).unwrap(), original);
 
     let first_segment = burned
