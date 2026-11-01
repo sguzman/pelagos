@@ -863,7 +863,14 @@ async fn playback_info(
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
     }
-    let source = source_from_probe(&item_id, kind, &file, &probed);
+    // Read-only sidecar directory enumeration can touch hundreds of metadata
+    // entries. Keep it off Tokio's I/O worker threads.
+    let (source, probed) = tokio::task::spawn_blocking(move || {
+        let source = source_from_probe(&item_id, kind, &file, &probed);
+        (source, probed)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     // An explicit playback profile overrides the token's previously reported
     // capabilities. Session profiles are never shared across users or tokens.
     let profile = match req.device_profile {
@@ -961,10 +968,15 @@ async fn serve_external_subtitle(
     let report = probe::probe(&source, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    let sidecar = external_subtitles(&source, &report)
-        .into_iter()
-        .find(|sidecar| sidecar.index == index && sidecar.format == format)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let discovered_source = source.clone();
+    let sidecar = tokio::task::spawn_blocking(move || {
+        external_subtitles(&discovered_source, &report)
+            .into_iter()
+            .find(|sidecar| sidecar.index == index && sidecar.format == format)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
     let (opened, _, size) = tokio::task::spawn_blocking(move || {
