@@ -176,9 +176,18 @@ fn mapped_attachment(value: &Value, item_id: &str) -> Option<MediaAttachment> {
 // platform-reserved filename punctuation; extraction uses stream index only.
 fn safe_attachment_filename(value: &Value) -> Option<String> {
     let name = text_field(value)?;
+    let stem = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserved = matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL"
+            | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9"
+            | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9"
+    );
     if name == "."
         || name == ".."
+        || name.ends_with('.')
         || name.trim() != name
+        || reserved
         || name.chars().any(|ch| "/\\:<>\"|?*".contains(ch))
     {
         return None;
@@ -2692,6 +2701,11 @@ mod tests {
             "..",
             " trailing.ttf ",
             "invalid\nname.ttf",
+            "CON.ttf",
+            "aux.otf",
+            "COM1.woff",
+            "Lpt9.ttf",
+            "trailing-dot.ttf.",
         ] {
             let mapped = make(unsafe_name);
             assert_eq!(mapped.file_name, None, "{unsafe_name:?}");
