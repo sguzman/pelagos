@@ -24,6 +24,30 @@ async fn request(app: &Router, method: &str, url: &str, token: Option<&str>) -> 
         .unwrap()
 }
 
+async fn post_subtitle_profile(
+    app: &Router,
+    id: &str,
+    token: &str,
+    index: i64,
+    format: &str,
+) -> Response {
+    let body = serde_json::json!({
+        "SubtitleStreamIndex": index,
+        "DeviceProfile": {
+            "DirectPlayProfiles": [{"Type":"Video","Container":"mp4","VideoCodec":"mpeg4"}],
+            "SubtitleProfiles": [{"Method":"External","Format":format}]
+        }
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/Items/{id}/PlaybackInfo"))
+        .header("Content-Type", "application/json")
+        .header("X-Emby-Token", token)
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    app.clone().oneshot(request).await.unwrap()
+}
+
 #[tokio::test]
 async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization() {
     if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
@@ -60,6 +84,11 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     fs::write(
         root.join("Feature.en.vtt"),
         b"WEBVTT\n\nintro\n00:00:01.000 --> 00:00:03.000 align:start\nHello!\n\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("Feature.es.vtt"),
+        b"WEBVTT\n\nSTYLE\n::cue {color: red}\n\n",
     )
     .unwrap();
     catalog::index(&state_dir, &root).unwrap();
@@ -100,6 +129,59 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         .find(|stream| stream["Type"] == "Subtitle" && stream["IsExternal"].as_bool() == Some(true))
         .expect("adjacent VTT subtitle is advertised");
     let index = subtitle["Index"].as_i64().unwrap();
+    let native_url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.vtt");
+    let native = request(&app, "GET", &native_url, Some(&viewer)).await;
+    assert_eq!(native.status(), StatusCode::OK);
+    let native_bytes = to_bytes(native.into_body(), 65_536).await.unwrap();
+    assert!(std::str::from_utf8(&native_bytes).unwrap().contains("align:start"));
+    // A VTT-only sidecar can be negotiated as SRT without mutating its
+    // original native metadata or the adjacent subtitle file.
+    let offered = post_subtitle_profile(&app, id, &viewer, index, "srt").await;
+    assert_eq!(offered.status(), StatusCode::OK);
+    let offer: serde_json::Value =
+        serde_json::from_slice(&to_bytes(offered.into_body(), 65_536).await.unwrap()).unwrap();
+    let selected = offer["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Index"] == index && stream["Type"] == "Subtitle")
+        .unwrap();
+    assert_eq!(offer["MediaSources"][0]["DefaultSubtitleStreamIndex"], index);
+    assert_eq!(selected["Codec"], "webvtt");
+    assert_eq!(selected["IsExternal"], true);
+    let srt_url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
+    assert_eq!(selected["DeliveryUrl"].as_str(), Some(srt_url.as_str()));
+    assert_eq!(
+        request(&app, "GET", &srt_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = request(&app, "GET", &srt_url, Some(&viewer)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/x-subrip");
+    let length = response.headers()[header::CONTENT_LENGTH].clone();
+    let body = to_bytes(response.into_body(), 65_536).await.unwrap();
+    assert_eq!(
+        body.as_ref(),
+        b"1\n00:00:01,000 --> 00:00:03,000\nHello!\n\n"
+    );
+    assert_eq!(length.to_str().unwrap(), body.len().to_string());
+    let head = request(&app, "HEAD", &srt_url, Some(&viewer)).await;
+    assert_eq!(head.status(), StatusCode::OK);
+    assert_eq!(head.headers()[header::CONTENT_LENGTH], length);
+    assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
+
+    let malformed = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Language"] == "es" && stream["Type"] == "Subtitle")
+        .unwrap();
+    let malformed_index = malformed["Index"].as_i64().unwrap();
+    let malformed_url = format!("/Videos/{id}/{id}/Subtitles/{malformed_index}/Stream.srt");
+    assert_eq!(
+        request(&app, "GET", &malformed_url, Some(&viewer)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
     let playlist_url =
         format!("/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
@@ -163,6 +245,7 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n"
     );
     assert_eq!(fs::read(&movie).unwrap(), original);
+    assert_eq!(fs::read(root.join("Feature.en.vtt")).unwrap(), native_bytes.as_ref());
     auth::revoke_library(&state_dir, "viewer", &root).unwrap();
     assert_eq!(
         request(&app, "GET", &first, Some(&viewer)).await.status(),
