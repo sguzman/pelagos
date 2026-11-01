@@ -1467,7 +1467,9 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
         format!("/Videos/{item}/{item}/Subtitles/{index}/subtitles.m3u8?segmentLength=1");
     let playlist_response = request(&app, "GET", &playlist_url, Some(&viewer), "").await;
     assert_eq!(playlist_response.status(), StatusCode::OK);
-    let playlist_bytes = to_bytes(playlist_response.into_body(), 16_384).await.unwrap();
+    let playlist_bytes = to_bytes(playlist_response.into_body(), 16_384)
+        .await
+        .unwrap();
     let playlist = std::str::from_utf8(&playlist_bytes).unwrap();
     let segment_urls = playlist
         .lines()
