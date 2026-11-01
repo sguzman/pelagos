@@ -1335,6 +1335,68 @@ async fn serve_external_subtitle(
     Ok(response)
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SubtitleQuery {
+    item_id: Option<String>,
+    media_source_id: Option<String>,
+    index: Option<i64>,
+    format: Option<String>,
+    start_position_ticks: Option<i64>,
+    end_position_ticks: Option<i64>,
+    copy_timestamps: Option<bool>,
+    add_vtt_time_map: Option<bool>,
+}
+
+impl SubtitleQuery {
+    fn validate(
+        &self,
+        item: &str,
+        media_source: &str,
+        index: i64,
+        format: &str,
+        route_start: i64,
+    ) -> Result<bool, StatusCode> {
+        if self.start_position_ticks.is_some_and(|value| value < 0)
+            || self.end_position_ticks.is_some_and(|value| value < 0)
+            || route_start < 0
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        if self.start_position_ticks.unwrap_or(route_start) != 0
+            || self.end_position_ticks.is_some()
+            || self.item_id.as_deref().is_some_and(|value| value != item)
+            || self.media_source_id.as_deref().is_some_and(|value| value != media_source)
+            || self.index.is_some_and(|value| value != index)
+            || self.format.as_deref().is_some_and(|value| value != format)
+        {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let map = self.add_vtt_time_map == Some(true);
+        if map && format != "vtt" {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        // CopyTimestamps=true is an identity at zero offset.
+        let _ = self.copy_timestamps;
+        Ok(map)
+    }
+}
+
+fn add_vtt_timestamp_map(bytes: &[u8]) -> Result<Vec<u8>, StatusCode> {
+    let source = std::str::from_utf8(bytes).map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
+    let source = source.trim_start_matches('\u{feff}');
+    let rest = source.strip_prefix("WEBVTT").ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    if rest.contains("X-TIMESTAMP-MAP=") {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let mut output = String::from("WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000");
+    output.push_str(rest);
+    if output.len() > 4 * 1024 * 1024 + 4096 {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    Ok(output.into_bytes())
+}
+
 /// Route and deprecated query selectors are constrained to the exact
 /// authorized source. Nonzero shifts/trim ranges are rejected until real
 /// conversion is available; never silently ignore client constraints.
