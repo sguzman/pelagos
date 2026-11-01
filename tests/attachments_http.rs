@@ -37,6 +37,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let nonfont = temp.path().join("not-a-font.bin");
     let oversized = temp.path().join("oversized.ttf");
     let spoofed = temp.path().join("spoofed.ttf");
+    let open_type = temp.path().join("fixture.otf");
     // Minimal offset-table signature for the bounded transport-header check:
     // this is synthetic data, not a complete font for rendering.
     let mut bytes = vec![0_u8; 28];
@@ -46,6 +47,10 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     fs::write(&nonfont, b"ARBITRARY_NONFONT_PAYLOAD").unwrap();
     fs::write(&oversized, vec![0_u8; 4 * 1024 * 1024 + 1]).unwrap();
     fs::write(&spoofed, b"NOT_A_REAL_TRUETYPE_FONT").unwrap();
+    let mut open_type_bytes = vec![0_u8; 28];
+    open_type_bytes[..4].copy_from_slice(b"OTTO");
+    open_type_bytes[4..6].copy_from_slice(&1_u16.to_be_bytes());
+    fs::write(&open_type, &open_type_bytes).unwrap();
     let movie = root.join("Feature.mkv");
     let output = Command::new("ffmpeg")
         .args([
@@ -83,7 +88,9 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
             "-attach",
         ])
         .arg(&spoofed)
-        .args(["-metadata:s:t:3", "mimetype=font/ttf", "-y"])
+        .args(["-metadata:s:t:3", "mimetype=font/ttf", "-attach"])
+        .arg(&open_type)
+        .args(["-metadata:s:t:4", "mimetype=application/vnd.ms-opentype", "-y"])
         .arg(&movie)
         .output()
         .unwrap();
@@ -135,7 +142,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let attachments = info["MediaSources"][0]["MediaAttachments"]
         .as_array()
         .unwrap();
-    assert_eq!(attachments.len(), 2);
+    assert_eq!(attachments.len(), 3);
     assert_eq!(attachments[0]["Index"], 1);
     assert_eq!(attachments[0]["Codec"], "ttf");
     assert!(attachments[0]["FileName"].is_null());
@@ -208,6 +215,20 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     assert_eq!(
         request(&app, "HEAD", &forged, Some(&viewer)).await.status(),
         StatusCode::NOT_IMPLEMENTED
+    );
+    let otf_url = format!("/Videos/{id}/{id}/Attachments/5");
+    let response = request(&app, "GET", &otf_url, Some(&viewer)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[header::CONTENT_TYPE], "font/otf");
+    assert_eq!(
+        to_bytes(response.into_body(), 1024).await.unwrap().as_ref(),
+        open_type_bytes.as_slice()
+    );
+    let response = request(&app, "HEAD", &otf_url, Some(&viewer)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH],
+        open_type_bytes.len().to_string()
     );
     assert_eq!(fs::read(&movie).unwrap(), original);
     auth::revoke_library(&state_dir, "viewer", &root).unwrap();
