@@ -248,6 +248,10 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
                 assert!(text.contains(" --> "));
             }
             assert_eq!(length.to_str().unwrap(), body.len().to_string());
+            let head = request(&app, "HEAD", &url, Some(&viewer)).await;
+            assert_eq!(head.status(), StatusCode::OK);
+            assert_eq!(head.headers()[header::CONTENT_LENGTH], length);
+            assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
         }
         // The same text conversion is usable by the bounded short-VOD HLS
         // subtitle playlist and its header-authenticated segment routes.
