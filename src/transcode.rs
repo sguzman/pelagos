@@ -316,7 +316,10 @@ pub async fn transcode_mpegts(
     deadline: Duration,
     max_bytes: u64,
 ) -> io::Result<u64> {
-    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None, None, None).await
+    transcode_mpegts_inner(
+        executable, source, output, deadline, max_bytes, None, None, None,
+    )
+    .await
 }
 
 /// Separate, validated encoder profile used for media variants. No shell
@@ -742,8 +745,7 @@ mod tests {
             ])
             .arg(&sidecar)
             .args([
-                "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s",
-                "srt", "-y",
+                "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "srt", "-y",
             ])
             .arg(&source)
             .output()
@@ -755,9 +757,13 @@ mod tests {
             String::from_utf8_lossy(&fixture.stderr)
         );
         let original = stdfs::read(&source).unwrap();
-        let controller =
-            TranscodeController::new(PathBuf::from("ffmpeg"), 1, Duration::from_secs(25), 8 * 1024 * 1024)
-                .unwrap();
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(25),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
         let plain = temp.path().join("plain.ts");
         let burned = temp.path().join("burned.ts");
         let plain_size = controller
@@ -775,10 +781,24 @@ mod tests {
         let mut frames = Vec::new();
         for output in [&plain, &burned] {
             let decoded = Command::new("ffmpeg")
-                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-ss", "0.7", "-i"])
+                .args([
+                    "-nostdin",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-ss",
+                    "0.7",
+                    "-i",
+                ])
                 .arg(output)
                 .args([
-                    "-frames:v", "1", "-vf", "format=gray", "-f", "rawvideo", "pipe:1",
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "format=gray",
+                    "-f",
+                    "rawvideo",
+                    "pipe:1",
                 ])
                 .output()
                 .await
