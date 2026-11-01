@@ -130,8 +130,45 @@ pub struct MediaSource {
     supports_direct_stream: bool,
     supports_transcoding: bool,
     media_streams: Vec<MediaStream>,
+    media_attachments: Vec<MediaAttachment>,
     required_http_headers: std::collections::BTreeMap<String, String>,
     direct_stream_url: String,
+}
+
+/// Pinned Jellyfin v12.3 MediaAttachment is distinct from MediaStreamType.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct MediaAttachment {
+    codec: Option<String>,
+    codec_tag: Option<String>,
+    comment: Option<String>,
+    index: i64,
+    file_name: Option<String>,
+    mime_type: &'static str,
+    delivery_url: String,
+}
+
+fn mapped_attachment(value: &Value, item_id: &str) -> Option<MediaAttachment> {
+    if value["codec_type"] != "attachment" {
+        return None;
+    }
+    let index = number(&value["index"])
+        .filter(|value| (0..=i64::from(i32::MAX)).contains(value))?;
+    let mime = crate::attachments::font_mime(value["tags"]["mimetype"].as_str()?)?;
+    if number(&value["extradata_size"]).is_some_and(|size| {
+        !(0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size)
+    }) {
+        return None;
+    }
+    Some(MediaAttachment {
+        codec: text_field(&value["codec_name"]),
+        codec_tag: text_field(&value["codec_tag_string"]),
+        comment: text_field(&value["tags"]["comment"]),
+        index,
+        file_name: text_field(&value["tags"]["filename"]),
+        mime_type: mime,
+        delivery_url: format!("/Videos/{item_id}/{item_id}/Attachments/{index}"),
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -222,15 +259,6 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         "video" => "Video",
         "audio" => "Audio",
         "subtitle" => "Subtitle",
-        "attachment"
-            if crate::attachments::font_mime(value["tags"]["mimetype"].as_str().unwrap_or(""))
-                .is_some()
-                && number(&value["extradata_size"]).is_none_or(|size| {
-                    (0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size)
-                }) =>
-        {
-            "Attachment"
-        }
         _ => return None,
     };
     let index = number(&value["index"])?;
@@ -245,11 +273,7 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         channels: number(&value["channels"]),
         sample_rate: number(&value["sample_rate"]),
         profile: text_field(&value["profile"]),
-        title: if stream_type == "Attachment" {
-            text_field(&value["tags"]["filename"]).or_else(|| text_field(&value["tags"]["title"]))
-        } else {
-            text_field(&value["tags"]["title"])
-        },
+        title: text_field(&value["tags"]["title"]),
         aspect_ratio: text_field(&value["display_aspect_ratio"]),
         pixel_format: text_field(&value["pix_fmt"]),
         channel_layout: text_field(&value["channel_layout"]),
@@ -544,6 +568,15 @@ fn source_from_probe(
         supports_direct_stream: false,
         supports_transcoding: false,
         media_streams,
+        media_attachments: if kind == "video" {
+            result
+                .streams
+                .iter()
+                .filter_map(|stream| mapped_attachment(stream, item_id))
+                .collect()
+        } else {
+            Vec::new()
+        },
         required_http_headers: Default::default(),
         direct_stream_url: format!(
             "/{}/{item_id}/stream?static=true",
