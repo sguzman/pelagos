@@ -461,7 +461,7 @@ async fn reauthorize_publication(
         return Err(StatusCode::NOT_FOUND);
     }
     if let Some(sidecar) = query.sidecar {
-        let bytes = read_confined_srt(source, &sidecar.filename).await?;
+        let bytes = read_confined_srt(&source, &sidecar.filename).await?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
         if digest != sidecar.digest {
             return Err(StatusCode::NOT_FOUND);
