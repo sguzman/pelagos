@@ -1012,11 +1012,16 @@ fn srt_timestamp(value: &str) -> Option<String> {
 }
 
 fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
-    let input = std::str::from_utf8(source).ok()?.trim_start_matches('\u{feff}');
+    let input = std::str::from_utf8(source)
+        .ok()?
+        .trim_start_matches('\u{feff}');
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
     let mut output = String::from("WEBVTT\n\n");
     let mut count = 0_u32;
-    for block in normalized.split("\n\n").filter(|part| !part.trim().is_empty()) {
+    for block in normalized
+        .split("\n\n")
+        .filter(|part| !part.trim().is_empty())
+    {
         let mut lines = block.lines();
         let first = lines.next()?.trim();
         let cue = if first.bytes().all(|byte| byte.is_ascii_digit()) && !first.is_empty() {
@@ -1073,8 +1078,7 @@ async fn serve_external_subtitle(
             .into_iter()
             .find(|sidecar| {
                 sidecar.index == index
-                    && (sidecar.format == format
-                        || (sidecar.format == "srt" && format == "vtt"))
+                    && (sidecar.format == format || (sidecar.format == "srt" && format == "vtt"))
             })
     })
     .await
@@ -1105,7 +1109,14 @@ async fn serve_external_subtitle(
         }
         let converted = convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
         let length = converted.len() as u64;
-        (if head { Body::empty() } else { Body::from(converted) }, length)
+        (
+            if head {
+                Body::empty()
+            } else {
+                Body::from(converted)
+            },
+            length,
+        )
     } else {
         let body = if head {
             Body::empty()

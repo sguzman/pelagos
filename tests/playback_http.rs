@@ -947,13 +947,30 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     let converted_url = format!("/Videos/{item}/{item}/Subtitles/2/Stream.vtt");
     let response = request(&app, "GET", &converted_url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "text/vtt; charset=utf-8");
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "text/vtt; charset=utf-8"
+    );
     let expected_vtt = b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello!\n\n";
-    assert_eq!(to_bytes(response.into_body(), 1_024).await.unwrap().as_ref(), expected_vtt);
+    assert_eq!(
+        to_bytes(response.into_body(), 1_024)
+            .await
+            .unwrap()
+            .as_ref(),
+        expected_vtt
+    );
     let response = request(&app, "HEAD", &converted_url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_LENGTH], expected_vtt.len().to_string());
-    assert!(to_bytes(response.into_body(), 1_024).await.unwrap().is_empty());
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH],
+        expected_vtt.len().to_string()
+    );
+    assert!(
+        to_bytes(response.into_body(), 1_024)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(
         vtt_url,
