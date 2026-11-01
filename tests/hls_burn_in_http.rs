@@ -423,10 +423,15 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     catalog::index(&state_dir, &library).unwrap();
     auth::create_user(&state_dir, "admin", "srt-overlay-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "srt-overlay-viewer-password").unwrap();
-    let token = auth::authenticate(&state_dir, "viewer", "srt-overlay-viewer-password", "server")
-        .unwrap()
-        .unwrap()
-        .access_token;
+    let token = auth::authenticate(
+        &state_dir,
+        "viewer",
+        "srt-overlay-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
@@ -449,9 +454,13 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     let base = format!("/Videos/{id}/main.m3u8?segmentLength=2");
     let burn = format!("{base}&subtitleStreamIndex={index}&subtitleMethod=Encode");
     assert_eq!(
-        call(&app, &format!("{base}&subtitleStreamIndex={index}"), Some(&token))
-            .await
-            .status(),
+        call(
+            &app,
+            &format!("{base}&subtitleStreamIndex={index}"),
+            Some(&token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     let plain_response = call(&app, &base, Some(&token)).await;
