@@ -17,6 +17,34 @@
       }
     },
     {
+      "name": "synthetic-invalid-password",
+      "method": "POST",
+      "path": "/Users/AuthenticateByName",
+      "auth": "none",
+      "status": 401,
+      "body": {
+        "Username": "fixture-viewer",
+        "Pw": "intentionally-invalid"
+      }
+    },
+    {
+      "name": "synthetic-password-login",
+      "method": "POST",
+      "path": "/Users/AuthenticateByName",
+      "auth": "none",
+      "status": 200,
+      "content_type_prefix": "application/json",
+      "body": {
+        "Username": "fixture-viewer",
+        "Pw": "synthetic-fixture-password"
+      },
+      "json_types": {
+        "/AccessToken": "string",
+        "/User/Name": "string",
+        "/SessionInfo/UserId": "string"
+      }
+    },
+    {
       "name": "authenticated-system-info-is-private",
       "method": "GET",
       "path": "/System/Info",
