@@ -2139,14 +2139,13 @@ async fn subtitle_playlist(
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    // A filename extension is not proof that a script sidecar is
-    // convertible. Fail closed before advertising HLS segments for
-    // incomplete ASS/SSA scripts, using the same confined input path
-    // and bounded read as direct sidecar delivery.
+    // Do not advertise HLS segments for unsupported WebVTT structure or
+    // incomplete ASS/SSA scripts based on filename extensions alone.
+    // Check only the selected confined sidecar within the existing bounds.
     if let Some(stream) = media.media_streams.iter().find(|stream| {
         stream.index == index
             && stream.is_external
-            && matches!(stream.codec.as_deref(), Some("ass" | "ssa"))
+            && matches!(stream.codec.as_deref(), Some("ass" | "ssa" | "webvtt"))
     }) {
         let sidecar = sidecars
             .iter()
@@ -2171,6 +2170,7 @@ async fn subtitle_playlist(
         let valid = match stream.codec.as_deref() {
             Some("ass") => probe::is_native_ass_script(&bytes),
             Some("ssa") => probe::is_native_ssa_script(&bytes),
+            Some("webvtt") => crate::subtitle_timing::vtt_sidecar_to_srt(&bytes).is_some(),
             _ => false,
         };
         if bytes.len() > 4 * 1024 * 1024 || !valid {
