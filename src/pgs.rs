@@ -158,7 +158,10 @@ fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
             0
         };
         let end = written.checked_add(count)?;
-        if end > area {
+        // PGS run codes are scanline-local. A malformed RLE run must not
+        // consume pixels from the next row merely because the flattened
+        // output buffer still has sufficient capacity.
+        if end > area || count > width - (written % width) {
             return None;
         }
         pixels[written..end].fill(color);
@@ -390,6 +393,10 @@ mod tests {
         ] {
             assert!(decode_rle_bitmap(invalid, 2, 1).is_none());
         }
+        // A palette run crossing the end of a scanline is malformed even
+        // if the flattened image has room for its declared pixel count.
+        assert!(decode_rle_bitmap(&[0, 0x83, 7, 0xaa], 2, 2).is_none());
+        assert!(decode_rle_bitmap(&[0xaa, 0, 0x02, 0xbb], 2, 2).is_none());
         assert!(decode_rle_bitmap(&[1], 4096, 4096).is_none());
         assert!(decode_rle_bitmap(&[1], 0, 1).is_none());
     }
