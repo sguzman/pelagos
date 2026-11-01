@@ -812,14 +812,14 @@ fn negotiate_selected_subtitle_delivery(
     let Some(original) = stream.delivery_url.clone() else {
         return Ok(());
     };
-    let fallback_formats: &[&str] = if !stream.is_external
-        && stream.codec.as_deref() == Some("ass")
+    let fallback_formats: &[&str] = if matches!(stream.codec.as_deref(), Some("ass" | "ssa"))
         && (original.ends_with("/Stream.ass") || original.ends_with("/Stream.ssa"))
     {
+        // Both embedded and confined external script tracks have bounded
+        // SRT conversion, with an optional additional WebVTT conversion.
         &["srt", "vtt"]
     } else if original.ends_with("/Stream.srt") {
-        // Both a real SRT sidecar and the bounded embedded SRT extractor
-        // support Stream.vtt; native ASS/SSA sidecars do not.
+        // Both a native SRT sidecar and embedded SRT can become WebVTT.
         &["vtt"]
     } else {
         &[]
