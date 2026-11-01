@@ -108,7 +108,12 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
         if bytes.len() as u64 != size {
             return Err(StatusCode::NOT_FOUND);
         }
-        let normalized = playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        let normalized = if filename.to_ascii_lowercase().ends_with(".vtt") {
+            crate::subtitle_timing::vtt_sidecar_to_srt(&bytes)
+                .ok_or(StatusCode::NOT_IMPLEMENTED)?
+        } else {
+            playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
+        };
         if normalized.len() > 4 * 1024 * 1024 {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -391,7 +396,7 @@ async fn validate_hls_track_selection(
             }
             return Ok(Some(HlsSubtitle::Embedded(position as u8)));
         }
-        if let Some(filename) = playback::hls_srt_sidecar_filename(source, &report, global_index) {
+        if let Some(filename) = playback::hls_text_sidecar_filename(source, &report, global_index) {
             let bytes = read_confined_srt(source, &filename).await?;
             let revision = SidecarRevision {
                 filename,
