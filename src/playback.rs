@@ -340,25 +340,35 @@ struct ExternalSubtitle {
     default: bool,
 }
 
-// Narrow BCP-47 language tags for adjacent subtitle filenames. Accept a
-// primary code plus one short region/script subtag without arbitrary names.
+// Bounded BCP-47 subset for adjacent subtitle filenames. Allow primary,
+// region, script, or script-then-region, but not arbitrary private extensions.
 fn sidecar_language_tag(part: &str) -> Option<String> {
-    let (primary, suffix) = part.split_once('-').unwrap_or((part, ""));
-    if !(2..=3).contains(&primary.len()) || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+    let mut sections = part.split('-');
+    let primary = sections.next()?;
+    if !(2..=3).contains(&primary.len())
+        || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
     {
         return None;
     }
-    if part.contains('-') && suffix.is_empty() {
+    let script_or_region = sections.next();
+    let region = sections.next();
+    if sections.next().is_some() {
         return None;
     }
-    if !suffix.is_empty()
-        && !((suffix.len() == 2 && suffix.bytes().all(|byte| byte.is_ascii_alphabetic()))
-            || (suffix.len() == 3 && suffix.bytes().all(|byte| byte.is_ascii_digit()))
-            || (suffix.len() == 4 && suffix.bytes().all(|byte| byte.is_ascii_alphabetic())))
-    {
-        return None;
-    }
-    Some(part.to_ascii_lowercase())
+    let is_region = |part: &str| {
+        (part.len() == 2 && part.bytes().all(|byte| byte.is_ascii_alphabetic()))
+            || (part.len() == 3 && part.bytes().all(|byte| byte.is_ascii_digit()))
+    };
+    let is_script = |part: &str| {
+        part.len() == 4 && part.bytes().all(|byte| byte.is_ascii_alphabetic())
+    };
+    let valid = match (script_or_region, region) {
+        (None, None) => true,
+        (Some(part), None) => is_region(part) || is_script(part),
+        (Some(script), Some(region)) => is_script(script) && is_region(region),
+        _ => false,
+    };
+    valid.then(|| part.to_ascii_lowercase())
 }
 
 fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<ExternalSubtitle> {
@@ -2434,9 +2444,13 @@ mod tests {
             ("es-mx", Some("es-mx")),
             ("en-001", Some("en-001")),
             ("zh-hans", Some("zh-hans")),
+            ("zh-hant-tw", Some("zh-hant-tw")),
+            ("sr-latn-001", Some("sr-latn-001")),
             ("hi", Some("hi")),
             ("en-", None),
             ("en-us-script", None),
+            ("en-us-gb", None),
+            ("zh-hant-tw-x", None),
             ("englishtitle", None),
             ("en-!", None),
         ] {
@@ -2456,6 +2470,7 @@ mod tests {
             "Feature.hi.vtt",
             "Feature.ja.hi.vtt",
             "Feature.es-MX.srt",
+            "Feature.zh-Hant-TW.srt",
             "Feature.eng.forced.forced.srt",
             "Feature.unrelated.txt",
         ] {
@@ -2473,7 +2488,7 @@ mod tests {
             .iter()
             .filter(|stream| stream.stream_type == "Subtitle")
             .collect::<Vec<_>>();
-        assert_eq!(subtitle.len(), 6);
+        assert_eq!(subtitle.len(), 7);
         let english = subtitle
             .iter()
             .find(|stream| stream.language.as_deref() == Some("eng"))
@@ -2499,6 +2514,9 @@ mod tests {
         assert!(subtitle.iter().any(|stream| {
             stream.language.as_deref() == Some("es-mx") && !stream.is_hearing_impaired
         }));
+        assert!(subtitle
+            .iter()
+            .any(|stream| stream.language.as_deref() == Some("zh-hant-tw")));
     }
 
     #[test]
