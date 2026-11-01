@@ -639,6 +639,32 @@ Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,STYLED TEXT VISIBLE
         let bright = bright_pixels(&bytes, &filename);
         assert!(bright > black + 20, "{label}");
     }
+    // Native SSA cache identity also follows changed script contents,
+    // not just the original movie's size, mtime or fixed sidecar index.
+    let ssa_index = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "ssa")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let ssa_route = format!("{base}&subtitleStreamIndex={ssa_index}&subtitleMethod=Encode");
+    let previous_ssa = body_string(call(&app, &ssa_route, Some(&token)).await).await;
+    let previous_ssa_segment = previous_ssa
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap();
+    let previous_ssa_url = format!("/Videos/{id}/{previous_ssa_segment}");
+    fs::write(&ssa, legacy.replace("STYLED TEXT VISIBLE", "UPDATED SSA CAPTION")).unwrap();
+    assert_eq!(
+        call(&app, &previous_ssa_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let changed_ssa = call(&app, &ssa_route, Some(&token)).await;
+    assert_eq!(changed_ssa.status(), StatusCode::OK);
+    assert_ne!(body_string(changed_ssa).await, previous_ssa);
+
     // An SSA file mislabeled as modern ASS must fail strict ScriptType
     // validation without corrupting the already-published SSA rendition.
     fs::write(&ass, &legacy).unwrap();
