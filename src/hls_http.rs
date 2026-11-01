@@ -95,7 +95,7 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
     let filename = filename.to_owned();
     tokio::task::spawn_blocking(move || {
         use std::io::Read;
-        let (mut file, _, size) = streaming::open_confined(&parent, Path::new(&filename))?;
+        let (file, _, size) = streaming::open_confined(&parent, Path::new(&filename))?;
         if size == 0 || size > 4 * 1024 * 1024 {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -108,8 +108,7 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
         if bytes.len() as u64 != size {
             return Err(StatusCode::NOT_FOUND);
         }
-        let normalized =
-            playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        let normalized = playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
         if normalized.len() > 4 * 1024 * 1024 {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
