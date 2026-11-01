@@ -624,7 +624,7 @@ pub(crate) fn hls_text_sidecar_filename(
 ) -> Option<String> {
     external_subtitles(source, report)
         .into_iter()
-        .find(|entry| entry.index == index && matches!(entry.format, "srt" | "vtt"))
+        .find(|entry| entry.index == index && matches!(entry.format, "srt" | "vtt" | "ass" | "ssa"))
         .map(|entry| entry.filename)
 }
 
