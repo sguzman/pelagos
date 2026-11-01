@@ -8,27 +8,35 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use pelagos::{app, discovery, identity};
+use pelagos::{app, config, discovery, identity};
 use tracing::info;
 
 #[derive(Debug, Parser)]
 #[command(about = "Pelagos: a Rust-first Jellyfin-compatible media server (early scaffold)")]
 struct Args {
     /// Bind address. Default is loopback; use 0.0.0.0 explicitly for LAN discovery.
-    #[arg(long, default_value = "127.0.0.1")]
-    bind: String,
+    #[arg(long)]
+    bind: Option<String>,
 
     /// HTTP port, separate from Jellyfin's default port 8096.
-    #[arg(long, default_value_t = 8097)]
-    port: u16,
+    #[arg(long)]
+    port: Option<u16>,
+
+    /// Explicit JSON config path; otherwise read XDG_CONFIG_HOME/pelagos/config.json when present.
+    #[arg(long)]
+    config: Option<PathBuf>,
 
     /// Private state directory (defaults to XDG_STATE_HOME/pelagos).
     #[arg(long)]
     state_dir: Option<PathBuf>,
 
     /// Enable opt-in Jellyfin UDP discovery on port 7359 (requires LAN bind).
-    #[arg(long)]
+    #[arg(long, conflicts_with = "no_discover")]
     discover: bool,
+
+    /// Disable discovery, including when enabled by the configuration file.
+    #[arg(long, conflicts_with = "discover")]
+    no_discover: bool,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -201,14 +209,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("download privilege revoked: {changed}");
         return Ok(());
     }
+    let configured = config::load(args.config.as_deref())?;
+    let effective = config::resolve(
+        configured,
+        args.bind,
+        args.port,
+        args.discover,
+        args.no_discover,
+    )?;
     let state_dir = args.state_dir.unwrap_or_else(identity::default_state_dir);
     let id = identity::load_or_create(&state_dir)?;
     let state_for_auth = state_dir.clone();
-    let address: SocketAddr = format!("{}:{}", args.bind, args.port).parse()?;
+    let address: SocketAddr = format!("{}:{}", effective.bind, effective.port).parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
     let listening_address = listener.local_addr()?;
     let mut discovery_task = None;
-    if args.discover {
+    if effective.discover {
         if address.ip().is_loopback() {
             return Err("--discover requires an HTTP LAN bind such as --bind 0.0.0.0".into());
         }

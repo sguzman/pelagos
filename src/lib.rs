@@ -5,6 +5,7 @@ pub mod auth;
 pub mod auth_api;
 pub mod bitrate;
 pub mod catalog;
+pub mod config;
 pub mod catalog_api;
 pub mod device_api;
 pub mod discovery;
