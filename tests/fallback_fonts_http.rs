@@ -6,7 +6,10 @@ use axum::{
     http::{Request, StatusCode, header},
     response::Response,
 };
-use pelagos::{app::{self, AppState}, auth};
+use pelagos::{
+    app::{self, AppState},
+    auth,
+};
 use std::{fs, sync::Arc};
 use tower::ServiceExt;
 
@@ -15,7 +18,10 @@ async fn request(app: &Router, method: &str, url: &str, token: Option<&str>) -> 
     if let Some(token) = token {
         request = request.header("X-Emby-Token", token);
     }
-    app.clone().oneshot(request.body(Body::empty()).unwrap()).await.unwrap()
+    app.clone()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
 }
 
 #[tokio::test]
@@ -41,39 +47,58 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
 
     auth::create_user(&state, "admin", "fallback-font-admin-password").unwrap();
     auth::create_user(&state, "viewer", "fallback-font-viewer-password").unwrap();
-    let token = auth::authenticate(
-        &state, "viewer", "fallback-font-viewer-password", "server",
-    ).unwrap().unwrap().access_token;
+    let token = auth::authenticate(&state, "viewer", "fallback-font-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
 
     let disabled = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(), state.clone(),
+        "server".to_owned(),
+        state.clone(),
     )));
     assert_eq!(
-        request(&disabled, "GET", "/FallbackFont/Fonts", None).await.status(),
+        request(&disabled, "GET", "/FallbackFont/Fonts", None)
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     let none = request(&disabled, "GET", "/FallbackFont/Fonts", Some(&token)).await;
     assert_eq!(none.status(), StatusCode::OK);
-    assert_eq!(to_bytes(none.into_body(), 64).await.unwrap().as_ref(), b"[]");
     assert_eq!(
-        request(&disabled, "GET", "/FallbackFont/Fonts/Family.ttf", Some(&token))
-            .await.status(),
+        to_bytes(none.into_body(), 64).await.unwrap().as_ref(),
+        b"[]"
+    );
+    assert_eq!(
+        request(
+            &disabled,
+            "GET",
+            "/FallbackFont/Fonts/Family.ttf",
+            Some(&token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
 
-    assert!(AppState::with_auth_dir("server".to_owned(), state.clone())
-        .with_fallback_font_dir(std::path::PathBuf::from("relative/fonts")).is_err());
-    assert!(AppState::with_auth_dir("server".to_owned(), state.clone())
-        .with_fallback_font_dir(temp.path().join("missing")).is_err());
+    assert!(
+        AppState::with_auth_dir("server".to_owned(), state.clone())
+            .with_fallback_font_dir(std::path::PathBuf::from("relative/fonts"))
+            .is_err()
+    );
+    assert!(
+        AppState::with_auth_dir("server".to_owned(), state.clone())
+            .with_fallback_font_dir(temp.path().join("missing"))
+            .is_err()
+    );
     let active = app::router(Arc::new(
         AppState::with_auth_dir("server".to_owned(), state.clone())
-            .with_fallback_font_dir(root.clone()).unwrap()
+            .with_fallback_font_dir(root.clone())
+            .unwrap(),
     ));
     let response = request(&active, "GET", "/FallbackFont/Fonts", Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
-    let files: serde_json::Value = serde_json::from_slice(
-        &to_bytes(response.into_body(), 65_536).await.unwrap()
-    ).unwrap();
+    let files: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
     assert_eq!(files.as_array().unwrap().len(), 2);
     assert_eq!(files[0]["Name"], "Alternative.otf");
     assert_eq!(files[0]["Size"], otf.len());
@@ -94,16 +119,34 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         let response = request(&active, "GET", &uri, Some(&token)).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
-        assert_eq!(response.headers()[header::CONTENT_LENGTH], contents.len().to_string());
-        assert_eq!(response.headers()[header::CACHE_CONTROL], "private, no-store");
+        assert_eq!(
+            response.headers()[header::CONTENT_LENGTH],
+            contents.len().to_string()
+        );
+        assert_eq!(
+            response.headers()[header::CACHE_CONTROL],
+            "private, no-store"
+        );
         assert_eq!(response.headers()["x-content-type-options"], "nosniff");
-        assert_eq!(to_bytes(response.into_body(), 1024).await.unwrap().as_ref(), contents);
+        assert_eq!(
+            to_bytes(response.into_body(), 1024).await.unwrap().as_ref(),
+            contents
+        );
         let head = request(&active, "HEAD", &uri, Some(&token)).await;
         assert_eq!(head.status(), StatusCode::OK);
-        assert_eq!(head.headers()[header::CONTENT_LENGTH], contents.len().to_string());
+        assert_eq!(
+            head.headers()[header::CONTENT_LENGTH],
+            contents.len().to_string()
+        );
         assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
     }
-    for name in ["Spoof.ttf", "Oversized.ttf", "Outside.ttf", "readme.txt", "missing.ttf"] {
+    for name in [
+        "Spoof.ttf",
+        "Oversized.ttf",
+        "Outside.ttf",
+        "readme.txt",
+        "missing.ttf",
+    ] {
         let uri = format!("/FallbackFont/Fonts/{name}");
         assert_eq!(
             request(&active, "GET", &uri, Some(&token)).await.status(),
