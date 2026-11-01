@@ -4,7 +4,7 @@
 
 **Overall acceptance progress:** `████░░░░░░ 39%` across 171 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `████░░░░░░ 37%`
+## 🧱 M0 — Foundation and project controls — `█████░░░░░ 45%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -31,22 +31,22 @@
   - [ ] Automated tests and Jellyfin baseline fixture verify baseline source/version and compatibility inventory
   - [ ] Production or real-client acceptance validates baseline source/version and compatibility inventory
 
-### 🛠️ P1 — Build and storage — `███░░░░░░░ 29%`
+### 🛠️ P1 — Build and storage — `█████░░░░░ 48%`
 
-- 🏗️ **T006 — Build reproducibility** — `░░░░░░░░░░ 0%`
-  - [ ] Implement locked dependencies and automated stable Rust compilation
+- 🏗️ **T006 — Build reproducibility** — `███░░░░░░░ 33%`
+  - [x] Implement locked dependencies and automated stable Rust compilation — Cargo.lock; .github/workflows/ci.yml — GitHub Actions 41266981983: committed resolved dependencies, stable Rust compilation, locked Clippy/tests and repository guards passed
   - [ ] Automated tests and Jellyfin baseline fixture verify locked dependencies and automated stable Rust compilation
   - [ ] Production or real-client acceptance validates locked dependencies and automated stable Rust compilation
-- 🗄️ **T007 — SQLite store and migrations** — `░░░░░░░░░░ 0%`
-  - [ ] Implement versioned schema, atomic transactions and recovery
+- 🗄️ **T007 — SQLite store and migrations** — `███░░░░░░░ 33%`
+  - [x] Implement versioned schema, atomic transactions and recovery — src/catalog.rs; src/auth.rs — GitHub Actions 41267057881: versioned catalog/auth SQLite schema, transactional recovery, legacy account/token preservation and future-version rejection passed
   - [ ] Automated tests and Jellyfin baseline fixture verify versioned schema, atomic transactions and recovery
   - [ ] Production or real-client acceptance validates versioned schema, atomic transactions and recovery
-- ⚙️ **T008 — Validated configuration** — `░░░░░░░░░░ 0%`
-  - [ ] Implement XDG config paths, CLI options, migration and safe defaults
+- ⚙️ **T008 — Validated configuration** — `███░░░░░░░ 33%`
+  - [x] Implement XDG config paths, CLI options, migration and safe defaults — src/config.rs; src/main.rs; tests/config_cli.rs — GitHub Actions 41267374625: XDG JSON path/default/legacy normalization, CLI overrides and isolated startup/rejection tests passed
   - [ ] Automated tests and Jellyfin baseline fixture verify XDG config paths, CLI options, migration and safe defaults
   - [ ] Production or real-client acceptance validates XDG config paths, CLI options, migration and safe defaults
-- 🧯 **T009 — Health, logs and process lifecycle** — `░░░░░░░░░░ 0%`
-  - [ ] Implement structured diagnostics, graceful shutdown and signals
+- 🧯 **T009 — Health, logs and process lifecycle** — `███░░░░░░░ 33%`
+  - [x] Implement structured diagnostics, graceful shutdown and signals — src/main.rs; tests/lifecycle_signal.rs — GitHub Actions 41266981983: structured stderr diagnostics, bounded graceful drain and isolated SIGINT/SIGTERM process tests passed
   - [ ] Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals
   - [ ] Production or real-client acceptance validates structured diagnostics, graceful shutdown and signals
 - 📂 **T014 — Read-only local media scan diagnostic** — `███████░░░ 67%`

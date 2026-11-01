@@ -141,7 +141,8 @@
               "checks": [
                 {
                   "title": "Implement locked dependencies and automated stable Rust compilation",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "Cargo.lock; .github/workflows/ci.yml — GitHub Actions 41266981983: committed resolved dependencies, stable Rust compilation, locked Clippy/tests and repository guards passed"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify locked dependencies and automated stable Rust compilation",
@@ -152,7 +153,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T007",
@@ -161,7 +162,8 @@
               "checks": [
                 {
                   "title": "Implement versioned schema, atomic transactions and recovery",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/catalog.rs; src/auth.rs — GitHub Actions 41267057881: versioned catalog/auth SQLite schema, transactional recovery, legacy account/token preservation and future-version rejection passed"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify versioned schema, atomic transactions and recovery",
@@ -172,7 +174,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T008",
@@ -181,7 +183,8 @@
               "checks": [
                 {
                   "title": "Implement XDG config paths, CLI options, migration and safe defaults",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/config.rs; src/main.rs; tests/config_cli.rs — GitHub Actions 41267374625: XDG JSON path/default/legacy normalization, CLI overrides and isolated startup/rejection tests passed"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify XDG config paths, CLI options, migration and safe defaults",
@@ -192,7 +195,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T009",
@@ -201,7 +204,8 @@
               "checks": [
                 {
                   "title": "Implement structured diagnostics, graceful shutdown and signals",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "src/main.rs; tests/lifecycle_signal.rs — GitHub Actions 41266981983: structured stderr diagnostics, bounded graceful drain and isolated SIGINT/SIGTERM process tests passed"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify structured diagnostics, graceful shutdown and signals",
@@ -212,7 +216,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T014",
