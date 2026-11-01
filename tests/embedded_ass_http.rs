@@ -153,9 +153,8 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             .contains("Hello ASS")
     );
     // Advertising native ASS must not remove the text-HLS fallback.
-    let playlist_url = format!(
-        "/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2"
-    );
+    let playlist_url =
+        format!("/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2");
     let playlist = request(&app, "GET", &playlist_url, Some(&viewer)).await;
     assert_eq!(playlist.status(), StatusCode::OK);
     let playlist_bytes = to_bytes(playlist.into_body(), 65_536).await.unwrap();
@@ -168,7 +167,11 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     let response = request(&app, "GET", &segment_url, Some(&viewer)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let segment_bytes = to_bytes(response.into_body(), 65_536).await.unwrap();
-    assert!(std::str::from_utf8(&segment_bytes).unwrap().contains("Hello ASS"));
+    assert!(
+        std::str::from_utf8(&segment_bytes)
+            .unwrap()
+            .contains("Hello ASS")
+    );
     assert_eq!(
         request(
             &app,
