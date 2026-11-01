@@ -350,8 +350,11 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
     })
 }
 
-// Bounded, deterministic read-only local SRT discovery; reject symlinks
+// Bounded, deterministic read-only sidecar discovery; reject symlinks
 // and never enumerate beyond the already authorized video's directory.
+// Raw PGS SUP files may be larger than ordinary 4 MiB text sidecars, but
+// remain bounded and are delivered as byte ranges without decoding.
+const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
 #[derive(Debug)]
 struct ExternalSubtitle {
     index: i64,
@@ -448,6 +451,7 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
             Some("vtt") => "vtt",
             Some("ass") => "ass",
             Some("ssa") => "ssa",
+            Some("sup") => "sup",
             _ => continue,
         };
         let mut language = None;
@@ -481,7 +485,13 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         if entry.file_type().is_ok_and(|kind| kind.is_file())
             && entry
                 .metadata()
-                .is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
+                .is_ok_and(|meta| {
+                    meta.len() <= if format == "sup" {
+                        MAX_SUP_BYTES
+                    } else {
+                        4 * 1024 * 1024
+                    }
+                })
         {
             names.push((
                 filename,
@@ -571,6 +581,7 @@ fn source_from_probe(
                 "vtt" => "webvtt",
                 "ass" => "ass",
                 "ssa" => "ssa",
+                "sup" => "pgssub",
                 _ => "subrip",
             };
             let mut stream = mapped_stream(&serde_json::json!({
@@ -588,9 +599,14 @@ fn source_from_probe(
             stream.is_external = true;
             stream.is_text_subtitle_stream = true;
             stream.delivery_method = Some("External");
+            let extension = if sidecar.format == "sup" {
+                "pgssub"
+            } else {
+                sidecar.format
+            };
             stream.delivery_url = Some(format!(
-                "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{}",
-                sidecar.index, sidecar.format
+                "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{extension}",
+                sidecar.index
             ));
             media_streams.push(stream);
         }
@@ -743,6 +759,8 @@ fn profile_allows_external_subtitles(
             "ass"
         } else if url.ends_with(".ssa") {
             "ssa"
+        } else if url.ends_with(".pgssub") || url.ends_with(".sup") {
+            "pgssub"
         } else {
             return Ok(false);
         };
