@@ -30,6 +30,11 @@ struct Args {
     #[arg(long)]
     state_dir: Option<PathBuf>,
 
+    /// Explicit read-only folder of optional fallback fonts for ASS clients.
+    /// Does not automatically read system fonts or existing media libraries.
+    #[arg(long)]
+    fallback_font_dir: Option<PathBuf>,
+
     /// Enable opt-in Jellyfin UDP discovery on port 7359 (requires LAN bind).
     #[arg(long, conflicts_with = "no_discover")]
     discover: bool,
@@ -244,12 +249,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     info!(%listening_address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
     let shutdown_requested = Arc::new(tokio::sync::Notify::new());
     let shutdown_notification = shutdown_requested.clone();
-    let server = axum::serve(
-        listener,
-        app::router(Arc::new(
-            app::AppState::with_auth_dir(id, state_for_auth).with_listen_addr(listening_address),
-        )),
-    )
+    let mut app_state =
+        app::AppState::with_auth_dir(id, state_for_auth).with_listen_addr(listening_address);
+    if let Some(fonts) = args.fallback_font_dir {
+        app_state = app_state.with_fallback_font_dir(fonts)?;
+    }
+    let server = axum::serve(listener, app::router(Arc::new(app_state)))
     .with_graceful_shutdown(async move {
         shutdown_signal().await;
         shutdown_notification.notify_one();
