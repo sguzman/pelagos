@@ -144,6 +144,23 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         negotiated["MediaSources"][0]["DefaultSubtitleStreamIndex"],
         index
     );
+    let incompatible = serde_json::json!({
+        "SubtitleStreamIndex": index,
+        "DeviceProfile": {
+            "DirectPlayProfiles": [{"Type":"Video","Container":"mkv","VideoCodec":"mpeg4"}],
+            "SubtitleProfiles": [{"Method":"External","Format":"srt"}]
+        }
+    });
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/Items/{id}/PlaybackInfo"))
+        .header("X-Emby-Token", token.as_str())
+        .header("Content-Type", "application/json")
+        .body(Body::from(incompatible.to_string())).unwrap();
+    assert_eq!(
+        app.clone().oneshot(request).await.unwrap().status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
 
     assert_eq!(
         send(&app, "GET", &url, None, &[]).await.status(),
@@ -180,6 +197,19 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         assert_eq!(
             response.headers()[header::CONTENT_LENGTH],
             expected.len().to_string()
+        );
+        let (start, end) = range.strip_prefix("bytes=").unwrap().split_once('-').unwrap();
+        let first = if start.is_empty() {
+            PGS.len() - expected.len()
+        } else {
+            start.parse::<usize>().unwrap()
+        };
+        let last = if end.is_empty() { PGS.len() - 1 } else {
+            end.parse::<usize>().unwrap()
+        };
+        assert_eq!(
+            response.headers()[header::CONTENT_RANGE],
+            format!("bytes {first}-{last}/{}", PGS.len())
         );
         let response_body = to_bytes(response.into_body(), 1024).await.unwrap();
         assert_eq!(response_body.as_ref(), expected.as_slice(), "{range}");
