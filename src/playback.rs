@@ -283,8 +283,7 @@ struct ExternalSubtitle {
 // primary code plus one short region/script subtag without arbitrary names.
 fn sidecar_language_tag(part: &str) -> Option<String> {
     let (primary, suffix) = part.split_once('-').unwrap_or((part, ""));
-    if !(2..=3).contains(&primary.len())
-        || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+    if !(2..=3).contains(&primary.len()) || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
     {
         return None;
     }
@@ -2179,11 +2178,9 @@ mod tests {
             .find(|stream| stream.language.as_deref() == Some("es"))
             .unwrap();
         assert!(spanish.is_default);
-        assert!(
-            subtitle.iter().any(|stream| {
-                stream.language.as_deref() == Some("ja") && stream.is_hearing_impaired
-            })
-        );
+        assert!(subtitle.iter().any(|stream| {
+            stream.language.as_deref() == Some("ja") && stream.is_hearing_impaired
+        }));
         assert!(subtitle.iter().any(|stream| {
             stream.language.as_deref() == Some("hi") && !stream.is_hearing_impaired
         }));
