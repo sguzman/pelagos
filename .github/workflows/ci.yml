@@ -21,14 +21,9 @@ jobs:
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Emit reproducible dependency resolution for future checked-in Cargo.lock
-        run: |
-          cargo generate-lockfile
-          echo PELAGOS_LOCKFILE_BEGIN
-          base64 -w0 Cargo.lock
-          echo
-          echo PELAGOS_LOCKFILE_END
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Verify committed dependency lock
+        run: test -s Cargo.lock
       - name: FFmpeg and FFprobe prerequisites
         run: |
           if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
@@ -42,10 +37,12 @@ jobs:
       - name: Tests
         env:
           PELAGOS_REQUIRE_FFMPEG: "1"
-        run: cargo test --all-targets
+        run: cargo test --locked --all-targets
       - name: Evidence-backed roadmap
-        run: cargo run --quiet --bin pelagos-roadmap -- --check
+        run: cargo run --locked --quiet --bin pelagos-roadmap -- --check
       - name: Pinned upstream source matrix
-        run: cargo run --quiet --bin pelagos-matrix -- --check
+        run: cargo run --locked --quiet --bin pelagos-matrix -- --check
+      - name: Lockfile immutability
+        run: git diff --exit-code -- Cargo.lock
       - name: Pinned controller route attributes
-        run: cargo run --quiet --bin pelagos-api-matrix -- --check
+        run: cargo run --locked --quiet --bin pelagos-api-matrix -- --check
