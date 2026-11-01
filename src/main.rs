@@ -255,11 +255,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         app_state = app_state.with_fallback_font_dir(fonts)?;
     }
     let server = axum::serve(listener, app::router(Arc::new(app_state)))
-    .with_graceful_shutdown(async move {
-        shutdown_signal().await;
-        shutdown_notification.notify_one();
-    })
-    .into_future();
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            shutdown_notification.notify_one();
+        })
+        .into_future();
     tokio::pin!(server);
     let outcome = tokio::select! {
         result = &mut server => result,
