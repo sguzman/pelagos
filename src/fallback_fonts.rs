@@ -171,6 +171,20 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
     Ok(listed)
 }
 
+// Jellyfin uses ordinal case-insensitive lookup for fallback font names.
+// An exact match takes precedence. Refuse ambiguous case-folded matches on
+// case-sensitive filesystems instead of unpredictably selecting a file.
+fn select_font(fonts: Vec<FontInfo>, requested: &str) -> Option<FontInfo> {
+    if let Some(exact) = fonts.iter().find(|font| font.name == requested) {
+        return Some(exact.clone());
+    }
+    let mut matching = fonts
+        .into_iter()
+        .filter(|font| font.name.eq_ignore_ascii_case(requested));
+    let first = matching.next()?;
+    matching.next().is_none().then_some(first)
+}
+
 async fn fallback_font_list(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -220,7 +234,7 @@ async fn serve_font(
     };
     let _permit = font_read_permit()?;
     let found = tokio::task::spawn_blocking(move || {
-        let Some(font) = available(&root)?.into_iter().find(|font| font.name == name) else {
+        let Some(font) = select_font(available(&root)?, &name) else {
             return Ok::<_, StatusCode>(None);
         };
         let Ok((file, _, size)) = streaming::open_confined(&root, Path::new(&name)) else {
@@ -292,6 +306,23 @@ pub fn router() -> Router<Arc<AppState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fallback_font_names_lookup_ignore_ascii_case_without_ambiguity() {
+        let fonts = vec![
+            FontInfo { name: "Family.ttf".to_owned(), size: 28, mime: "font/ttf" },
+            FontInfo { name: "Other.otf".to_owned(), size: 32, mime: "font/otf" },
+        ];
+        assert_eq!(select_font(fonts.clone(), "family.TTF").unwrap().name, "Family.ttf");
+        assert_eq!(select_font(fonts.clone(), "Other.otf").unwrap().name, "Other.otf");
+        assert!(select_font(fonts.clone(), "missing.ttf").is_none());
+        let ambiguous = vec![
+            FontInfo { name: "Face.ttf".to_owned(), size: 28, mime: "font/ttf" },
+            FontInfo { name: "FACE.TTF".to_owned(), size: 28, mime: "font/ttf" },
+        ];
+        assert!(select_font(ambiguous.clone(), "face.ttf").is_none());
+        assert_eq!(select_font(ambiguous, "Face.ttf").unwrap().name, "Face.ttf");
+    }
 
     #[test]
     fn inventory_fails_closed_before_unbounded_directory_enumeration() {
