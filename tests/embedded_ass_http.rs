@@ -274,7 +274,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         let segment = to_bytes(segment.into_body(), 65_536).await.unwrap();
         let text = std::str::from_utf8(&segment).unwrap();
         assert!(text.contains(caption));
-        assert!(text.starts_with("WEBVTT\\nX-TIMESTAMP-MAP="));
+        assert!(text.starts_with("WEBVTT\nX-TIMESTAMP-MAP="));
     }
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
