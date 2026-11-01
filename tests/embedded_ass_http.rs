@@ -63,8 +63,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         ])
         .arg(&subtitle)
         .args([
-            "-map", "0:v:0", "-map", "1:s:0",
-            "-c:v", "mpeg4", "-c:s", "ass", "-y",
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "ass", "-y",
         ])
         .arg(&movie)
         .output()
@@ -78,18 +77,14 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "native-ass-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "native-ass-viewer-password").unwrap();
-    let admin = auth::authenticate(
-        &state_dir, "admin", "native-ass-admin-password", "server"
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
-    let viewer = auth::authenticate(
-        &state_dir, "viewer", "native-ass-viewer-password", "server"
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
+    let admin = auth::authenticate(&state_dir, "admin", "native-ass-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let viewer = auth::authenticate(&state_dir, "viewer", "native-ass-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state_dir, "viewer", &root).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
@@ -120,10 +115,7 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     assert_eq!(embedded["IsExternal"], false);
     let index = embedded["Index"].as_i64().unwrap();
     let url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.ass");
-    assert_eq!(
-        embedded["DeliveryUrl"].as_str(),
-        Some(url.as_str())
-    );
+    assert_eq!(embedded["DeliveryUrl"].as_str(), Some(url.as_str()));
     assert_eq!(
         request(&app, "GET", &url, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -134,7 +126,10 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
         response.headers()[header::CONTENT_TYPE],
         "text/x-ass; charset=utf-8"
     );
-    assert_eq!(response.headers()[header::CACHE_CONTROL], "private, no-store");
+    assert_eq!(
+        response.headers()[header::CACHE_CONTROL],
+        "private, no-store"
+    );
     let length = response.headers()[header::CONTENT_LENGTH].clone();
     let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024 + 4096)
         .await
@@ -152,7 +147,11 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
     let srt = request(&app, "GET", &srt_url, Some(&viewer)).await;
     assert_eq!(srt.status(), StatusCode::OK);
     let srt_bytes = to_bytes(srt.into_body(), 65_536).await.unwrap();
-    assert!(std::str::from_utf8(&srt_bytes).unwrap().contains("Hello ASS"));
+    assert!(
+        std::str::from_utf8(&srt_bytes)
+            .unwrap()
+            .contains("Hello ASS")
+    );
     assert_eq!(
         request(
             &app,
