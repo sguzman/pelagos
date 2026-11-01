@@ -2666,7 +2666,9 @@ mod tests {
             negotiate_selected_subtitle_delivery(&native_profile, &mut source),
             Ok(())
         );
-        let ass = source.media_streams.iter()
+        let ass = source
+            .media_streams
+            .iter()
             .find(|stream| stream.stream_type == "Subtitle" && stream.index == 2)
             .unwrap();
         assert_eq!(ass.codec.as_deref(), Some("ass"));
