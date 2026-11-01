@@ -115,16 +115,15 @@ pub(crate) fn clip_vtt(
         }
         let timing = if first.contains(" --> ") {
             first
-        } else if !first.is_empty()
-            && first.len() <= 128
-            && !first.chars().any(char::is_control)
-        {
+        } else if !first.is_empty() && first.len() <= 128 && !first.chars().any(char::is_control) {
             lines.next()?.trim()
         } else {
             return None;
         };
         let (start, end_with_settings) = timing.split_once(" --> ")?;
-        let (end, settings) = end_with_settings.split_once(' ').unwrap_or((end_with_settings, ""));
+        let (end, settings) = end_with_settings
+            .split_once(' ')
+            .unwrap_or((end_with_settings, ""));
         if settings.len() > 128
             || !settings.split_whitespace().all(|setting| {
                 setting.starts_with("align:")
@@ -247,8 +246,24 @@ mod tests {
             result,
             b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 align:start\nHello!\n\n"
         );
-        assert!(clip_vtt(b"WEBVTT\n\nSTYLE\n::cue{color:red}\n\n", 0, 20_000_000, false).is_none());
-        assert!(clip_vtt(b"WEBVTT\n\nfoo\n00:01.000 --> 00:03.000 invalid:bar\nHi\n\n", 0, 20_000_000, false).is_none());
+        assert!(
+            clip_vtt(
+                b"WEBVTT\n\nSTYLE\n::cue{color:red}\n\n",
+                0,
+                20_000_000,
+                false
+            )
+            .is_none()
+        );
+        assert!(
+            clip_vtt(
+                b"WEBVTT\n\nfoo\n00:01.000 --> 00:03.000 invalid:bar\nHi\n\n",
+                0,
+                20_000_000,
+                false
+            )
+            .is_none()
+        );
     }
 
     #[test]
