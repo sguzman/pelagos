@@ -65,24 +65,14 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "subtitle-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "subtitle-viewer-password").unwrap();
-    let admin = auth::authenticate(
-        &state_dir,
-        "admin",
-        "subtitle-admin-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
-    let viewer = auth::authenticate(
-        &state_dir,
-        "viewer",
-        "subtitle-viewer-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
+    let admin = auth::authenticate(&state_dir, "admin", "subtitle-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let viewer = auth::authenticate(&state_dir, "viewer", "subtitle-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state_dir, "viewer", &root).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
@@ -110,9 +100,8 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         .find(|stream| stream["Type"] == "Subtitle" && stream["IsExternal"].as_bool() == Some(true))
         .expect("adjacent VTT subtitle is advertised");
     let index = subtitle["Index"].as_i64().unwrap();
-    let playlist_url = format!(
-        "/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2"
-    );
+    let playlist_url =
+        format!("/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
         request(&app, "GET", &playlist_url, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -123,7 +112,10 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         playlist.headers()[header::CONTENT_TYPE],
         "application/vnd.apple.mpegurl"
     );
-    assert_eq!(playlist.headers()[header::CACHE_CONTROL], "private, no-store");
+    assert_eq!(
+        playlist.headers()[header::CACHE_CONTROL],
+        "private, no-store"
+    );
     let bytes = to_bytes(playlist.into_body(), 65_536).await.unwrap();
     let manifest = std::str::from_utf8(&bytes).unwrap();
     assert!(manifest.starts_with("#EXTM3U\n"));
@@ -154,9 +146,7 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     let length = response.headers()[header::CONTENT_LENGTH].clone();
     let content = to_bytes(response.into_body(), 65_536).await.unwrap();
     let text = std::str::from_utf8(&content).unwrap();
-    assert!(text.starts_with(
-        "WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n"
-    ));
+    assert!(text.starts_with("WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\n"));
     assert!(text.contains("00:00:02.000 --> 00:00:03.000 align:start"));
     assert!(text.contains("Hello!"));
     assert_eq!(length.to_str().unwrap(), content.len().to_string());
