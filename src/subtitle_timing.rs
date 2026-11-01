@@ -81,10 +81,23 @@ fn write_stamp(ticks: u64) -> String {
 // Restrict the small supported grammar rather than reproducing malformed
 // settings in a generated VTT segment. Each setting may occur only once.
 fn cue_percent(value: &str) -> bool {
-    value
-        .strip_suffix('%')
-        .and_then(|digits| digits.parse::<u8>().ok())
-        .is_some_and(|percent| percent <= 100)
+    let Some(raw) = value.strip_suffix('%') else {
+        return false;
+    };
+    if raw.len() > 12 {
+        return false;
+    }
+    let (whole, fraction) = raw.split_once('.').unwrap_or((raw, ""));
+    if whole.is_empty()
+        || !whole.bytes().all(|digit| digit.is_ascii_digit())
+        || (raw.contains('.')
+            && (fraction.is_empty() || !fraction.bytes().all(|digit| digit.is_ascii_digit())))
+    {
+        return false;
+    }
+    raw.parse::<f64>()
+        .ok()
+        .is_some_and(|percent| percent <= 100.0)
 }
 
 fn supported_cue_settings(settings: &str) -> bool {
@@ -325,12 +338,12 @@ mod tests {
 
     #[test]
     fn cue_settings_accept_valid_positions_and_reject_malformed_values() {
-        let valid = b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000 align:start line:-2 position:50%,line-left size:80% vertical:rl\nCaption\n\n";
+        let valid = b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000 align:start line:-2 position:50.5%,line-left size:80.25% vertical:rl\nCaption\n\n";
         let window = clip_vtt(valid, 10_000_000, 30_000_000, false).unwrap();
         assert!(
             std::str::from_utf8(&window)
                 .unwrap()
-                .contains("position:50%,line-left")
+                .contains("position:50.5%,line-left")
         );
         assert_eq!(
             vtt_to_srt(&window).unwrap(),
@@ -342,6 +355,11 @@ mod tests {
             "align:start align:end",
             "line:nan",
             "size:101%",
+            "size:100.01%",
+            "size:1e2%",
+            "size:20.%",
+            "size:.5%",
+            "size:20.0.1%",
             "size:-1%",
             "position:30%,unknown",
             "vertical:down",
