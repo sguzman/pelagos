@@ -100,6 +100,11 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     let mut utf16_srt = vec![0xff, 0xfe];
     utf16_srt.extend(japanese_srt.encode_utf16().flat_map(u16::to_le_bytes));
     fs::write(root.join("Feature.ja.srt"), &utf16_srt).unwrap();
+    let korean_srt = "1\n00:00:01,000 --> 00:00:02,000\n안녕\n\n";
+    let mut utf16be_srt = vec![0xfe, 0xff];
+    utf16be_srt.extend(korean_srt.encode_utf16().flat_map(u16::to_be_bytes));
+    fs::write(root.join("Feature.ko.srt"), &utf16be_srt).unwrap();
+    fs::write(root.join("Feature.pt.srt"), [0xff, 0xfe, 0x00]).unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "subtitle-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "subtitle-viewer-password").unwrap();
@@ -251,6 +256,31 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     assert_eq!(head.headers()[header::CONTENT_LENGTH], length);
     assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
     assert_eq!(fs::read(root.join("Feature.ja.srt")).unwrap(), utf16_srt);
+    let korean_index = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Language"] == "ko" && stream["Type"] == "Subtitle")
+        .and_then(|stream| stream["Index"].as_i64())
+        .unwrap();
+    let korean_url = format!("/Videos/{id}/{id}/Subtitles/{korean_index}/Stream.srt");
+    let korean_response = request(&app, "GET", &korean_url, Some(&viewer)).await;
+    assert_eq!(korean_response.status(), StatusCode::OK);
+    let korean_bytes = to_bytes(korean_response.into_body(), 65_536).await.unwrap();
+    assert_eq!(korean_bytes.as_ref(), korean_srt.as_bytes());
+    assert_eq!(fs::read(root.join("Feature.ko.srt")).unwrap(), utf16be_srt);
+    let invalid_index = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Language"] == "pt" && stream["Type"] == "Subtitle")
+        .and_then(|stream| stream["Index"].as_i64())
+        .unwrap();
+    let invalid_url = format!("/Videos/{id}/{id}/Subtitles/{invalid_index}/Stream.srt");
+    assert_eq!(
+        request(&app, "GET", &invalid_url, Some(&viewer)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
     let playlist_url =
         format!("/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
