@@ -33,7 +33,7 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     let mut ttf = vec![0_u8; 28];
     ttf[..4].copy_from_slice(&[0, 1, 0, 0]);
     ttf[4..6].copy_from_slice(&1_u16.to_be_bytes());
-    let mut otf = vec![0_u8; 28];
+    let mut otf = vec![0_u8; 32];
     otf[..4].copy_from_slice(b"OTTO");
     otf[4..6].copy_from_slice(&1_u16.to_be_bytes());
     fs::write(root.join("Family.ttf"), &ttf).unwrap();
@@ -68,17 +68,15 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         to_bytes(none.into_body(), 64).await.unwrap().as_ref(),
         b"[]"
     );
-    assert_eq!(
-        request(
-            &disabled,
-            "GET",
-            "/FallbackFont/Fonts/Family.ttf",
-            Some(&token)
-        )
-        .await
-        .status(),
-        StatusCode::NOT_FOUND
-    );
+    let missing = request(
+        &disabled,
+        "GET",
+        "/FallbackFont/Fonts/Family.ttf",
+        Some(&token)
+    ).await;
+    assert_eq!(missing.status(), StatusCode::OK);
+    assert_eq!(missing.headers()[header::CONTENT_LENGTH], "0");
+    assert!(to_bytes(missing.into_body(), 64).await.unwrap().is_empty());
 
     assert!(
         AppState::with_auth_dir("server".to_owned(), state.clone())
@@ -110,12 +108,13 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
     let files: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
     assert_eq!(files.as_array().unwrap().len(), 2);
-    assert_eq!(files[0]["Name"], "Alternative.otf");
-    assert_eq!(files[0]["Size"], otf.len());
+    // Pinned Jellyfin v12.3 sorts by smaller font size before name.
+    assert_eq!(files[0]["Name"], "Family.ttf");
+    assert_eq!(files[0]["Size"], ttf.len());
     assert!(files[0]["DateCreated"].is_null());
     assert!(files[0]["DateModified"].is_null());
-    assert_eq!(files[1]["Name"], "Family.ttf");
-    assert_eq!(files[1]["Size"], ttf.len());
+    assert_eq!(files[1]["Name"], "Alternative.otf");
+    assert_eq!(files[1]["Size"], otf.len());
 
     for (filename, contents, mime) in [
         ("Family.ttf", ttf.as_slice(), "font/ttf"),
@@ -158,11 +157,23 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         "missing.ttf",
     ] {
         let uri = format!("/FallbackFont/Fonts/{name}");
-        assert_eq!(
-            request(&active, "GET", &uri, Some(&token)).await.status(),
-            StatusCode::NOT_FOUND,
-            "{name}"
-        );
+        let missing = request(&active, "GET", &uri, Some(&token)).await;
+        assert_eq!(missing.status(), StatusCode::OK, "{name}");
+        assert_eq!(missing.headers()[header::CONTENT_LENGTH], "0");
+        assert!(to_bytes(missing.into_body(), 64).await.unwrap().is_empty());
+    }
+    assert_eq!(
+        request(&active, "GET", "/FallbackFont/Fonts/trailing.ttf.", Some(&token))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    for name in ["Spoof.ttf", "missing.ttf"] {
+        let uri = format!("/FallbackFont/Fonts/{name}");
+        let head = request(&active, "HEAD", &uri, Some(&token)).await;
+        assert_eq!(head.status(), StatusCode::OK);
+        assert_eq!(head.headers()[header::CONTENT_LENGTH], "0");
+        assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
     }
     assert_eq!(fs::read(root.join("Family.ttf")).unwrap(), ttf);
     assert_eq!(fs::read(root.join("Alternative.otf")).unwrap(), otf);
