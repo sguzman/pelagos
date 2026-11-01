@@ -204,7 +204,9 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         } else {
             start.parse::<usize>().unwrap()
         };
-        let last = if end.is_empty() { PGS.len() - 1 } else {
+        let last = if start.is_empty() || end.is_empty() {
+            PGS.len() - 1
+        } else {
             end.parse::<usize>().unwrap()
         };
         assert_eq!(
