@@ -35,7 +35,7 @@ pub(crate) fn decode_text_subtitle(input: &[u8]) -> Option<String> {
         .ok()
 }
 
-fn parse_stamp(stamp: &str) -> Option<u64> {
+pub(crate) fn parse_stamp(stamp: &str) -> Option<u64> {
     let (clock, fraction) = stamp.split_once('.')?;
     if fraction.len() != 3 || !fraction.bytes().all(|digit| digit.is_ascii_digit()) {
         return None;
