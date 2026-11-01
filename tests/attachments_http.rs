@@ -35,9 +35,11 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     fs::create_dir_all(&root).unwrap();
     let font = temp.path().join("fixture.ttf");
     let nonfont = temp.path().join("not-a-font.bin");
+    let oversized = temp.path().join("oversized.ttf");
     let bytes = b"SYNTHETIC_FONT_ATTACHMENT_BYTES";
     fs::write(&font, bytes).unwrap();
     fs::write(&nonfont, b"ARBITRARY_NONFONT_PAYLOAD").unwrap();
+    fs::write(&oversized, vec![0_u8; 4 * 1024 * 1024 + 1]).unwrap();
     let movie = root.join("Feature.mkv");
     let output = Command::new("ffmpeg")
         .args([
@@ -60,7 +62,9 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
             "-attach",
         ])
         .arg(&nonfont)
-        .args(["-metadata:s:t:1", "mimetype=application/octet-stream", "-y"])
+        .args(["-metadata:s:t:1", "mimetype=application/octet-stream", "-attach"])
+        .arg(&oversized)
+        .args(["-metadata:s:t:2", "mimetype=application/x-truetype-font", "-y"])
         .arg(&movie)
         .output()
         .unwrap();
@@ -146,6 +150,13 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
         .await
         .status(),
         StatusCode::NOT_FOUND
+    );
+    // A probed but oversized font is never sent to a client and never
+    // written to a temporary directory by FFmpeg.
+    let too_big = format!("/Videos/{id}/{id}/Attachments/3");
+    assert_eq!(
+        request(&app, "GET", &too_big, Some(&viewer)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(fs::read(&movie).unwrap(), original);
     auth::revoke_library(&state_dir, "viewer", &root).unwrap();
