@@ -1648,54 +1648,55 @@ async fn serve_external_subtitle(
     }
     let (body, response_length) =
         if convert_to_vtt || convert_to_srt || convert_script || normalize_native_srt {
-        // Compute identical payload length for GET and HEAD; never touch
-        // or rewrite the user's adjacent subtitle file.
-        let mut bytes = Vec::new();
-        tokio::fs::File::from_std(opened)
-            .take(4 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-        if bytes.len() > 4 * 1024 * 1024 {
-            return Err(StatusCode::NOT_IMPLEMENTED);
-        }
-        let srt = if convert_script {
-            convert_script_sidecar_to_srt(state.ffmpeg_executable(), &bytes).await?
-        } else if normalize_native_srt
-            && (bytes.starts_with(&[0xff, 0xfe])
-                || bytes.starts_with(&[0xfe, 0xff])
-                || bytes.starts_with(&[0xef, 0xbb, 0xbf]))
-        {
-            crate::subtitle_timing::decode_text_subtitle(&bytes)
-                .ok_or(StatusCode::NOT_IMPLEMENTED)?
-                .into_bytes()
+            // Compute identical payload length for GET and HEAD; never touch
+            // or rewrite the user's adjacent subtitle file.
+            let mut bytes = Vec::new();
+            tokio::fs::File::from_std(opened)
+                .take(4 * 1024 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .await
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+            if bytes.len() > 4 * 1024 * 1024 {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            let srt = if convert_script {
+                convert_script_sidecar_to_srt(state.ffmpeg_executable(), &bytes).await?
+            } else if normalize_native_srt
+                && (bytes.starts_with(&[0xff, 0xfe])
+                    || bytes.starts_with(&[0xfe, 0xff])
+                    || bytes.starts_with(&[0xef, 0xbb, 0xbf]))
+            {
+                crate::subtitle_timing::decode_text_subtitle(&bytes)
+                    .ok_or(StatusCode::NOT_IMPLEMENTED)?
+                    .into_bytes()
+            } else {
+                bytes
+            };
+            let converted = if convert_to_srt {
+                crate::subtitle_timing::vtt_sidecar_to_srt(&srt)
+                    .ok_or(StatusCode::NOT_IMPLEMENTED)?
+            } else if format == "vtt" {
+                convert_srt_to_webvtt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
+            } else {
+                srt
+            };
+            let length = converted.len() as u64;
+            (
+                if head {
+                    Body::empty()
+                } else {
+                    Body::from(converted)
+                },
+                length,
+            )
         } else {
-            bytes
-        };
-        let converted = if convert_to_srt {
-            crate::subtitle_timing::vtt_sidecar_to_srt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
-        } else if format == "vtt" {
-            convert_srt_to_webvtt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
-        } else {
-            srt
-        };
-        let length = converted.len() as u64;
-        (
-            if head {
+            let body = if head {
                 Body::empty()
             } else {
-                Body::from(converted)
-            },
-            length,
-        )
-    } else {
-        let body = if head {
-            Body::empty()
-        } else {
-            Body::from_stream(ReaderStream::new(tokio::fs::File::from_std(opened)))
+                Body::from_stream(ReaderStream::new(tokio::fs::File::from_std(opened)))
+            };
+            (body, size)
         };
-        (body, size)
-    };
     // Sidecar decoding/reading can also span grant or source revision
     // changes. Revalidate before releasing even a previously opened file.
     reauthorize_video_source(state.clone(), headers, item, &source, &source_metadata).await?;
