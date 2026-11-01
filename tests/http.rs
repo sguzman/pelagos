@@ -60,6 +60,13 @@ async fn admin_page_contains_system_default_and_theme_controls() {
     assert!(html.contains("data-choice=\"light\""));
     assert!(html.contains("data-choice=\"dark\""));
     assert!(html.contains("let choice = [\"system\", \"light\", \"dark\"]"));
+    // Public status copy must distinguish implemented experimental APIs
+    // from unverified real-client compatibility and unfinished admin UI.
+    assert!(html.contains("no unmodified Smart TV client has been accepted"));
+    assert!(html.contains("Read-only indexing, FFprobe metadata"));
+    assert!(html.contains("Local account and session APIs are experimental"));
+    assert!(html.contains("This public page is status-only"));
+    assert!(!html.contains("Accounts and security-sensitive settings are not implemented"));
 }
 
 #[tokio::test]
