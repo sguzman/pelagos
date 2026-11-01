@@ -1318,7 +1318,9 @@ async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
     for extension in ["ass", "ssa"] {
         let unsupported = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.{extension}");
         assert_eq!(
-            request(&app, "GET", &unsupported, Some(&viewer), "").await.status(),
+            request(&app, "GET", &unsupported, Some(&viewer), "")
+                .await
+                .status(),
             StatusCode::NOT_IMPLEMENTED
         );
     }
