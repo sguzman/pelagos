@@ -105,14 +105,15 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     // establish the original style-script format.
     assert_eq!(stream["Codec"], "ass");
     let index = stream["Index"].as_i64().unwrap();
-    // Metadata must no longer advertise the false native ASS extension;
-    // the known SRT conversion remains the truthful default.
+    // FFprobe's codec is shared, but the script header confirms SSA v4.00.
+    let ssa = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.ssa");
     let srt = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
-    assert_eq!(stream["DeliveryUrl"].as_str(), Some(srt.as_str()));
+    assert_eq!(stream["DeliveryUrl"].as_str(), Some(ssa.as_str()));
     // Device format negotiation must not upgrade legacy SSA to a false
     // native ASS offer even though FFprobe calls its source codec "ass".
     for (format, expected) in [
         ("ass", StatusCode::NOT_IMPLEMENTED),
+        ("ssa", StatusCode::OK),
         ("srt", StatusCode::OK),
         ("webvtt", StatusCode::OK),
     ] {
@@ -144,7 +145,11 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
                 .iter()
                 .find(|stream| stream["Index"] == index)
                 .unwrap();
-            let extension = if format == "webvtt" { "vtt" } else { "srt" };
+            let extension = match format {
+                "webvtt" => "vtt",
+                "ssa" => "ssa",
+                _ => "srt",
+            };
             assert_eq!(
                 selected["DeliveryUrl"],
                 format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.{extension}")
@@ -161,6 +166,14 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
         request(&app, &ass, Some(&token)).await.status(),
         StatusCode::NOT_IMPLEMENTED
     );
+    let native = request(&app, &ssa, Some(&token)).await;
+    assert_eq!(native.status(), StatusCode::OK);
+    assert_eq!(native.headers()[header::CONTENT_TYPE], "text/x-ssa; charset=utf-8");
+    let native = to_bytes(native.into_body(), 65_536).await.unwrap();
+    let native_text = std::str::from_utf8(&native).unwrap();
+    assert!(native_text.contains("ScriptType: v4.00"));
+    assert!(!native_text.contains("ScriptType: v4.00+"));
+    assert!(native_text.contains("Hello SSA"));
     let response = request(&app, &srt, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
@@ -172,7 +185,7 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     assert_eq!(fs::read(&movie).unwrap(), original);
     auth::revoke_library(&state_dir, "viewer", &root).unwrap();
     assert_eq!(
-        request(&app, &ass, Some(&token)).await.status(),
+        request(&app, &ssa, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
 }
