@@ -73,6 +73,9 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
     );
     let original = fs::read(&movie).unwrap();
     catalog::index(&state_dir, &root).unwrap();
+    // The first account is an administrator; exercise library revocation
+    // with a distinct non-admin viewer, not the bootstrap owner.
+    auth::create_user(&state_dir, "admin", "legacy-ssa-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "legacy-ssa-viewer-password").unwrap();
     let token = auth::authenticate(&state_dir, "viewer", "legacy-ssa-viewer-password", "server")
         .unwrap()
