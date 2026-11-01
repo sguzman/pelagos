@@ -83,7 +83,9 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     let original = fs::read(&movie).unwrap();
     fs::write(
         root.join("Feature.en.vtt"),
-        b"WEBVTT\n\nintro\n00:00:01.000 --> 00:00:03.000 align:start\nHello!\n\n",
+        // Valid horizontal tabs around the cue arrow must survive native
+        // transport and convert consistently through SRT and HLS windows.
+        b"WEBVTT\n\nintro\n00:00:01.000\t-->\t00:00:03.000\talign:start\nHello!\n\n",
     )
     .unwrap();
     fs::write(
