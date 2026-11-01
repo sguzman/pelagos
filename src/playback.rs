@@ -311,7 +311,10 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
             {
                 continue;
             }
-            (if format == "vtt" { "vtt" } else { "srt" }, Some(language.to_ascii_lowercase()))
+            (
+                if format == "vtt" { "vtt" } else { "srt" },
+                Some(language.to_ascii_lowercase()),
+            )
         };
         if entry.file_type().is_ok_and(|kind| kind.is_file())
             && entry
@@ -364,7 +367,11 @@ fn source_from_probe(
     if kind == "video" {
         for sidecar in external_subtitles(file, result) {
             let language = sidecar.language.as_deref();
-            let codec = if sidecar.format == "vtt" { "webvtt" } else { "subrip" };
+            let codec = if sidecar.format == "vtt" {
+                "webvtt"
+            } else {
+                "subrip"
+            };
             let mut stream = mapped_stream(&serde_json::json!({
                 "index": sidecar.index,
                 "codec_type": "subtitle",

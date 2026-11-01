@@ -895,10 +895,16 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         StatusCode::NOT_FOUND
     );
     let vtt_url = streams[3]["DeliveryUrl"].as_str().unwrap();
-    assert_eq!(vtt_url, format!("/Videos/{item}/{item}/Subtitles/3/Stream.vtt"));
+    assert_eq!(
+        vtt_url,
+        format!("/Videos/{item}/{item}/Subtitles/3/Stream.vtt")
+    );
     let response = request(&app, "GET", vtt_url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "text/vtt; charset=utf-8");
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "text/vtt; charset=utf-8"
+    );
     assert_eq!(
         to_bytes(response.into_body(), 1_024)
             .await
