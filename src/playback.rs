@@ -26,10 +26,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    app::AppState, auth, auth_api, catalog, catalog_api,
-    pgs::{MAX_SUP_BYTES, header_valid as pgs_header_valid, packets_valid as pgs_packets_valid},
+    app::AppState,
+    auth, auth_api, catalog, catalog_api,
+    pgs::{MAX_SUP_BYTES, packets_valid as pgs_packets_valid},
     probe, streaming,
 };
+#[cfg(test)]
+use crate::pgs::header_valid as pgs_header_valid;
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::Command,
@@ -2691,12 +2694,10 @@ mod tests {
         // A valid empty graphical presentation followed by END. Dedicated
         // segment-shape cases live in the PGS parser's own regression suite.
         let mut good = vec![
-            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 11,
-            0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0,
+            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 11, 0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0,
+            0,
         ];
-        good.extend_from_slice(&[
-            b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x80, 0, 0,
-        ]);
+        good.extend_from_slice(&[b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x80, 0, 0]);
         assert!(pgs_packets_valid(
             &mut std::io::Cursor::new(&good),
             good.len() as u64,
