@@ -95,8 +95,7 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
     let filename = filename.to_owned();
     tokio::task::spawn_blocking(move || {
         use std::io::Read;
-        let (mut file, _, size) =
-            streaming::open_confined(&parent, Path::new(&filename))?;
+        let (mut file, _, size) = streaming::open_confined(&parent, Path::new(&filename))?;
         if size == 0 || size > 4 * 1024 * 1024 {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -385,9 +384,7 @@ async fn validate_hls_track_selection(
             }
             return Ok(Some(HlsSubtitle::Embedded(position as u8)));
         }
-        if let Some(filename) =
-            playback::hls_srt_sidecar_filename(source, &report, global_index)
-        {
+        if let Some(filename) = playback::hls_srt_sidecar_filename(source, &report, global_index) {
             let bytes = read_confined_srt(source, &filename).await?;
             let revision = SidecarRevision {
                 filename,
@@ -1263,7 +1260,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
-                sidecar: None,
+                    sidecar: None,
                 },
             )
             .await,
@@ -1291,7 +1288,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
-                sidecar: None,
+                    sidecar: None,
                 },
             )
             .await
@@ -1341,7 +1338,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
-                sidecar: None,
+                    sidecar: None,
                 },
             )
             .await,
@@ -1363,7 +1360,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
-                sidecar: None,
+                    sidecar: None,
                 },
             )
             .await,
@@ -1385,7 +1382,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
-                sidecar: None,
+                    sidecar: None,
                 },
             )
             .await,
@@ -1457,7 +1454,7 @@ mod tests {
             start_time_ticks: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
-                sidecar: None,
+            sidecar: None,
         };
         // Multiple synthetic entries use the same cache key; the most
         // recently used publication is now returned, rather than the one
@@ -1541,7 +1538,7 @@ mod tests {
             start_time_ticks: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
-                sidecar: None,
+            sidecar: None,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
