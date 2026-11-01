@@ -14,7 +14,10 @@ use axum::{
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, IF_RANGE, RANGE},
+        header::{
+            ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, IF_RANGE,
+            RANGE,
+        },
     },
     response::Response,
     routing::get,
@@ -509,15 +512,14 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
             continue;
         }
         if entry.file_type().is_ok_and(|kind| kind.is_file())
-            && entry
-                .metadata()
-                .is_ok_and(|meta| {
-                    meta.len() <= if format == "sup" {
+            && entry.metadata().is_ok_and(|meta| {
+                meta.len()
+                    <= if format == "sup" {
                         MAX_SUP_BYTES
                     } else {
                         4 * 1024 * 1024
                     }
-                })
+            })
         {
             names.push((
                 filename,
@@ -1722,14 +1724,7 @@ async fn serve_external_subtitle(
         let range = match range {
             Ok(range) => range,
             Err(()) => {
-                reauthorize_video_source(
-                    state,
-                    headers,
-                    item,
-                    &source,
-                    &source_metadata,
-                )
-                .await?;
+                reauthorize_video_source(state, headers, item, &source, &source_metadata).await?;
                 return pgs_invalid_range(size);
             }
         };
@@ -1757,14 +1752,12 @@ async fn serve_external_subtitle(
             CONTENT_TYPE,
             HeaderValue::from_static("application/octet-stream"),
         );
-        response.headers_mut().insert(
-            CACHE_CONTROL,
-            HeaderValue::from_static("private, no-store"),
-        );
-        response.headers_mut().insert(
-            ACCEPT_RANGES,
-            HeaderValue::from_static("bytes"),
-        );
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+        response
+            .headers_mut()
+            .insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
         response.headers_mut().insert(
             "x-content-type-options",
             HeaderValue::from_static("nosniff"),
@@ -2442,7 +2435,15 @@ async fn get_external_pgs(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "pgssub", headers, false, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "pgssub",
+        headers,
+        false,
+        query,
+    )
+    .await
 }
 
 async fn head_external_pgs(
@@ -2451,7 +2452,15 @@ async fn head_external_pgs(
     Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_response(state, (item, media_source, index, 0), "pgssub", headers, true, query).await
+    subtitle_response(
+        state,
+        (item, media_source, index, 0),
+        "pgssub",
+        headers,
+        true,
+        query,
+    )
+    .await
 }
 
 async fn get_timed_pgs(
