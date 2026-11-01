@@ -62,9 +62,17 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
             "-attach",
         ])
         .arg(&nonfont)
-        .args(["-metadata:s:t:1", "mimetype=application/octet-stream", "-attach"])
+        .args([
+            "-metadata:s:t:1",
+            "mimetype=application/octet-stream",
+            "-attach",
+        ])
         .arg(&oversized)
-        .args(["-metadata:s:t:2", "mimetype=application/x-truetype-font", "-y"])
+        .args([
+            "-metadata:s:t:2",
+            "mimetype=application/x-truetype-font",
+            "-y",
+        ])
         .arg(&movie)
         .output()
         .unwrap();
