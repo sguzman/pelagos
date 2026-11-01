@@ -283,7 +283,7 @@ async fn serve_font(
         let Some(font) = select_font(available(&root)?, &name) else {
             return Ok::<_, StatusCode>(None);
         };
-        let Ok((file, _, size)) = streaming::open_confined(&root, Path::new(&name)) else {
+        let Ok((file, _, size)) = streaming::open_confined(&root, Path::new(&font.name)) else {
             return Ok(None);
         };
         if size != font.size {
