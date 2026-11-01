@@ -34,6 +34,62 @@ pub(crate) fn font_mime(raw: &str) -> Option<&'static str> {
     }
 }
 
+/// Reject a Matroska attachment whose declared font MIME disagrees with
+/// the extracted binary header. This is a bounded container/header check,
+/// not a general font parser or a guarantee that an untrusted font is safe
+/// for client-side shaping/rendering.
+fn font_header_matches(mime: &str, bytes: &[u8]) -> bool {
+    if bytes.len() < 12 {
+        return false;
+    }
+    let sfnt = || {
+        if bytes.len() < 12 {
+            return false;
+        }
+        let tables = usize::from(u16::from_be_bytes([bytes[4], bytes[5]]));
+        tables > 0
+            && tables <= 256
+            && 12_usize
+                .checked_add(16 * tables)
+                .is_some_and(|directory| directory <= bytes.len())
+    };
+    match mime {
+        "font/ttf" => {
+            matches!(&bytes[..4], b"\\x00\\x01\\x00\\x00" | b"true" | b"typ1") && sfnt()
+        }
+        "font/otf" => {
+            (matches!(&bytes[..4], b"OTTO" | b"\\x00\\x01\\x00\\x00") || &bytes[..4] == b"true")
+                && sfnt()
+        }
+        "font/woff" => {
+            if bytes.len() < 44 || &bytes[..4] != b"wOFF" {
+                return false;
+            }
+            let declared = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
+            let tables = usize::from(u16::from_be_bytes([bytes[12], bytes[13]]));
+            let uncompressed = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+            tables > 0
+                && tables <= 256
+                && uncompressed >= 12
+                && declared == bytes.len()
+                && 44 + 20 * tables < bytes.len()
+        }
+        "font/woff2" => {
+            if bytes.len() <= 48 || &bytes[..4] != b"wOF2" {
+                return false;
+            }
+            let declared = u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as usize;
+            let tables = usize::from(u16::from_be_bytes([bytes[12], bytes[13]]));
+            let uncompressed = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+            tables > 0
+                && tables <= 256
+                && uncompressed >= 12
+                && declared == bytes.len()
+        }
+        _ => false,
+    }
+}
+
 async fn dump_font(ffmpeg: &Path, file: &Path, index: i64) -> Result<Vec<u8>, StatusCode> {
     let semaphore = FONT_WORKERS
         .get_or_init(|| Arc::new(Semaphore::new(2)))
@@ -120,6 +176,9 @@ async fn serve(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let data = dump_font(state.ffmpeg_executable(), &file, index).await?;
+    if !font_header_matches(mime, &data) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     playback::reauthorize_video_source(state, headers, item, &file, &revision).await?;
     let length = data.len();
     let mut response = Response::new(if head {
@@ -171,6 +230,45 @@ pub fn router() -> Router<Arc<AppState>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn font_header_requires_matching_bounded_container_signature() {
+        let mut ttf = vec![0_u8; 28];
+        ttf[0..4].copy_from_slice(&[0, 1, 0, 0]);
+        ttf[4..6].copy_from_slice(&1_u16.to_be_bytes());
+        assert!(font_header_matches("font/ttf", &ttf));
+        assert!(font_header_matches("font/otf", &ttf));
+        assert!(!font_header_matches("font/woff", &ttf));
+        assert!(!font_header_matches("font/woff2", &ttf));
+        assert!(!font_header_matches("font/ttf", b"not actually a font"));
+        assert!(!font_header_matches("font/ttf", &ttf[..27]));
+        ttf[4..6].copy_from_slice(&257_u16.to_be_bytes());
+        assert!(!font_header_matches("font/ttf", &ttf));
+        let mut otf = vec![0_u8; 28];
+        otf[0..4].copy_from_slice(b"OTTO");
+        otf[4..6].copy_from_slice(&1_u16.to_be_bytes());
+        assert!(font_header_matches("font/otf", &otf));
+        assert!(!font_header_matches("font/ttf", &otf));
+
+        let mut woff = vec![0_u8; 65];
+        woff[0..4].copy_from_slice(b"wOFF");
+        woff[8..12].copy_from_slice(&65_u32.to_be_bytes());
+        woff[12..14].copy_from_slice(&1_u16.to_be_bytes());
+        woff[16..20].copy_from_slice(&28_u32.to_be_bytes());
+        assert!(font_header_matches("font/woff", &woff));
+        assert!(!font_header_matches("font/woff2", &woff));
+        woff[8..12].copy_from_slice(&64_u32.to_be_bytes());
+        assert!(!font_header_matches("font/woff", &woff));
+
+        let mut woff2 = vec![0_u8; 49];
+        woff2[0..4].copy_from_slice(b"wOF2");
+        woff2[8..12].copy_from_slice(&49_u32.to_be_bytes());
+        woff2[12..14].copy_from_slice(&1_u16.to_be_bytes());
+        woff2[16..20].copy_from_slice(&28_u32.to_be_bytes());
+        assert!(font_header_matches("font/woff2", &woff2));
+        assert!(!font_header_matches("font/woff", &woff2));
+        assert!(!font_header_matches("font/woff2", &woff2[..48]));
+    }
+
     #[test]
     fn serves_only_explicit_font_types() {
         assert_eq!(font_mime("application/x-truetype-font"), Some("font/ttf"));
