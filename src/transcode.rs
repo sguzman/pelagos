@@ -476,9 +476,17 @@ async fn transcode_mpegts_inner(
         if let Some(index) = burn_in_subtitle {
             let dir = burn_in_dir.as_ref().expect("subtitle directory exists");
             command.current_dir(dir.path());
-            command
-                .arg("-vf")
-                .arg(format!("subtitles=input.mkv:si={index}"));
+            // Input-side -ss resets video timestamps. Restore the original
+            // validated media time for libass, then return to a zero-based
+            // output timeline for independently decodable MPEG-TS windows.
+            let overlay = match window {
+                Some(window) if window.start_seconds > 0.0 => format!(
+                    "setpts=PTS+{:.3}/TB,subtitles=input.mkv:si={index},setpts=PTS-STARTPTS",
+                    window.start_seconds
+                ),
+                _ => format!("subtitles=input.mkv:si={index}"),
+            };
+            command.arg("-vf").arg(overlay);
         }
         command
             .arg("-f")
@@ -748,7 +756,7 @@ mod tests {
         let sidecar = temp.path().join("synthetic.srt");
         stdfs::write(
             &sidecar,
-            b"1\n00:00:00,200 --> 00:00:01,800\nPELAGOS SUBTITLE BURN IN\n\n",
+            b"1\n00:00:00,200 --> 00:00:01,800\nPELAGOS SUBTITLE BURN IN\n\n2\n00:00:02,200 --> 00:00:03,500\nPELAGOS SEEKED SUBTITLE\n\n",
         )
         .unwrap();
         let fixture = Command::new("ffmpeg")
@@ -760,7 +768,7 @@ mod tests {
                 "-f",
                 "lavfi",
                 "-i",
-                "color=c=black:s=320x128:r=5:d=2",
+                "color=c=black:s=320x128:r=5:d=4",
                 "-f",
                 "srt",
                 "-i",
@@ -798,10 +806,15 @@ mod tests {
             .unwrap();
         assert!(plain_size >= 188 && burned_size >= 188);
         assert_eq!(stdfs::read(&burned).unwrap().len() as u64, burned_size);
+        let burned_seek = temp.path().join("burned-seek.ts");
+        controller
+            .try_run_window_with_burn_in(&source, &burned_seek, 2.0, 1.5, 0)
+            .await
+            .unwrap();
         assert_eq!(stdfs::read(&source).unwrap(), original);
 
         let mut frames = Vec::new();
-        for output in [&plain, &burned] {
+        for output in [&plain, &burned, &burned_seek] {
             let decoded = Command::new("ffmpeg")
                 .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
                 .arg(output)
@@ -828,6 +841,7 @@ mod tests {
         let above_black = |pixels: &[u8]| pixels.iter().filter(|pixel| **pixel > 80).count();
         assert_ne!(frames[0], frames[1]);
         assert!(above_black(&frames[1]) > above_black(&frames[0]) + 20);
+        assert!(above_black(&frames[2]) > above_black(&frames[0]) + 20);
 
         let invalid = temp.path().join("invalid.ts");
         let rejected = controller
