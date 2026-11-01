@@ -239,6 +239,9 @@ struct PlaylistQuery {
     audio_codec: Option<String>,
     video_codec: Option<String>,
     require_avc: Option<bool>,
+    audio_stream_index: Option<i64>,
+    video_stream_index: Option<i64>,
+    subtitle_stream_index: Option<i64>,
 }
 
 /// Recognize explicit pinned v12.3 codec/container constraints without
@@ -259,6 +262,48 @@ fn validate_hls_output_request(query: &PlaylistQuery, kind: &str) -> Result<(), 
         || (query.require_avc == Some(true) && kind != "video")
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    Ok(())
+}
+
+/// FFmpeg's fixed `0:v:0?` and `0:a:0?` stream maps can only
+/// honor explicit stream IDs matching the first input track of that type.
+/// Embedded subtitles are always omitted by this narrow HLS pipeline.
+async fn validate_hls_track_selection(
+    state: &AppState,
+    source: &Path,
+    query: &PlaylistQuery,
+    kind: &str,
+) -> Result<(), StatusCode> {
+    if query.subtitle_stream_index.is_some_and(|index| index != -1)
+        || (kind == "audio" && query.video_stream_index.is_some())
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    if query.audio_stream_index.is_none() && query.video_stream_index.is_none() {
+        return Ok(());
+    }
+    let report = crate::probe::probe(
+        source,
+        state.probe_executable(),
+        crate::probe::DEFAULT_TIMEOUT,
+    )
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    for (stream_kind, requested) in [
+        ("audio", query.audio_stream_index),
+        ("video", query.video_stream_index),
+    ] {
+        if let Some(index) = requested {
+            let first = report
+                .streams
+                .iter()
+                .find(|stream| stream["codec_type"] == stream_kind)
+                .and_then(|stream| stream["index"].as_i64());
+            if first != Some(index) {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+        }
     }
     Ok(())
 }
@@ -375,6 +420,7 @@ async fn generate_hls_playlist(
     if kind != expected_kind {
         return Err(StatusCode::NOT_FOUND);
     }
+    validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
     let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;

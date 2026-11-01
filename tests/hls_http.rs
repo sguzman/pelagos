@@ -640,6 +640,31 @@ async fn audio_hls_routes_are_token_scoped_and_deliver_probeable_transport() {
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = text_body(master_response).await;
     assert_playlist_head(&app, &master_route, &listener, master.len()).await;
+    assert_eq!(
+        text_body(
+            request(
+                &app,
+                "GET",
+                &format!("{master_route}&audioStreamIndex=0&subtitleStreamIndex=-1"),
+                Some(&listener),
+            )
+            .await,
+        )
+        .await,
+        master
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("{master_route}&videoStreamIndex=0"),
+            Some(&listener),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+
     assert!(master.contains("#EXT-X-STREAM-INF:BANDWIDTH="));
     let media_name = master
         .lines()
@@ -1211,6 +1236,32 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
                 "GET",
                 &format!("{route}&{invalid_options}"),
                 Some(&alice)
+            )
+            .await
+            .status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
+    // The encoder maps the first input video/audio streams and drops
+    // subtitles. Exact matching indices can be accepted without pretending
+    // to support arbitrary stream selection.
+    let selected = format!("{route}&videoStreamIndex=0&audioStreamIndex=1&subtitleStreamIndex=-1");
+    assert_eq!(
+        text_body(request(&app, "GET", &selected, Some(&alice)).await).await,
+        alice_master
+    );
+    for unsupported_selection in [
+        "videoStreamIndex=1",
+        "audioStreamIndex=0",
+        "audioStreamIndex=-1",
+        "subtitleStreamIndex=2",
+    ] {
+        assert_eq!(
+            request(
+                &app,
+                "GET",
+                &format!("{route}&{unsupported_selection}"),
+                Some(&alice),
             )
             .await
             .status(),
