@@ -3,6 +3,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     sync::Arc,
+    time::Duration,
 };
 
 use clap::{Parser, Subcommand};
@@ -222,14 +223,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         );
     }
     info!(%listening_address, "Pelagos listening (pre-alpha, not yet a usable Jellyfin replacement)");
-    let outcome = axum::serve(
+    let shutdown_requested = Arc::new(tokio::sync::Notify::new());
+    let shutdown_notification = shutdown_requested.clone();
+    let server = axum::serve(
         listener,
         app::router(Arc::new(
             app::AppState::with_auth_dir(id, state_for_auth).with_listen_addr(listening_address),
         )),
     )
-    .with_graceful_shutdown(shutdown_signal())
-    .await;
+    .with_graceful_shutdown(async move {
+        shutdown_signal().await;
+        shutdown_notification.notify_one();
+    });
+    tokio::pin!(server);
+    let outcome = tokio::select! {
+        result = &mut server => result,
+        _ = shutdown_requested.notified() => {
+            // Slow or abandoned clients cannot hold the daemon forever
+            // after an authorized process shutdown signal.
+            match tokio::time::timeout(Duration::from_secs(30), &mut server).await {
+                Ok(result) => result,
+                Err(_) => Err(io::Error::other("HTTP graceful shutdown exceeded 30 seconds")),
+            }
+        }
+    };
     if let Some(task) = discovery_task {
         task.abort();
         let _ = task.await;
