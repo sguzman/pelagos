@@ -218,9 +218,11 @@ impl TranscodeController {
             output,
             self.deadline,
             self.max_bytes.min(remaining_bytes),
-            quality,
-            Some(window),
-            None,
+            EncoderOptions {
+                quality,
+                window: Some(window),
+                burn_in_subtitle: None,
+            },
         )
         .await
     }
@@ -256,9 +258,11 @@ impl TranscodeController {
             output,
             self.deadline,
             self.max_bytes,
-            None,
-            Some(window),
-            Some(subtitle_index),
+            EncoderOptions {
+                window: Some(window),
+                burn_in_subtitle: Some(subtitle_index),
+                ..EncoderOptions::default()
+            },
         )
         .await
     }
@@ -273,6 +277,15 @@ impl TranscodeController {
         )
         .await
     }
+}
+
+/// Internal, validated FFmpeg encoder options. Grouping keeps all
+/// transport call sites on a single fixed-argument process interface.
+#[derive(Debug, Clone, Copy, Default)]
+struct EncoderOptions {
+    quality: Option<MpegTsQuality>,
+    window: Option<TranscodeWindow>,
+    burn_in_subtitle: Option<u8>,
 }
 
 /// A bounded seeking window, never constructed from untrusted FFmpeg strings.
@@ -317,7 +330,12 @@ pub async fn transcode_mpegts(
     max_bytes: u64,
 ) -> io::Result<u64> {
     transcode_mpegts_inner(
-        executable, source, output, deadline, max_bytes, None, None, None,
+        executable,
+        source,
+        output,
+        deadline,
+        max_bytes,
+        EncoderOptions::default(),
     )
     .await
 }
@@ -344,9 +362,10 @@ pub async fn transcode_mpegts_with_quality(
         output,
         deadline,
         max_bytes,
-        Some(quality),
-        None,
-        None,
+        EncoderOptions {
+            quality: Some(quality),
+            ..EncoderOptions::default()
+        },
     )
     .await
 }
@@ -357,10 +376,13 @@ async fn transcode_mpegts_inner(
     output: &Path,
     deadline: Duration,
     max_bytes: u64,
-    quality: Option<MpegTsQuality>,
-    window: Option<TranscodeWindow>,
-    burn_in_subtitle: Option<u8>,
+    options: EncoderOptions,
 ) -> io::Result<u64> {
+    let EncoderOptions {
+        quality,
+        window,
+        burn_in_subtitle,
+    } = options;
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
