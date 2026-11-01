@@ -107,7 +107,7 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         .as_array()
         .unwrap()
         .iter()
-        .find(|stream| stream["Type"] == "Subtitle" && stream["IsExternal"] == true)
+        .find(|stream| stream["Type"] == "Subtitle" && stream["IsExternal"].as_bool() == Some(true))
         .expect("adjacent VTT subtitle is advertised");
     let index = subtitle["Index"].as_i64().unwrap();
     let playlist_url = format!(
@@ -128,7 +128,10 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     let manifest = std::str::from_utf8(&bytes).unwrap();
     assert!(manifest.starts_with("#EXTM3U\n"));
     assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
-    assert!(!manifest.contains(&viewer), "no session token in HLS URLs");
+    assert!(
+        !manifest.contains(viewer.as_str()),
+        "no session token in HLS URLs"
+    );
     let segments = manifest
         .lines()
         .filter(|line| line.starts_with("stream.vtt?"))
