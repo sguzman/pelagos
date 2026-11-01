@@ -337,7 +337,10 @@ mod tests {
         split_run.extend(packet(0x15, &[0, 2, 0, 0, 0x83]));
         split_run.extend(packet(0x15, &[0, 2, 0, 0x40, 7]));
         split_run.extend(packet(0x80, &[]));
-        assert!(packets_valid(&mut split_run.as_slice(), split_run.len() as u64));
+        assert!(packets_valid(
+            &mut split_run.as_slice(),
+            split_run.len() as u64
+        ));
         // Correct fragment sizes cannot disguise a dangling RLE escape.
         let mut dangling_run = packet(0x15, &[0, 3, 0, 0x80, 0, 0, 6, 0, 3, 0, 1, 0]);
         dangling_run.extend(packet(0x15, &[0, 3, 0, 0x40, 0x83]));
