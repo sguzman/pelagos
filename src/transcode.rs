@@ -714,6 +714,103 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn embedded_text_subtitle_burn_in_modifies_video_pixels_when_ci_requires_ffmpeg() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("name:comma,[quotes]' video.mkv");
+        let sidecar = temp.path().join("synthetic.srt");
+        stdfs::write(
+            &sidecar,
+            b"1\n00:00:00,200 --> 00:00:01,800\nPELAGOS SUBTITLE BURN IN\n\n",
+        )
+        .unwrap();
+        let fixture = Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=320x128:r=5:d=2",
+                "-f",
+                "srt",
+                "-i",
+            ])
+            .arg(&sidecar)
+            .args([
+                "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s",
+                "srt", "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "fixture FFmpeg failed: {}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+        let controller =
+            TranscodeController::new(PathBuf::from("ffmpeg"), 1, Duration::from_secs(25), 8 * 1024 * 1024)
+                .unwrap();
+        let plain = temp.path().join("plain.ts");
+        let burned = temp.path().join("burned.ts");
+        let plain_size = controller
+            .try_run_window(&source, &plain, 0.0, 1.5)
+            .await
+            .unwrap();
+        let burned_size = controller
+            .try_run_window_with_burn_in(&source, &burned, 0.0, 1.5, 0)
+            .await
+            .unwrap();
+        assert!(plain_size >= 188 && burned_size >= 188);
+        assert_eq!(stdfs::read(&burned).unwrap().len() as u64, burned_size);
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+
+        let mut frames = Vec::new();
+        for output in [&plain, &burned] {
+            let decoded = Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-ss", "0.7", "-i"])
+                .arg(output)
+                .args([
+                    "-frames:v", "1", "-vf", "format=gray", "-f", "rawvideo", "pipe:1",
+                ])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "decode FFmpeg failed: {}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 320 * 128);
+            frames.push(decoded.stdout);
+        }
+        let above_black = |pixels: &[u8]| pixels.iter().filter(|pixel| **pixel > 80).count();
+        assert!(above_black(&frames[1]) > above_black(&frames[0]) + 100);
+
+        let invalid = temp.path().join("invalid.ts");
+        let rejected = controller
+            .try_run_window_with_burn_in(&source, &invalid, 0.0, 1.5, 32)
+            .await
+            .unwrap_err();
+        assert_eq!(rejected.kind(), io::ErrorKind::InvalidInput);
+        assert!(!invalid.exists());
+        let missing = temp.path().join("no-such-track.ts");
+        let error = controller
+            .try_run_window_with_burn_in(&source, &missing, 0.0, 1.5, 1)
+            .await
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+        assert!(!missing.exists());
+    }
+
+    #[tokio::test]
     async fn semaphore_limits_concurrent_jobs_without_spawning_queued_outputs() {
         let (_temp, executable, source, first_output) = fixture("sleep 1; printf 'done'");
         let second_output = first_output.with_file_name("second.ts");
