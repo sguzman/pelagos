@@ -58,6 +58,7 @@ struct Published {
     target_seconds: u32,
     start_time_ticks: u64,
     rendition_count: u8,
+    subtitle_stream_index: Option<i64>,
     private_root: PathBuf,
     main_playlist: String,
     master_playlist: String,
@@ -81,6 +82,7 @@ struct CacheLookup<'a> {
     target_seconds: u32,
     start_time_ticks: u64,
     rendition_count: u8,
+    subtitle_stream_index: Option<i64>,
 }
 
 /// Small private LRU cache; segment access promotes active publications and
@@ -160,6 +162,7 @@ impl HlsRegistry {
                 && entry.target_seconds == query.target_seconds
                 && entry.start_time_ticks == query.start_time_ticks
                 && entry.rendition_count == query.rendition_count
+                && entry.subtitle_stream_index == query.subtitle_stream_index
         })?;
         let entry = entries.remove(index)?;
         entries.push_back(entry.clone());
@@ -266,22 +269,27 @@ fn validate_hls_output_request(query: &PlaylistQuery, kind: &str) -> Result<(), 
     Ok(())
 }
 
-/// FFmpeg's fixed `0:v:0?` and `0:a:0?` stream maps can only
-/// honor explicit stream IDs matching the first input track of that type.
-/// Embedded subtitles are always omitted by this narrow HLS pipeline.
+/// The fixed FFmpeg maps honor only the first audio/video tracks.
+/// An explicitly selected global subtitle stream ID is translated to
+/// FFmpeg's *subtitle-relative* "si" filter position. Only bounded embedded
+/// ASS/SubRip text can be burned in; graphical tracks and other layouts
+/// fail closed instead of silently omitting the chosen subtitles.
 async fn validate_hls_track_selection(
     state: &AppState,
     source: &Path,
     query: &PlaylistQuery,
     kind: &str,
-) -> Result<(), StatusCode> {
-    if query.subtitle_stream_index.is_some_and(|index| index != -1)
-        || (kind == "audio" && query.video_stream_index.is_some())
+) -> Result<Option<u8>, StatusCode> {
+    if (kind == "audio" && query.video_stream_index.is_some())
+        || (kind != "video" && query.subtitle_stream_index.is_some_and(|index| index != -1))
     {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    if query.audio_stream_index.is_none() && query.video_stream_index.is_none() {
-        return Ok(());
+    if query.audio_stream_index.is_none()
+        && query.video_stream_index.is_none()
+        && query.subtitle_stream_index.is_none_or(|index| index == -1)
+    {
+        return Ok(None);
     }
     let report = crate::probe::probe(
         source,
@@ -305,7 +313,27 @@ async fn validate_hls_track_selection(
             }
         }
     }
-    Ok(())
+    if let Some(global_index) = query.subtitle_stream_index.filter(|index| *index >= 0) {
+        let track = report
+            .streams
+            .iter()
+            .filter(|stream| stream["codec_type"] == "subtitle")
+            .enumerate()
+            .find(|(_, stream)| stream["index"].as_i64() == Some(global_index));
+        let Some((position, stream)) = track else {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        };
+        if position > 31
+            || !matches!(stream["codec_name"].as_str(), Some("subrip" | "ass" | "ssa"))
+        {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        return Ok(Some(position as u8));
+    }
+    if query.subtitle_stream_index.is_some_and(|index| index != -1) {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    Ok(None)
 }
 
 async fn video_main(
@@ -420,7 +448,12 @@ async fn generate_hls_playlist(
     if kind != expected_kind {
         return Err(StatusCode::NOT_FOUND);
     }
-    validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
+    let burn_in_subtitle =
+        validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
+    if burn_in_subtitle.is_some() && rendition_count > 1 {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let selected_index = query.subtitle_stream_index.filter(|index| *index >= 0);
     let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -437,6 +470,7 @@ async fn generate_hls_playlist(
         target_seconds,
         start_time_ticks,
         rendition_count,
+        subtitle_stream_index: selected_index,
     };
     if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
@@ -601,6 +635,7 @@ async fn generate_hls_playlist(
             target_seconds,
             start_time_ticks,
             rendition_count,
+            subtitle_stream_index: selected_index,
             private_root,
             main_playlist: String::new(),
             master_playlist,
@@ -612,15 +647,28 @@ async fn generate_hls_playlist(
         registry.publish(publication);
         return Ok(response);
     }
-    let artifact = hls::generate_segmented_vod_from(
-        &registry.controller,
-        state.probe_executable(),
-        &source,
-        &private_root.join("bundle"),
-        target_seconds,
-        start_time_ticks as f64 / 10_000_000.0,
-    )
-    .await
+    let artifact = if let Some(index) = burn_in_subtitle {
+        hls::generate_segmented_vod_with_burn_in_from(
+            &registry.controller,
+            state.probe_executable(),
+            &source,
+            &private_root.join("bundle"),
+            target_seconds,
+            start_time_ticks as f64 / 10_000_000.0,
+            index,
+        )
+        .await
+    } else {
+        hls::generate_segmented_vod_from(
+            &registry.controller,
+            state.probe_executable(),
+            &source,
+            &private_root.join("bundle"),
+            target_seconds,
+            start_time_ticks as f64 / 10_000_000.0,
+        )
+        .await
+    }
     .map_err(|err| match err.kind() {
         io::ErrorKind::WouldBlock => StatusCode::TOO_MANY_REQUESTS,
         io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
@@ -671,6 +719,7 @@ async fn generate_hls_playlist(
         target_seconds,
         start_time_ticks,
         rendition_count,
+        subtitle_stream_index: selected_index,
         private_root,
         main_playlist: playlist,
         master_playlist,
@@ -1110,6 +1159,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     rendition_count: 1,
+                    subtitle_stream_index: None,
                 },
             )
             .await,
@@ -1136,6 +1186,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     rendition_count: 1,
+                    subtitle_stream_index: None,
                 },
             )
             .await
@@ -1184,6 +1235,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     rendition_count: 1,
+                    subtitle_stream_index: None,
                 },
             )
             .await,
@@ -1204,6 +1256,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     rendition_count: 1,
+                    subtitle_stream_index: None,
                 },
             )
             .await,
@@ -1224,6 +1277,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     rendition_count: 1,
+                    subtitle_stream_index: None,
                 },
             )
             .await,
@@ -1258,6 +1312,7 @@ mod tests {
                 target_seconds: 2,
                 start_time_ticks: 0,
                 rendition_count: 1,
+                    subtitle_stream_index: None,
                 private_root: root,
                 main_playlist: String::new(),
                 master_playlist: String::new(),
@@ -1292,6 +1347,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             rendition_count: 1,
+                    subtitle_stream_index: None,
         };
         // Multiple synthetic entries use the same cache key; the most
         // recently used publication is now returned, rather than the one
@@ -1362,6 +1418,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             rendition_count: 1,
+                    subtitle_stream_index: None,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
