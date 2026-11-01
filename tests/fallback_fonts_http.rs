@@ -90,6 +90,16 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
             .with_fallback_font_dir(temp.path().join("missing"))
             .is_err()
     );
+    #[cfg(unix)]
+    {
+        let link = temp.path().join("font-link");
+        std::os::unix::fs::symlink(&root, &link).unwrap();
+        assert!(
+            AppState::with_auth_dir("server".to_owned(), state.clone())
+                .with_fallback_font_dir(link)
+                .is_err()
+        );
+    }
     let active = app::router(Arc::new(
         AppState::with_auth_dir("server".to_owned(), state.clone())
             .with_fallback_font_dir(root.clone())
