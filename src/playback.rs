@@ -2433,11 +2433,66 @@ async fn head_subtitle_segment(
     .await
 }
 
+// The native graphical PGS route intentionally does not decode bitmap
+// frames; both SUP and the Jellyfin codec-shaped PGSSUB URL resolve to the
+// same authenticated, bounded raw-byte representation.
+async fn get_external_pgs(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "pgssub", headers, false, query).await
+}
+
+async fn head_external_pgs(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, (item, media_source, index, 0), "pgssub", headers, true, query).await
+}
+
+async fn get_timed_pgs(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "pgssub", headers, false, query).await
+}
+
+async fn head_timed_pgs(
+    State(state): State<Arc<AppState>>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    subtitle_response(state, route, "pgssub", headers, true, query).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
             "/Items/{item_id}/PlaybackInfo",
             get(get_playback).post(post_playback),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.pgssub",
+            get(get_external_pgs).head(head_external_pgs),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.sup",
+            get(get_external_pgs).head(head_external_pgs),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.pgssub",
+            get(get_timed_pgs).head(head_timed_pgs),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/{start_time_ticks}/Stream.sup",
+            get(get_timed_pgs).head(head_timed_pgs),
         )
         .route(
             "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.srt",
