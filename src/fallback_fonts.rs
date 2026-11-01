@@ -266,6 +266,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn inventory_fails_closed_before_unbounded_directory_enumeration() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(available(root.path()).unwrap().is_empty());
+        for index in 0..=MAX_DIRECTORY_ENTRIES {
+            std::fs::write(root.path().join(format!("unrelated-{index:03}.txt")), b"x")
+                .unwrap();
+        }
+        assert!(matches!(
+            available(root.path()),
+            Err(StatusCode::NOT_IMPLEMENTED)
+        ));
+    }
+
+    #[test]
     fn permits_only_simple_font_names_and_four_known_file_types() {
         assert!(safe_name("Noto Sans CJK.woff2"));
         assert!(safe_name("Fuente_Ágil.ttf"));
