@@ -1634,6 +1634,7 @@ async fn serve_external_subtitle(
     let sidecar = sidecar.ok_or(StatusCode::NOT_FOUND)?;
     let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
     let convert_to_srt = sidecar.format == "vtt" && format == "srt";
+    let normalize_native_srt = sidecar.format == "srt" && format == "srt";
     let convert_script = matches!(sidecar.format, "ass" | "ssa") && matches!(format, "srt" | "vtt");
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
@@ -1645,7 +1646,8 @@ async fn serve_external_subtitle(
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let (body, response_length) = if convert_to_vtt || convert_to_srt || convert_script {
+    let (body, response_length) =
+        if convert_to_vtt || convert_to_srt || convert_script || normalize_native_srt {
         // Compute identical payload length for GET and HEAD; never touch
         // or rewrite the user's adjacent subtitle file.
         let mut bytes = Vec::new();
@@ -1659,6 +1661,14 @@ async fn serve_external_subtitle(
         }
         let srt = if convert_script {
             convert_script_sidecar_to_srt(state.ffmpeg_executable(), &bytes).await?
+        } else if normalize_native_srt
+            && (bytes.starts_with(&[0xff, 0xfe])
+                || bytes.starts_with(&[0xfe, 0xff])
+                || bytes.starts_with(&[0xef, 0xbb, 0xbf]))
+        {
+            crate::subtitle_timing::decode_text_subtitle(&bytes)
+                .ok_or(StatusCode::NOT_IMPLEMENTED)?
+                .into_bytes()
         } else {
             bytes
         };
