@@ -84,10 +84,85 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
     }
 }
 
-/// Validate the declared RLE object-data byte count across first, middle
-/// and last ODS fragments, without decoding or interpreting any RLE pixels.
-/// An incomplete object's sequence cannot silently pass a display-set END.
-fn object_fragment_valid(pending: &mut BTreeMap<u16, u32>, bytes: &[u8]) -> bool {
+/// Keep bitmap expansion bounded independently of the raw SUP file cap.
+/// This is a decoder preflight, not a renderer or bitmap-to-PNG API.
+const MAX_BITMAP_PIXELS: usize = 4 * 1024 * 1024;
+const MAX_OBJECT_RLE_BYTES: usize = 4 * 1024 * 1024;
+
+struct PendingObject {
+    remaining: usize,
+    width: u16,
+    height: u16,
+    compressed: Vec<u8>,
+}
+
+/// Expand the published PGS RLE word format into indexed pixels. A nonzero
+/// octet is one literal pixel; zero introduces short/long transparent or
+/// colored runs, or an explicit end-of-line marker. No palette interpretation
+/// occurs here. Dimensions and output memory are checked before allocation.
+fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
+    let width = usize::from(width);
+    let height = usize::from(height);
+    let area = width.checked_mul(height)?;
+    if width == 0 || height == 0 || area > MAX_BITMAP_PIXELS {
+        return None;
+    }
+    let mut pixels = vec![0; area];
+    let mut cursor = 0_usize;
+    let mut written = 0_usize;
+    while cursor < data.len() {
+        if written == area {
+            // A final EOL marker is allowed even if the last row was full.
+            return (data.len() == cursor + 2 && data[cursor..] == [0, 0])
+                .then_some(pixels);
+        }
+        let opcode = *data.get(cursor)?;
+        cursor += 1;
+        if opcode != 0 {
+            pixels[written] = opcode;
+            written += 1;
+            continue;
+        }
+        let control = *data.get(cursor)?;
+        cursor += 1;
+        if control == 0 {
+            // A short scanline is padded by the transparent palette index.
+            let remainder = written % width;
+            written += if remainder == 0 { width } else { width - remainder };
+            if written > area {
+                return None;
+            }
+            continue;
+        }
+        let mut count = usize::from(control & 0x3f);
+        if control & 0x40 != 0 {
+            count = count.checked_shl(8)? + usize::from(*data.get(cursor)?);
+            cursor += 1;
+        }
+        if count == 0 {
+            return None;
+        }
+        let color = if control & 0x80 != 0 {
+            let value = *data.get(cursor)?;
+            cursor += 1;
+            value
+        } else {
+            0
+        };
+        let end = written.checked_add(count)?;
+        if end > area {
+            return None;
+        }
+        pixels[written..end].fill(color);
+        written = end;
+    }
+    (written == area).then_some(pixels)
+}
+
+/// Accumulate only a bounded number of compressed ODS fragments. On final
+/// fragments, check the actual RLE decode as well as the declared byte count,
+/// so corrupt image payloads cannot masquerade as compatible bitmaps.
+fn object_fragment_valid(pending: &mut BTreeMap<u16, PendingObject>, bytes: &[u8]) -> bool {
     let id = be16(&bytes[..2]);
     let flags = bytes[3];
     let last = flags & 0x40 != 0;
@@ -96,39 +171,54 @@ fn object_fragment_valid(pending: &mut BTreeMap<u16, u32>, bytes: &[u8]) -> bool
             return false;
         }
         let declared = u32::from_be_bytes([0, bytes[4], bytes[5], bytes[6]]);
-        let Some(image_bytes) = declared.checked_sub(4) else {
+        let Some(image_bytes) = declared.checked_sub(4).map(|size| size as usize) else {
             return false;
         };
-        let received = (bytes.len() - 11) as u32;
-        if image_bytes == 0 || received > image_bytes {
+        let width = be16(&bytes[7..9]);
+        let height = be16(&bytes[9..11]);
+        if image_bytes == 0
+            || image_bytes > MAX_OBJECT_RLE_BYTES
+            || usize::from(width) * usize::from(height) > MAX_BITMAP_PIXELS
+            || bytes.len() - 11 > image_bytes
+        {
             return false;
         }
         if last {
-            return received == image_bytes;
+            return bytes.len() - 11 == image_bytes
+                && decode_rle_bitmap(&bytes[11..], width, height).is_some();
         }
-        if received == image_bytes || pending.len() >= 64 {
+        if bytes.len() - 11 == image_bytes || pending.len() >= 64 {
             return false;
         }
-        pending.insert(id, image_bytes - received);
+        pending.insert(
+            id,
+            PendingObject {
+                remaining: image_bytes - (bytes.len() - 11),
+                width,
+                height,
+                compressed: bytes[11..].to_vec(),
+            },
+        );
         return true;
     }
-    let Some(remaining) = pending.get(&id).copied() else {
+    let Some(object) = pending.get_mut(&id) else {
         return false;
     };
-    let received = (bytes.len() - 4) as u32;
-    if received == 0 || received > remaining {
+    let fragment = &bytes[4..];
+    if fragment.is_empty() || fragment.len() > object.remaining {
         return false;
     }
+    object.remaining -= fragment.len();
+    object.compressed.extend_from_slice(fragment);
     if last {
-        if received != remaining {
+        if object.remaining != 0
+            || decode_rle_bitmap(&object.compressed, object.width, object.height).is_none()
+        {
             return false;
         }
         pending.remove(&id);
-    } else {
-        if received == remaining {
-            return false;
-        }
-        pending.insert(id, remaining - received);
+    } else if object.remaining == 0 {
+        return false;
     }
     true
 }
@@ -216,7 +306,7 @@ mod tests {
 
     #[test]
     fn fragmented_pgs_objects_must_complete_their_declared_rle_lengths() {
-        let first = packet(0x15, &[0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0, 8, 0xaa]);
+        let first = packet(0x15, &[0, 1, 0, 0x80, 0, 0, 6, 0, 2, 0, 1, 0xaa]);
         let last = packet(0x15, &[0, 1, 0, 0x40, 0xbb]);
         let mut complete = first.clone();
         complete.extend(&last);
@@ -226,7 +316,7 @@ mod tests {
             complete.len() as u64
         ));
 
-        let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 8, 0, 8, 0xaa, 0xbb]);
+        let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 0xaa, 0xbb]);
         assert!(packets_valid(&mut single.as_slice(), single.len() as u64));
 
         // Incomplete, unmatched, repeated and oversized final fragments all
@@ -239,7 +329,7 @@ mod tests {
         repeated.extend(&first);
         let mut oversized = first.clone();
         oversized.extend(packet(0x15, &[0, 1, 0, 0x40, 0xbb, 0xcc]));
-        let short_declared = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 7, 0, 8, 0, 8, 0xaa, 0xbb]);
+        let short_declared = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 7, 0, 2, 0, 1, 0xaa, 0xbb]);
         for bad in [
             first,
             unfinished,
@@ -250,6 +340,35 @@ mod tests {
         ] {
             assert!(!packets_valid(&mut bad.as_slice(), bad.len() as u64));
         }
+    }
+
+    #[test]
+    fn bitmap_rle_expansion_is_bounded_and_covers_literal_transparent_and_colored_runs() {
+        assert_eq!(decode_rle_bitmap(&[0xaa, 0xbb], 2, 1), Some(vec![0xaa, 0xbb]));
+        assert_eq!(decode_rle_bitmap(&[0, 0x83, 7], 3, 1), Some(vec![7; 3]));
+        assert_eq!(decode_rle_bitmap(&[0, 0xc0, 65, 7], 65, 1), Some(vec![7; 65]));
+        assert_eq!(decode_rle_bitmap(&[0, 0x03], 3, 1), Some(vec![0; 3]));
+        assert_eq!(decode_rle_bitmap(&[0, 0x40, 65], 65, 1), Some(vec![0; 65]));
+        assert_eq!(
+            decode_rle_bitmap(&[0, 0, 0xaa, 0xbb], 2, 2),
+            Some(vec![0, 0, 0xaa, 0xbb])
+        );
+        assert_eq!(
+            decode_rle_bitmap(&[0xaa, 0xbb, 0, 0], 2, 1),
+            Some(vec![0xaa, 0xbb])
+        );
+        for invalid in [
+            &[0][..],
+            &[0, 0x80, 0x2a],
+            &[0, 0x83, 7],
+            &[0, 0x40],
+            &[0, 0xc0, 65],
+            &[0xaa, 0xbb, 0xcc],
+        ] {
+            assert!(decode_rle_bitmap(invalid, 2, 1).is_none());
+        }
+        assert!(decode_rle_bitmap(&[1], 4096, 4096).is_none());
+        assert!(decode_rle_bitmap(&[1], 0, 1).is_none());
     }
 
     #[test]
