@@ -133,6 +133,11 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
         .unwrap()
         .unwrap()
         .access_token;
+    let sibling = auth::authenticate(&state_dir, "admin", "subtitle-burnin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    assert_ne!(token, sibling);
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state_dir,
@@ -212,6 +217,21 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     let undecorated = segment_bytes(&app, id, &plain, &token, 0).await;
     let first = segment_bytes(&app, id, &burned, &token, 0).await;
     let second = segment_bytes(&app, id, &burned, &token, 1).await;
+    let segment_url = format!(
+        "/Videos/{id}/{}",
+        burned
+            .lines()
+            .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+            .unwrap()
+    );
+    assert_eq!(
+        call(&app, &segment_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &segment_url, Some(&sibling)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     assert_ne!(undecorated, first);
     let reference = bright_pixels(&undecorated, &temp.path().join("plain.ts"));
     let first_white = bright_pixels(&first, &temp.path().join("first.ts"));
