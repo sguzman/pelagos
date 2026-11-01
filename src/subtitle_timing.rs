@@ -40,12 +40,13 @@ fn parse_stamp(stamp: &str) -> Option<u64> {
     if fraction.len() != 3 || !fraction.bytes().all(|digit| digit.is_ascii_digit()) {
         return None;
     }
-    let mut fields = clock.split(':');
-    let hours = fields.next()?;
-    let minutes = fields.next()?;
-    let seconds = fields.next()?;
-    if fields.next().is_some()
-        || !(2..=3).contains(&hours.len())
+    let fields = clock.split(':').collect::<Vec<_>>();
+    let (hours, minutes, seconds) = match fields.as_slice() {
+        [minutes, seconds] => ("00", *minutes, *seconds),
+        [hours, minutes, seconds] => (*hours, *minutes, *seconds),
+        _ => return None,
+    };
+    if !(2..=3).contains(&hours.len())
         || minutes.len() != 2
         || seconds.len() != 2
         || ![hours, minutes, seconds]
@@ -92,20 +93,49 @@ pub(crate) fn clip_vtt(
         .ok()?
         .trim_start_matches('\u{feff}');
     let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
-    let body = normalized.strip_prefix("WEBVTT\n\n")?;
+    let prefix = normalized.strip_prefix("WEBVTT")?;
+    let (header, body) = prefix.split_once("\n\n")?;
+    if !header.is_empty()
+        && (header.len() > 256
+            || !(header.starts_with(' ') || header.starts_with('\t'))
+            || header.chars().any(char::is_control))
+    {
+        return None;
+    }
     let mut result = String::from("WEBVTT\n\n");
     let mut cues = 0_u32;
     for block in body.split("\n\n").filter(|part| !part.trim().is_empty()) {
         let mut lines = block.lines();
         let first = lines.next()?.trim();
+        if first == "NOTE" || first.starts_with("NOTE ") {
+            continue;
+        }
+        if matches!(first, "STYLE" | "REGION") {
+            return None;
+        }
         let timing = if first.contains(" --> ") {
             first
-        } else if first.bytes().all(|byte| byte.is_ascii_digit()) && !first.is_empty() {
+        } else if !first.is_empty()
+            && first.len() <= 128
+            && !first.chars().any(char::is_control)
+        {
             lines.next()?.trim()
         } else {
             return None;
         };
-        let (start, end) = timing.split_once(" --> ")?;
+        let (start, end_with_settings) = timing.split_once(" --> ")?;
+        let (end, settings) = end_with_settings.split_once(' ').unwrap_or((end_with_settings, ""));
+        if settings.len() > 128
+            || !settings.split_whitespace().all(|setting| {
+                setting.starts_with("align:")
+                    || setting.starts_with("line:")
+                    || setting.starts_with("position:")
+                    || setting.starts_with("size:")
+                    || setting.starts_with("vertical:")
+            })
+        {
+            return None;
+        }
         let cue_start = parse_stamp(start)?;
         let cue_end = parse_stamp(end)?;
         if cue_end <= cue_start {
@@ -122,6 +152,10 @@ pub(crate) fn clip_vtt(
             result.push_str(&write_stamp(selected_start - offset));
             result.push_str(" --> ");
             result.push_str(&write_stamp(selected_end - offset));
+            if !settings.is_empty() {
+                result.push(' ');
+                result.push_str(settings);
+            }
             result.push('\n');
             result.push_str(caption.trim_end());
             result.push_str("\n\n");
@@ -203,6 +237,18 @@ mod tests {
             vtt_to_srt(&relative).unwrap(),
             b"1\n00:00:00,000 --> 00:00:01,000\nFirst\n\n2\n00:00:02,000 --> 00:00:03,000\nSecond\n\n"
         );
+    }
+
+    #[test]
+    fn ordinary_vtt_cue_identifiers_short_timestamps_and_settings_survive() {
+        let vtt = b"WEBVTT - Local captions\n\nNOTE From the editor\nignored comment\n\nintro\n00:01.000 --> 00:03.000 align:start\nHello!\n\n";
+        let result = clip_vtt(vtt, 15_000_000, 25_000_000, false).unwrap();
+        assert_eq!(
+            result,
+            b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 align:start\nHello!\n\n"
+        );
+        assert!(clip_vtt(b"WEBVTT\n\nSTYLE\n::cue{color:red}\n\n", 0, 20_000_000, false).is_none());
+        assert!(clip_vtt(b"WEBVTT\n\nfoo\n00:01.000 --> 00:03.000 invalid:bar\nHi\n\n", 0, 20_000_000, false).is_none());
     }
 
     #[test]
