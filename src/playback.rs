@@ -2123,8 +2123,7 @@ async fn subtitle_playlist(
             && stream.delivery_url.as_deref().is_some_and(|url| {
                 url.ends_with(".srt")
                     || url.ends_with(".vtt")
-                    || (stream.codec.as_deref() == Some("ass")
-                        && !stream.is_external
+                    || (matches!(stream.codec.as_deref(), Some("ass" | "ssa"))
                         && (url.ends_with(".ass") || url.ends_with(".ssa")))
             })
     }) {
