@@ -810,7 +810,7 @@ fn negotiate_selected_subtitle_delivery(
     };
     let fallback_formats: &[&str] = if !stream.is_external
         && stream.codec.as_deref() == Some("ass")
-        && original.ends_with("/Stream.ass")
+        && (original.ends_with("/Stream.ass") || original.ends_with("/Stream.ssa"))
     {
         &["srt", "vtt"]
     } else if original.ends_with("/Stream.srt") {
@@ -1138,12 +1138,12 @@ async fn playback_info(
     // FFprobe labels legacy SSA-in-Matroska as codec "ass". Confirm the
     // script header separately before advertising native .ass to clients.
     // A failed/oversized auxiliary probe fails closed to the SRT fallback.
-    let native_ass = if probed
+    let native_scripts = if probed
         .streams
         .iter()
         .any(|stream| stream["codec_type"] == "subtitle" && stream["codec_name"] == "ass")
     {
-        probe::native_ass_stream_indices(&file, state.probe_executable())
+        probe::native_script_formats(&file, state.probe_executable())
             .await
             .unwrap_or_default()
     } else {
@@ -1163,11 +1163,14 @@ async fn playback_info(
         if !stream.is_external
             && stream.stream_type == "Subtitle"
             && stream.codec.as_deref() == Some("ass")
-            && !native_ass.contains(&stream.index)
             && let Some(url) = stream.delivery_url.as_deref()
             && let Some(prefix) = url.strip_suffix("/Stream.ass")
         {
-            stream.delivery_url = Some(format!("{prefix}/Stream.srt"));
+            let format = native_scripts
+                .get(&stream.index)
+                .copied()
+                .unwrap_or("srt");
+            stream.delivery_url = Some(format!("{prefix}/Stream.{format}"));
         }
     }
     if let Some(index) = req.subtitle_stream_index {
@@ -1344,7 +1347,7 @@ async fn extract_embedded_text(
     executable: &Path,
     source: &Path,
     index: i64,
-    native_ass: bool,
+    native_format: Option<&str>,
 ) -> Result<Vec<u8>, StatusCode> {
     let workers = SUBTITLE_WORKERS
         .get_or_init(|| Arc::new(Semaphore::new(2)))
@@ -1362,9 +1365,9 @@ async fn extract_embedded_text(
         .arg("-map")
         .arg(format!("0:{index}"))
         .arg("-c:s")
-        .arg(if native_ass { "copy" } else { "srt" })
+        .arg(if native_format.is_some() { "copy" } else { "srt" })
         .arg("-f")
-        .arg(if native_ass { "ass" } else { "srt" })
+        .arg(if native_format.is_some() { "ass" } else { "srt" })
         .arg("pipe:1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1391,10 +1394,13 @@ async fn extract_embedded_text(
             .wait()
             .await
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-        if !status.success()
-            || payload.is_empty()
-            || (native_ass && !probe::is_native_ass_script(&payload))
-        {
+        let correct_script = match native_format {
+            Some("ass") => probe::is_native_ass_script(&payload),
+            Some("ssa") => probe::is_native_ssa_script(&payload),
+            None => true,
+            _ => false,
+        };
+        if !status.success() || payload.is_empty() || !correct_script {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         Ok(payload)
@@ -1480,16 +1486,18 @@ async fn serve_external_subtitle(
         // Native Matroska ASS can be stream-copied into the ASS muxer,
         // preserving style metadata; other embedded text is still delivered
         // as bounded SRT with an optional WebVTT conversion.
-        if !matches!(format, "srt" | "vtt" | "ass")
-            || (format == "ass" && embedded_codec.as_deref() != Some("ass"))
+        if !matches!(format, "srt" | "vtt" | "ass" | "ssa")
+            || (matches!(format, "ass" | "ssa")
+                && embedded_codec.as_deref() != Some("ass"))
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         if !(0..=i64::from(i32::MAX)).contains(&index) {
             return Err(StatusCode::BAD_REQUEST);
         }
+        let native_format = matches!(format, "ass" | "ssa").then_some(format);
         let bytes =
-            extract_embedded_text(state.ffmpeg_executable(), &source, index, format == "ass")
+            extract_embedded_text(state.ffmpeg_executable(), &source, index, native_format)
                 .await?;
         let payload = if format == "vtt" {
             convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
@@ -2020,7 +2028,7 @@ async fn subtitle_playlist(
                     || url.ends_with(".vtt")
                     || (stream.codec.as_deref() == Some("ass")
                         && !stream.is_external
-                        && url.ends_with(".ass"))
+                        && (url.ends_with(".ass") || url.ends_with(".ssa")))
             })
     }) {
         return Err(StatusCode::NOT_IMPLEMENTED);
