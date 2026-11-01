@@ -362,6 +362,8 @@ fn is_pgs_codec(codec: &str) -> bool {
 // Raw PGS SUP files may be larger than ordinary 4 MiB text sidecars, but
 // remain bounded and are delivered as byte ranges without decoding.
 const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
+// Bound packet-header work even for adversarial streams of empty segments.
+const MAX_PGS_PACKETS: usize = 100_000;
 
 /// A raw Blu-ray PGS packet begins with "PG", PTS/DTS, a known segment
 /// type and a bounded segment payload. This does not decode/render bitmaps.
@@ -369,7 +371,38 @@ fn pgs_header_valid(bytes: &[u8; 13], file_size: u64) -> bool {
     let len = u64::from(u16::from_be_bytes([bytes[11], bytes[12]]));
     &bytes[..2] == b"PG"
         && matches!(bytes[10], 0x14 | 0x15 | 0x16 | 0x17 | 0x80)
+        && (bytes[10] != 0x80 || len == 0)
         && 13_u64.checked_add(len).is_some_and(|end| end <= file_size)
+}
+
+/// Validate every raw PGS packet boundary without parsing or decoding bitmap
+/// payloads. A valid first header alone does not ensure the remaining stream
+/// is safe to advertise. A seek skips bounded segment payload bytes.
+fn pgs_packets_valid<R: std::io::Read + std::io::Seek>(reader: &mut R, size: u64) -> bool {
+    if !(13..=MAX_SUP_BYTES).contains(&size) {
+        return false;
+    }
+    let mut offset = 0_u64;
+    let mut packets = 0_usize;
+    while offset < size {
+        if packets >= MAX_PGS_PACKETS || size - offset < 13 {
+            return false;
+        }
+        let mut header = [0_u8; 13];
+        if reader.read_exact(&mut header).is_err() || !pgs_header_valid(&header, size - offset) {
+            return false;
+        }
+        let length = u64::from(u16::from_be_bytes([header[11], header[12]]));
+        let Some(next) = offset.checked_add(13).and_then(|pos| pos.checked_add(length)) else {
+            return false;
+        };
+        if reader.seek(std::io::SeekFrom::Start(next)).is_err() {
+            return false;
+        }
+        offset = next;
+        packets += 1;
+    }
+    packets > 0
 }
 
 fn pgs_invalid_range(size: u64) -> Result<Response, StatusCode> {
@@ -1617,9 +1650,8 @@ async fn extract_embedded_pgs(
             .await
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !status.success()
-            || payload.len() < 13
-            || !pgs_header_valid(
-                payload[..13].try_into().expect("checked PGS header length"),
+            || !pgs_packets_valid(
+                &mut std::io::Cursor::new(&payload),
                 payload.len() as u64,
             )
         {
@@ -1865,15 +1897,20 @@ async fn serve_external_subtitle(
         if !(13..=MAX_SUP_BYTES).contains(&size) {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        let mut reader = tokio::fs::File::from_std(opened);
-        let mut prefix = [0_u8; 13];
-        reader
-            .read_exact(&mut prefix)
-            .await
-            .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
-        if !pgs_header_valid(&prefix, size) {
+        // Inspect every packet boundary from the already confined descriptor.
+        // Keep blocking file seeks off the async executor; the validator does
+        // not read, cache or decode the potentially large bitmap payloads.
+        let (opened, valid) = tokio::task::spawn_blocking(move || {
+            let mut reader = std::io::BufReader::new(opened);
+            let valid = pgs_packets_valid(&mut reader, size);
+            (reader.into_inner(), valid)
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if !valid {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
+        let mut reader = tokio::fs::File::from_std(opened);
         // PGS is a raw graphical subtitle format; clients incrementally
         // fetch its bytes. Honor one bounded RFC 9110 range, never multi-
         // ranges, and ignore Range if its If-Range precondition is unknown.
@@ -2690,6 +2727,42 @@ mod tests {
         assert!(pgs_header_valid(&header, 13));
         header[0] = b'X';
         assert!(!pgs_header_valid(&header, 13));
+    }
+
+    #[test]
+    fn raw_pgs_rejects_invalid_later_packets_and_trailing_bytes() {
+        let good = [
+            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 2, 0xaa, 0xbb,
+            b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x80, 0, 0,
+        ];
+        assert!(pgs_packets_valid(
+            &mut std::io::Cursor::new(good),
+            good.len() as u64,
+        ));
+        let mut trailing = good.to_vec();
+        trailing.extend_from_slice(b"garbage");
+        assert!(!pgs_packets_valid(
+            &mut std::io::Cursor::new(&trailing),
+            trailing.len() as u64,
+        ));
+        let mut invalid_second = good;
+        invalid_second[15] = b'X';
+        assert!(!pgs_packets_valid(
+            &mut std::io::Cursor::new(invalid_second),
+            invalid_second.len() as u64,
+        ));
+        let mut truncated = good.to_vec();
+        truncated.pop();
+        assert!(!pgs_packets_valid(
+            &mut std::io::Cursor::new(&truncated),
+            truncated.len() as u64,
+        ));
+        let mut invalid_end = good;
+        invalid_end[27] = 1;
+        assert!(!pgs_packets_valid(
+            &mut std::io::Cursor::new(invalid_end),
+            invalid_end.len() as u64,
+        ));
     }
 
     #[test]
