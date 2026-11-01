@@ -871,6 +871,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         StatusCode::OK
     );
     let blocked_profile = serde_json::json!({
+        "SubtitleStreamIndex": 2,
         "DeviceProfile":{
             "DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],
             "SubtitleProfiles":[{"Method":"Embed","Format":"srt"}]
@@ -914,6 +915,25 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         .await
         .status(),
         StatusCode::NOT_IMPLEMENTED
+    );
+    let selected_profile = serde_json::json!({
+        "SubtitleStreamIndex":2,
+        "DeviceProfile":{
+            "DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}],
+            "SubtitleProfiles":[{"Method":"External","Format":"srt","Language":"eng"}]
+        }
+    });
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            &format!("/Items/{item}/PlaybackInfo"),
+            Some(&viewer),
+            &selected_profile.to_string(),
+        )
+        .await
+        .status(),
+        StatusCode::OK
     );
     let url = streams[2]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(url, format!("/Videos/{item}/{item}/Subtitles/2/Stream.srt"));

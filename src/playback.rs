@@ -583,11 +583,18 @@ fn profile_allows_external_subtitles(
             }
         }
     }
+    // Unselected streams don't constrain direct play: only the requested
+    // subtitle must be deliverable using the selected device profile.
+    let Some(selected_index) = source.default_subtitle_stream_index else {
+        return Ok(true);
+    };
+    let mut found = false;
     for stream in source
         .media_streams
         .iter()
-        .filter(|stream| stream.stream_type == "Subtitle")
+        .filter(|stream| stream.stream_type == "Subtitle" && stream.index == selected_index)
     {
+        found = true;
         let Some(url) = stream
             .delivery_url
             .as_deref()
@@ -628,7 +635,7 @@ fn profile_allows_external_subtitles(
             return Ok(false);
         }
     }
-    Ok(true)
+    Ok(found)
 }
 
 /// This is a conservative, bounded direct-file subset, not full DLNA
@@ -1926,10 +1933,20 @@ mod tests {
         );
         assert_eq!(source.media_streams[2].delivery_url, None);
         assert_eq!(source.media_streams[3].delivery_url, None);
+        let mut selected_source = source;
+        selected_source.default_subtitle_stream_index = Some(1);
         assert_eq!(
             profile_allows_external_subtitles(
                 &[json!({"Format":"srt","Method":"External"})],
-                &source
+                &selected_source
+            ),
+            Ok(true)
+        );
+        selected_source.default_subtitle_stream_index = Some(2);
+        assert_eq!(
+            profile_allows_external_subtitles(
+                &[json!({"Format":"srt","Method":"External"})],
+                &selected_source
             ),
             Ok(false)
         );
@@ -2003,8 +2020,9 @@ mod tests {
             ],
             chapters: vec![],
         };
-        let source = source_from_probe("id", "video", &movie, &report);
+        let mut source = source_from_probe("id", "video", &movie, &report);
         assert_eq!(source.media_streams.len(), 4);
+        source.default_subtitle_stream_index = Some(2);
         for (profile, expected) in [
             (
                 json!([
@@ -2014,7 +2032,7 @@ mod tests {
                 Ok(true),
             ),
             (json!([{"Method":"Embed","Format":"srt"}]), Ok(false)),
-            (json!([{"Method":"External","Format":"srt"}]), Ok(false)),
+            (json!([{"Method":"External","Format":"srt"}]), Ok(true)),
             (json!([{"Method":"External","Format":"-srt"}]), Ok(false)),
             (
                 json!([{"Method":"External","Format":"vtt","Language":"eng"}]),
@@ -2030,6 +2048,22 @@ mod tests {
                 expected
             );
         }
+        source.default_subtitle_stream_index = Some(3);
+        assert_eq!(
+            profile_allows_external_subtitles(
+                &[json!({"Method":"External","Format":"vtt","Language":"fr"})],
+                &source
+            ),
+            Ok(true)
+        );
+        source.default_subtitle_stream_index = None;
+        assert_eq!(
+            profile_allows_external_subtitles(
+                &[json!({"Method":"Embed","Format":"srt"})],
+                &source
+            ),
+            Ok(true)
+        );
     }
 
     #[test]
