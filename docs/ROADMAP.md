@@ -2,9 +2,9 @@
 
 **MVP means complete Jellyfin Server port**, not a slim movie streamer. Scope: [Jellyfin v12.3 baseline](SOURCE_BASELINE.md) plus compatibility with unmodified Smart TV Jellyfin clients. Every milestone M0 through M6 is part of MVP. Full source of truth: [progress.json](progress.json).
 
-**Overall acceptance progress:** `████░░░░░░ 38%` across 171 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
+**Overall acceptance progress:** `████░░░░░░ 39%` across 171 atomic tasks. This tracks accepted checks, not lines translated or claimed runtime readiness. Checked source-path milestones are not substitutes for passing CI or real devices.
 
-## 🧱 M0 — Foundation and project controls — `████░░░░░░ 35%`
+## 🧱 M0 — Foundation and project controls — `████░░░░░░ 37%`
 
 **Gate:** Native Rust code builds, documentation is traceable, and controls can be tested without running Jellyfin.
 
@@ -62,7 +62,7 @@
   - [x] CI verifies hundreds of items across batch boundaries, watched/favorite/position/timestamp data, absent records, duplicate IDs and cross-user isolation — GitHub Actions 40012254173 — complete Rust tests, formatting, Clippy and repository guards passed
   - [ ] Large-scale library benchmarks and production performance/memory parity on Linux with unmodified Jellyfin client load
 
-### 🧪 P2 — Test framework — `███░░░░░░░ 33%`
+### 🧪 P2 — Test framework — `████░░░░░░ 40%`
 
 - 📊 **T010 — Ledger generator and CI guard** — `███████░░░ 67%`
   - [x] Implement machine ledger, calculated percentages and acceptance evidence — src/bin/pelagos-roadmap.rs; docs/progress.json; docs/ROADMAP.md
@@ -72,8 +72,8 @@
   - [x] Implement contract replay harness without private user data — tests/contract_replay.rs; tests/fixtures/pinned_public_replay.json; GitHub Actions 41265325427: format, Clippy, all targets and roadmap/matrix gates passed; synthetic responses, not upstream golden captures
   - [ ] Automated tests and Jellyfin baseline fixture verify contract replay harness without private user data
   - [ ] Production or real-client acceptance validates contract replay harness without private user data
-- 🔒 **T012 — Security harness** — `░░░░░░░░░░ 0%`
-  - [ ] Implement authentication, authorization, path traversal and fuzz regression suite
+- 🔒 **T012 — Security harness** — `███░░░░░░░ 33%`
+  - [x] Implement authentication, authorization, path traversal and fuzz regression suite — tests/security_harness.rs; GitHub Actions 41265579970: format, Clippy, synthetic auth/authorization/symlink traversal and 199 deterministic range mutation cases, all tests and roadmap/matrix gates passed
   - [ ] Automated tests and Jellyfin baseline fixture verify authentication, authorization, path traversal and fuzz regression suite
   - [ ] Production or real-client acceptance validates authentication, authorization, path traversal and fuzz regression suite
 - 🖥️ **T013 — Rendered admin GUI acceptance** — `░░░░░░░░░░ 0%`

@@ -337,7 +337,8 @@
               "checks": [
                 {
                   "title": "Implement authentication, authorization, path traversal and fuzz regression suite",
-                  "passed": false
+                  "passed": true,
+                  "evidence": "tests/security_harness.rs; GitHub Actions 41265579970: format, Clippy, synthetic auth/authorization/symlink traversal and 199 deterministic range mutation cases, all tests and roadmap/matrix gates passed"
                 },
                 {
                   "title": "Automated tests and Jellyfin baseline fixture verify authentication, authorization, path traversal and fuzz regression suite",
@@ -348,7 +349,7 @@
                   "passed": false
                 }
               ],
-              "progress": 0
+              "progress": 33
             },
             {
               "id": "T013",
