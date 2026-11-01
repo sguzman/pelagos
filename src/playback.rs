@@ -279,6 +279,25 @@ struct ExternalSubtitle {
     default: bool,
 }
 
+// Narrow BCP-47 language tags for adjacent subtitle filenames. Accept a
+// primary code plus one short region/script subtag without arbitrary names.
+fn sidecar_language_tag(part: &str) -> Option<String> {
+    let (primary, suffix) = part.split_once('-').unwrap_or((part, ""));
+    if !(2..=3).contains(&primary.len())
+        || !primary.bytes().all(|byte| byte.is_ascii_alphabetic())
+    {
+        return None;
+    }
+    if !suffix.is_empty()
+        && !((suffix.len() == 2 && suffix.bytes().all(|byte| byte.is_ascii_alphabetic()))
+            || (suffix.len() == 3 && suffix.bytes().all(|byte| byte.is_ascii_digit()))
+            || (suffix.len() == 4 && suffix.bytes().all(|byte| byte.is_ascii_alphabetic())))
+    {
+        return None;
+    }
+    Some(part.to_ascii_lowercase())
+}
+
 fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<ExternalSubtitle> {
     let Some(dir) = source.parent() else {
         return Vec::new();
@@ -345,13 +364,16 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         for token in &tokens[..tokens.len() - 1] {
             match *token {
                 "forced" if !forced => forced = true,
-                "sdh" | "hi" if !hearing_impaired => hearing_impaired = true,
+                "sdh" if !hearing_impaired => hearing_impaired = true,
+                "hi" if language.is_some() && !hearing_impaired => hearing_impaired = true,
                 "default" if !default => default = true,
-                part if language.is_none()
-                    && (2..=3).contains(&part.len())
-                    && part.bytes().all(|byte| byte.is_ascii_alphabetic()) =>
-                {
-                    language = Some(part.to_owned());
+                part if language.is_none() => {
+                    if let Some(tag) = sidecar_language_tag(part) {
+                        language = Some(tag);
+                    } else {
+                        valid = false;
+                        break;
+                    }
                 }
                 _ => {
                     valid = false;
@@ -2102,6 +2124,8 @@ mod tests {
             "Feature.fr.sdh.vtt",
             "Feature.es.default.srt",
             "Feature.hi.vtt",
+            "Feature.ja.hi.vtt",
+            "Feature.es-MX.srt",
             "Feature.eng.forced.forced.srt",
             "Feature.unrelated.txt",
         ] {
@@ -2119,7 +2143,7 @@ mod tests {
             .iter()
             .filter(|stream| stream.stream_type == "Subtitle")
             .collect::<Vec<_>>();
-        assert_eq!(subtitle.len(), 4);
+        assert_eq!(subtitle.len(), 6);
         let english = subtitle
             .iter()
             .find(|stream| stream.language.as_deref() == Some("eng"))
@@ -2137,10 +2161,16 @@ mod tests {
             .unwrap();
         assert!(spanish.is_default);
         assert!(
-            subtitle
-                .iter()
-                .any(|stream| stream.language.is_none() && stream.is_hearing_impaired)
+            subtitle.iter().any(|stream| {
+                stream.language.as_deref() == Some("ja") && stream.is_hearing_impaired
+            })
         );
+        assert!(subtitle.iter().any(|stream| {
+            stream.language.as_deref() == Some("hi") && !stream.is_hearing_impaired
+        }));
+        assert!(subtitle.iter().any(|stream| {
+            stream.language.as_deref() == Some("es-mx") && !stream.is_hearing_impaired
+        }));
     }
 
     #[test]
