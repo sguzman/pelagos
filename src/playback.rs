@@ -393,7 +393,10 @@ fn pgs_packets_valid<R: std::io::Read + std::io::Seek>(reader: &mut R, size: u64
             return false;
         }
         let length = u64::from(u16::from_be_bytes([header[11], header[12]]));
-        let Some(next) = offset.checked_add(13).and_then(|pos| pos.checked_add(length)) else {
+        let Some(next) = offset
+            .checked_add(13)
+            .and_then(|pos| pos.checked_add(length))
+        else {
             return false;
         };
         if reader.seek(std::io::SeekFrom::Start(next)).is_err() {
@@ -1650,10 +1653,7 @@ async fn extract_embedded_pgs(
             .await
             .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !status.success()
-            || !pgs_packets_valid(
-                &mut std::io::Cursor::new(&payload),
-                payload.len() as u64,
-            )
+            || !pgs_packets_valid(&mut std::io::Cursor::new(&payload), payload.len() as u64)
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -2732,8 +2732,8 @@ mod tests {
     #[test]
     fn raw_pgs_rejects_invalid_later_packets_and_trailing_bytes() {
         let good = [
-            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 2, 0xaa, 0xbb,
-            b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x80, 0, 0,
+            b'P', b'G', 0, 0, 0, 1, 0, 0, 0, 1, 0x16, 0, 2, 0xaa, 0xbb, b'P', b'G', 0, 0, 0, 2, 0,
+            0, 0, 2, 0x80, 0, 0,
         ];
         assert!(pgs_packets_valid(
             &mut std::io::Cursor::new(good),
