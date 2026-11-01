@@ -78,16 +78,52 @@ fn write_stamp(ticks: u64) -> String {
 }
 
 // Cue positioning is valid VTT syntax but has no SRT equivalent.
-// Reuse the same narrow whitelist when clipping and converting.
+// Restrict the small supported grammar rather than reproducing malformed
+// settings in a generated VTT segment. Each setting may occur only once.
+fn cue_percent(value: &str) -> bool {
+    value
+        .strip_suffix('%')
+        .and_then(|digits| digits.parse::<u8>().ok())
+        .is_some_and(|percent| percent <= 100)
+}
+
 fn supported_cue_settings(settings: &str) -> bool {
-    settings.len() <= 128
-        && settings.split_whitespace().all(|setting| {
-            setting.starts_with("align:")
-                || setting.starts_with("line:")
-                || setting.starts_with("position:")
-                || setting.starts_with("size:")
-                || setting.starts_with("vertical:")
-        })
+    if settings.len() > 128 {
+        return false;
+    }
+    let mut seen = [false; 5];
+    for setting in settings.split_whitespace() {
+        let Some((name, value)) = setting.split_once(':') else {
+            return false;
+        };
+        let (slot, valid) = match name {
+            "align" => (0, matches!(value, "start" | "center" | "end" | "left" | "right")),
+            "vertical" => (1, matches!(value, "rl" | "lr")),
+            "size" => (2, cue_percent(value)),
+            "line" => {
+                let (line, anchor) = value.split_once(',').unwrap_or((value, ""));
+                let valid_anchor = anchor.is_empty()
+                    || matches!(anchor, "start" | "center" | "end");
+                let valid_line = cue_percent(line) || line.parse::<i32>().is_ok();
+                (3, valid_anchor && valid_line)
+            }
+            "position" => {
+                let (position, anchor) = value.split_once(',').unwrap_or((value, ""));
+                let valid_anchor = anchor.is_empty()
+                    || matches!(
+                        anchor,
+                        "line-left" | "center" | "line-right" | "auto"
+                    );
+                (4, cue_percent(position) && valid_anchor)
+            }
+            _ => return false,
+        };
+        if !valid || seen[slot] {
+            return false;
+        }
+        seen[slot] = true;
+    }
+    true
 }
 
 /// Clip simple cue ranges into a short VOD window. Clamp overlapping cues,
@@ -285,6 +321,35 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn cue_settings_accept_valid_positions_and_reject_malformed_values() {
+        let valid = b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000 align:start line:-2 position:50%,line-left size:80% vertical:rl\nCaption\n\n";
+        let window = clip_vtt(valid, 10_000_000, 30_000_000, false).unwrap();
+        assert!(std::str::from_utf8(&window).unwrap().contains("position:50%,line-left"));
+        assert_eq!(
+            vtt_to_srt(&window).unwrap(),
+            b"1\n00:00:00,000 --> 00:00:02,000\nCaption\n\n"
+        );
+        for invalid in [
+            "align:",
+            "align:wat",
+            "align:start align:end",
+            "line:nan",
+            "size:101%",
+            "size:-1%",
+            "position:30%,unknown",
+            "vertical:down",
+            "line:2,invalid",
+            "size:90%,size:50%",
+            "no-colon",
+        ] {
+            let source = format!(
+                "WEBVTT\n\n00:00:01.000 --> 00:00:03.000 {invalid}\nCaption\n\n"
+            );
+            assert!(clip_vtt(source.as_bytes(), 0, 30_000_000, false).is_none(), "{invalid}");
+        }
     }
 
     #[test]
