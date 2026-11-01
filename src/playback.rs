@@ -23,7 +23,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
-use tokio::{io::AsyncReadExt, process::Command, sync::Semaphore};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command,
+    sync::Semaphore,
+};
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Deserialize, Default)]
@@ -1438,8 +1442,85 @@ pub(crate) async fn reauthorize_video_source(
     Ok(())
 }
 
-// Only identity subtitle requests are supported. Timestamp conversion,
-// subtitle transcoding, and graphical subtitles need separate implementations.
+// Convert an already confined, bounded ASS/SSA sidecar to SRT without
+// passing a user-controlled file path to FFmpeg. Input is pipe-fed from the
+// authorized descriptor; source files and their directories are never written.
+async fn convert_script_sidecar_to_srt(
+    executable: &Path,
+    source: &[u8],
+) -> Result<Vec<u8>, StatusCode> {
+    let workers = SUBTITLE_WORKERS
+        .get_or_init(|| Arc::new(Semaphore::new(2)))
+        .clone();
+    let _permit = workers
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    let mut child = Command::new(executable)
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-f")
+        .arg("ass")
+        .arg("-i")
+        .arg("pipe:0")
+        .arg("-c:s")
+        .arg("srt")
+        .arg("-f")
+        .arg("srt")
+        .arg("pipe:1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let mut input = child
+        .stdin
+        .take()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    tokio::time::timeout(Duration::from_secs(30), async {
+        let mut output = Vec::new();
+        let write = async {
+            input
+                .write_all(source)
+                .await
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+            input
+                .shutdown()
+                .await
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+        };
+        let read = async {
+            stdout
+                .take(4 * 1024 * 1024 + 1)
+                .read_to_end(&mut output)
+                .await
+                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+        };
+        tokio::try_join!(write, read)?;
+        if output.len() > 4 * 1024 * 1024 {
+            let _ = child.kill().await;
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let status = child
+            .wait()
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if !status.success() || output.is_empty() {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        Ok(output)
+    })
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+}
+
+// Sidecars are otherwise delivered unchanged. SRT -> VTT and ASS/SSA ->
+// SRT/VTT are isolated, bounded text-conversion exceptions.
 async fn serve_external_subtitle(
     state: Arc<AppState>,
     item: String,
@@ -1479,7 +1560,10 @@ async fn serve_external_subtitle(
             .into_iter()
             .find(|sidecar| {
                 sidecar.index == index
-                    && (sidecar.format == format || (sidecar.format == "srt" && format == "vtt"))
+                    && (sidecar.format == format
+                        || (sidecar.format == "srt" && format == "vtt")
+                        || (matches!(sidecar.format, "ass" | "ssa")
+                            && matches!(format, "srt" | "vtt")))
             })
     })
     .await
@@ -1544,6 +1628,8 @@ async fn serve_external_subtitle(
     }
     let sidecar = sidecar.ok_or(StatusCode::NOT_FOUND)?;
     let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
+    let convert_script = matches!(sidecar.format, "ass" | "ssa")
+        && matches!(format, "srt" | "vtt");
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;
     let (opened, _, size) = tokio::task::spawn_blocking(move || {
@@ -1554,7 +1640,7 @@ async fn serve_external_subtitle(
     if size > 4 * 1024 * 1024 {
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
-    let (body, response_length) = if convert_to_vtt {
+    let (body, response_length) = if convert_to_vtt || convert_script {
         // Compute identical payload length for GET and HEAD; never touch
         // or rewrite the user's adjacent subtitle file.
         let mut bytes = Vec::new();
@@ -1566,7 +1652,16 @@ async fn serve_external_subtitle(
         if bytes.len() > 4 * 1024 * 1024 {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        let converted = convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        let srt = if convert_script {
+            convert_script_sidecar_to_srt(state.ffmpeg_executable(), &bytes).await?
+        } else {
+            bytes
+        };
+        let converted = if format == "vtt" {
+            convert_srt_to_webvtt(&srt).ok_or(StatusCode::NOT_IMPLEMENTED)?
+        } else {
+            srt
+        };
         let length = converted.len() as u64;
         (
             if head {
