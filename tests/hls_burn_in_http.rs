@@ -197,6 +197,13 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
         .status(),
         StatusCode::NOT_IMPLEMENTED
     );
+    let audio_burn = format!(
+        "/Audio/{id}/main.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    assert_eq!(
+        call(&app, &audio_burn, Some(&token)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
 
     let plain_response = call(&app, &plain_url, Some(&token)).await;
     assert_eq!(plain_response.status(), StatusCode::OK);
@@ -204,6 +211,13 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     let burn_response = call(&app, &burn_url, Some(&token)).await;
     assert_eq!(burn_response.status(), StatusCode::OK);
     let burned = body_string(burn_response).await;
+    // Enum form 0 is the pinned v12.3 Encode delivery method; it selects
+    // the same publication, not a second FFmpeg render or cross-track cache.
+    let numeric_encode = format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=0");
+    assert_eq!(
+        body_string(call(&app, &numeric_encode, Some(&token)).await).await,
+        burned
+    );
     assert_ne!(plain, burned);
     // ASP.NET's pinned enum accepts the named Encode method and its 0
     // numeric value, without creating a differently keyed HLS publication.
