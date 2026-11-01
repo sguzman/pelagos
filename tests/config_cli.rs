@@ -22,7 +22,13 @@ fn config_file_and_cli_overrides_launch_only_an_isolated_loopback_server() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_pelagos"))
         .arg("--config")
         .arg(&configuration)
-        .args(["--bind", "127.0.0.1", "--port", &port.to_string(), "--no-discover"])
+        .args([
+            "--bind",
+            "127.0.0.1",
+            "--port",
+            &port.to_string(),
+            "--no-discover",
+        ])
         .arg("--state-dir")
         .arg(&state_dir)
         .stdout(Stdio::null())
