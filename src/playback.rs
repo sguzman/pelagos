@@ -388,10 +388,7 @@ fn pgs_invalid_range(size: u64) -> Result<Response, StatusCode> {
         .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     Ok(response)
 }
-fn pgs_requested_range(
-    headers: &HeaderMap,
-    size: u64,
-) -> Result<Option<streaming::ByteRange>, ()> {
+fn pgs_requested_range(headers: &HeaderMap, size: u64) -> Result<Option<streaming::ByteRange>, ()> {
     // An unsupported If-Range validator cannot safely authorize a partial
     // response, so send the entire raw representation instead.
     if headers.contains_key(IF_RANGE) {
@@ -653,8 +650,7 @@ fn source_from_probe(
         // actionable URLs. Do not imply that graphical or unknown subtitles
         // have a delivery path, and preserve their embedded source identity.
         for stream in &mut media_streams {
-            if stream.stream_type == "Subtitle"
-                && (0..=i64::from(i32::MAX)).contains(&stream.index)
+            if stream.stream_type == "Subtitle" && (0..=i64::from(i32::MAX)).contains(&stream.index)
             {
                 if stream.is_text_subtitle_stream
                     && matches!(
@@ -1779,14 +1775,8 @@ async fn serve_external_subtitle(
             let range = match pgs_requested_range(&headers, size) {
                 Ok(range) => range,
                 Err(()) => {
-                    reauthorize_video_source(
-                        state,
-                        headers,
-                        item,
-                        &source,
-                        &source_metadata,
-                    )
-                    .await?;
+                    reauthorize_video_source(state, headers, item, &source, &source_metadata)
+                        .await?;
                     return pgs_invalid_range(size);
                 }
             };
@@ -1794,14 +1784,7 @@ async fn serve_external_subtitle(
                 Some(range) => (range.start as usize, (range.end - range.start + 1) as usize),
                 None => (0, bytes.len()),
             };
-            reauthorize_video_source(
-                state,
-                headers,
-                item,
-                &source,
-                &source_metadata,
-            )
-            .await?;
+            reauthorize_video_source(state, headers, item, &source, &source_metadata).await?;
             let body = if head {
                 Body::empty()
             } else {
