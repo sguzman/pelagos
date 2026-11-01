@@ -2610,6 +2610,7 @@ mod tests {
         let movie = fixture.path().join("Feature.mkv");
         std::fs::write(&movie, b"media").unwrap();
         std::fs::write(fixture.path().join("Feature.eng.srt"), b"caption").unwrap();
+        std::fs::write(fixture.path().join("Feature.fr.ass"), b"native ASS").unwrap();
         let sidecar_report = probe::ProbeReport {
             path: movie.clone(),
             size_bytes: 5,
@@ -2657,6 +2658,29 @@ mod tests {
         assert_eq!(
             source.media_streams[1].delivery_url.as_deref(),
             Some("/Videos/item/item/Subtitles/1/Stream.srt")
+        );
+        // Never advertise an unsupported conversion of an external ASS
+        // sidecar merely because a client declares SRT support.
+        source.default_subtitle_stream_index = Some(2);
+        assert_eq!(
+            negotiate_selected_subtitle_delivery(&native_profile, &mut source),
+            Ok(())
+        );
+        let ass = source.media_streams.iter()
+            .find(|stream| stream.stream_type == "Subtitle" && stream.index == 2)
+            .unwrap();
+        assert_eq!(ass.codec.as_deref(), Some("ass"));
+        assert!(ass.is_external);
+        assert_eq!(
+            ass.delivery_url.as_deref(),
+            Some("/Videos/item/item/Subtitles/2/Stream.ass")
+        );
+        assert_eq!(
+            profile_allows_external_subtitles(
+                native_profile["SubtitleProfiles"].as_array().unwrap(),
+                &source
+            ),
+            Ok(false)
         );
     }
 
