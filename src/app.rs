@@ -22,6 +22,7 @@ use crate::{
 pub struct AppState {
     server_id: String,
     auth_dir: Option<PathBuf>,
+    fallback_font_dir: Option<PathBuf>,
     probe_executable: PathBuf,
     ffmpeg_executable: PathBuf,
     local_address: Option<String>,
@@ -33,6 +34,7 @@ impl AppState {
         Self {
             server_id,
             auth_dir: None,
+            fallback_font_dir: None,
             probe_executable: PathBuf::from("ffprobe"),
             ffmpeg_executable: PathBuf::from("ffmpeg"),
             local_address: None,
@@ -44,6 +46,7 @@ impl AppState {
         Self {
             server_id,
             auth_dir: Some(auth_dir),
+            fallback_font_dir: None,
             probe_executable: PathBuf::from("ffprobe"),
             ffmpeg_executable: PathBuf::from("ffmpeg"),
             local_address: None,
@@ -85,6 +88,26 @@ impl AppState {
         &self.ffmpeg_executable
     }
 
+    /// Deliberate opt-in only; never enumerate system fonts or private media
+    /// directories by default. Root must be an existing absolute canonical
+    /// directory, not a symlink or a path containing dot components.
+    pub fn with_fallback_font_dir(mut self, directory: PathBuf) -> std::io::Result<Self> {
+        if !directory.is_absolute() || !directory.is_dir()
+            || std::fs::canonicalize(&directory)? != directory
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "fallback font directory must be an existing canonical absolute directory",
+            ));
+        }
+        self.fallback_font_dir = Some(directory);
+        Ok(self)
+    }
+
+    pub(crate) fn fallback_font_dir(&self) -> Option<&Path> {
+        self.fallback_font_dir.as_deref()
+    }
+
     pub fn auth_dir(&self) -> Option<PathBuf> {
         self.auth_dir.clone()
     }
@@ -113,6 +136,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .merge(crate::hls_http::router())
         .merge(playback::router())
         .merge(crate::attachments::router())
+        .merge(crate::fallback_fonts::router())
         .merge(search::router())
         .merge(shows::router())
         .merge(user_data::router())
