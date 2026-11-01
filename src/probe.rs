@@ -112,6 +112,136 @@ pub async fn probe(file: &Path, executable: &Path, deadline: Duration) -> io::Re
     })
 }
 
+/// An FFprobe-reported ASS codec can contain either ASS v4.00+ or
+/// legacy SSA v4.00 script data. Parse the script header, not just the codec.
+pub(crate) fn is_native_ass_script(bytes: &[u8]) -> bool {
+    let Ok(script) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let mut script_info = false;
+    let mut found_type = false;
+    let mut found_events = false;
+    for line in script.trim_start_matches('\u{feff}').lines() {
+        let line = line.trim();
+        if line.eq_ignore_ascii_case("[Script Info]") {
+            script_info = true;
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            script_info = false;
+            if line.eq_ignore_ascii_case("[Events]") {
+                found_events = true;
+            }
+            continue;
+        }
+        if script_info
+            && let Some((name, value)) = line.split_once(':')
+            && name.trim().eq_ignore_ascii_case("ScriptType")
+        {
+            if found_type || !value.trim().eq_ignore_ascii_case("v4.00+") {
+                return false;
+            }
+            found_type = true;
+        }
+    }
+    found_type && found_events
+}
+
+/// FFprobe's -show_data JSON renders stream extradata as addressed hex rows.
+/// Decode only the hex column, never its untrusted printable preview.
+fn decode_extradata_hex(rendered: &str) -> Option<Vec<u8>> {
+    if rendered.len() > 128 * 1024 {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    for line in rendered.lines().filter(|line| !line.trim().is_empty()) {
+        let (address, columns) = line.split_once(':')?;
+        if address.len() != 8
+            || !address.bytes().all(|digit| digit.is_ascii_hexdigit())
+            || usize::from_str_radix(address, 16).ok()? != bytes.len()
+        {
+            return None;
+        }
+        let hex = columns.trim_start().split("  ").next()?;
+        for group in hex.split_ascii_whitespace() {
+            if group.len() % 2 != 0
+                || group.len() > 8
+                || !group.bytes().all(|digit| digit.is_ascii_hexdigit())
+            {
+                return None;
+            }
+            for pair in group.as_bytes().chunks_exact(2) {
+                bytes.push(u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?);
+                if bytes.len() > 64 * 1024 {
+                    return None;
+                }
+            }
+        }
+    }
+    (!bytes.is_empty()).then_some(bytes)
+}
+
+/// Probe only subtitle extradata to distinguish genuine modern ASS from
+/// legacy SSA sharing codec_name=ass. Failure means no confirmed native ASS:
+/// the caller can still offer bounded text conversion. No source is modified.
+pub(crate) async fn native_ass_stream_indices(
+    file: &Path,
+    executable: &Path,
+) -> io::Result<std::collections::HashSet<i64>> {
+    let mut child = Command::new(executable)
+        .arg("-v")
+        .arg("error")
+        .arg("-select_streams")
+        .arg("s")
+        .arg("-show_entries")
+        .arg("stream=index,codec_name,extradata")
+        .arg("-show_data")
+        .arg("-of")
+        .arg("json")
+        .arg("-i")
+        .arg(file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()?;
+    let stdout = child.stdout.take().expect("piped stdout");
+    let output_reader = tokio::spawn(capped_read(stdout, 256 * 1024));
+    let status = match time::timeout(Duration::from_secs(10), child.wait()).await {
+        Ok(result) => result?,
+        Err(_) => {
+            child.kill().await?;
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "ASS probe timed out"));
+        }
+    };
+    let bytes = output_reader.await.map_err(io::Error::other)??;
+    if !status.success() || bytes.len() > 256 * 1024 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "ASS probe refused"));
+    }
+    let json: Value = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+    let streams = json["streams"]
+        .as_array()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ASS streams missing"))?;
+    let mut native = std::collections::HashSet::new();
+    for stream in streams {
+        if stream["codec_name"] != "ass" {
+            continue;
+        }
+        let index = stream["index"]
+            .as_i64()
+            .filter(|index| (0..=i64::from(i32::MAX)).contains(index));
+        let script = stream["extradata"]
+            .as_str()
+            .and_then(decode_extradata_hex);
+        if let (Some(index), Some(script)) = (index, script)
+            && is_native_ass_script(&script)
+        {
+            native.insert(index);
+        }
+    }
+    Ok(native)
+}
+
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
@@ -125,6 +255,22 @@ mod tests {
         fs::write(&executable, format!("#!/bin/sh\n{script}\n")).unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
         (dir, executable, media)
+    }
+
+    #[test]
+    fn ffprobe_ass_header_distinguishes_modern_from_legacy_and_malformed() {
+        let native = b"[Script Info]\nScriptType: v4.00+\n[Events]\nFormat: Start,End,Text";
+        let legacy = b"[Script Info]\nScriptType: v4.00\n[Events]\nFormat: Start,End,Text";
+        assert!(is_native_ass_script(native));
+        assert!(!is_native_ass_script(legacy));
+        assert!(!is_native_ass_script(
+            b"[Script Info]\nScriptType: v4.00+\nScriptType: v4.00+\n[Events]\n"
+        ));
+        let rendered = "\n00000000: 5b53 6372 6970 7420 496e 666f 5d0a 5363  [Script Info].Sc\n00000010: 7269 7074 5479 7065 3a20 7634 2e30 302b  riptType: v4.00+\n00000020: 0a5b 4576 656e 7473 5d0a                 .[Events].\n";
+        let decoded = decode_extradata_hex(rendered).unwrap();
+        assert!(is_native_ass_script(&decoded));
+        assert!(decode_extradata_hex("00000001: 5b53  bad offset").is_none());
+        assert!(decode_extradata_hex("00000000: 5b5Z  bad hex").is_none());
     }
 
     #[tokio::test]
