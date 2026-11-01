@@ -36,10 +36,16 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let font = temp.path().join("fixture.ttf");
     let nonfont = temp.path().join("not-a-font.bin");
     let oversized = temp.path().join("oversized.ttf");
-    let bytes = b"SYNTHETIC_FONT_ATTACHMENT_BYTES";
-    fs::write(&font, bytes).unwrap();
+    let spoofed = temp.path().join("spoofed.ttf");
+    // Minimal offset-table signature for the bounded transport-header check:
+    // this is synthetic data, not a complete font for rendering.
+    let mut bytes = vec![0_u8; 28];
+    bytes[0..4].copy_from_slice(&[0, 1, 0, 0]);
+    bytes[4..6].copy_from_slice(&1_u16.to_be_bytes());
+    fs::write(&font, &bytes).unwrap();
     fs::write(&nonfont, b"ARBITRARY_NONFONT_PAYLOAD").unwrap();
     fs::write(&oversized, vec![0_u8; 4 * 1024 * 1024 + 1]).unwrap();
+    fs::write(&spoofed, b"NOT_A_REAL_TRUETYPE_FONT").unwrap();
     let movie = root.join("Feature.mkv");
     let output = Command::new("ffmpeg")
         .args([
@@ -74,6 +80,12 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
         .args([
             "-metadata:s:t:2",
             "mimetype=application/x-truetype-font",
+            "-attach",
+        ])
+        .arg(&spoofed)
+        .args([
+            "-metadata:s:t:3",
+            "mimetype=font/ttf",
             "-y",
         ])
         .arg(&movie)
@@ -127,7 +139,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let attachments = info["MediaSources"][0]["MediaAttachments"]
         .as_array()
         .unwrap();
-    assert_eq!(attachments.len(), 1);
+    assert_eq!(attachments.len(), 2);
     assert_eq!(attachments[0]["Index"], 1);
     assert_eq!(attachments[0]["Codec"], "ttf");
     assert!(attachments[0]["FileName"].is_null());
@@ -147,7 +159,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     assert_eq!(response.headers()["x-content-type-options"], "nosniff");
     assert_eq!(
         to_bytes(response.into_body(), 1024).await.unwrap().as_ref(),
-        bytes
+        bytes.as_slice()
     );
     let response = request(&app, "HEAD", &url, Some(&viewer)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -188,6 +200,17 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let too_big = format!("/Videos/{id}/{id}/Attachments/3");
     assert_eq!(
         request(&app, "GET", &too_big, Some(&viewer)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    // A forged Matroska MIME tag must never turn arbitrary extracted
+    // attachment bytes into a font payload.
+    let forged = format!("/Videos/{id}/{id}/Attachments/4");
+    assert_eq!(
+        request(&app, "GET", &forged, Some(&viewer)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        request(&app, "HEAD", &forged, Some(&viewer)).await.status(),
         StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(fs::read(&movie).unwrap(), original);
