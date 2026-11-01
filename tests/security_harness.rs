@@ -70,9 +70,13 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
     assert_eq!(items.len(), 2);
     assert!(!items.iter().any(|item| item["Name"] == "linked"));
     let allowed_id = items.iter().find(|item| item["Name"] == "clip").unwrap()["Id"]
-        .as_str().unwrap().to_owned();
+        .as_str()
+        .unwrap()
+        .to_owned();
     let hidden_id = items.iter().find(|item| item["Name"] == "private").unwrap()["Id"]
-        .as_str().unwrap().to_owned();
+        .as_str()
+        .unwrap()
+        .to_owned();
     let stream = format!("/Videos/{allowed_id}/stream?static=true");
     let hidden_stream = format!("/Videos/{hidden_id}/stream?static=true");
     assert_eq!(
