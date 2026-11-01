@@ -288,6 +288,9 @@ fn sidecar_language_tag(part: &str) -> Option<String> {
     {
         return None;
     }
+    if part.contains('-') && suffix.is_empty() {
+        return None;
+    }
     if !suffix.is_empty()
         && !((suffix.len() == 2 && suffix.bytes().all(|byte| byte.is_ascii_alphabetic()))
             || (suffix.len() == 3 && suffix.bytes().all(|byte| byte.is_ascii_digit()))
@@ -2112,6 +2115,22 @@ mod tests {
             ),
             Ok(false)
         );
+    }
+
+    #[test]
+    fn sidecar_language_tags_reject_invalid_or_ambiguous_segments() {
+        for (input, expected) in [
+            ("es-mx", Some("es-mx")),
+            ("en-001", Some("en-001")),
+            ("zh-hans", Some("zh-hans")),
+            ("hi", Some("hi")),
+            ("en-", None),
+            ("en-us-script", None),
+            ("englishtitle", None),
+            ("en-!", None),
+        ] {
+            assert_eq!(sidecar_language_tag(input).as_deref(), expected);
+        }
     }
 
     #[test]
