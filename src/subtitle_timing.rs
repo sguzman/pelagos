@@ -160,7 +160,7 @@ pub(crate) fn clip_vtt(
     if !header.is_empty()
         && (header.len() > 256
             || !(header.starts_with(' ') || header.starts_with('\t'))
-            || header.chars().any(char::is_control))
+            || header.chars().any(|ch| ch.is_control() && ch != '\t'))
     {
         return None;
     }
@@ -435,6 +435,17 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn clip_vtt_accepts_tab_separated_titles_but_rejects_header_metadata() {
+        let valid = b"WEBVTT\tCaptions\n\n00:00:01.000 --> 00:00:02.000\nHello\n\n";
+        assert_eq!(
+            clip_vtt(valid, 0, 30_000_000, false).unwrap(),
+            b"WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello\n\n"
+        );
+        let invalid = b"WEBVTT\tCaptions\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n\n";
+        assert!(clip_vtt(invalid, 0, 30_000_000, false).is_none());
     }
 
     #[test]
