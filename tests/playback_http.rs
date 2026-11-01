@@ -774,7 +774,10 @@ async fn audio_playback_info_is_scoped_and_reports_direct_source_only() {
 async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory() {
     use axum::body::to_bytes;
     use pelagos::catalog;
-    use std::{fs, os::unix::fs::{PermissionsExt, symlink}};
+    use std::{
+        fs,
+        os::unix::fs::{PermissionsExt, symlink},
+    };
 
     let fixture = tempfile::tempdir().unwrap();
     let library = fixture.path().join("Movies");
@@ -797,24 +800,33 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     auth::create_user(&state_dir, "admin", "subtitle-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "subtitle-viewer-password").unwrap();
     let admin = auth::authenticate(&state_dir, "admin", "subtitle-admin-password", "server")
-        .unwrap().unwrap().access_token;
+        .unwrap()
+        .unwrap()
+        .access_token;
     let viewer = auth::authenticate(&state_dir, "viewer", "subtitle-viewer-password", "server")
-        .unwrap().unwrap().access_token;
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
     let app = app::router(Arc::new(
         AppState::with_auth_dir("server".to_owned(), state_dir.clone())
             .with_probe_executable(ffprobe),
     ));
     let response = request(&app, "GET", "/Items", Some(&admin), "").await;
-    let listing: serde_json::Value = serde_json::from_slice(
-        &to_bytes(response.into_body(), 65_536).await.unwrap(),
-    ).unwrap();
+    let listing: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
     let item = listing["Items"][0]["Id"].as_str().unwrap();
-    let info = request(&app, "GET", &format!("/Items/{item}/PlaybackInfo"), Some(&viewer), "").await;
+    let info = request(
+        &app,
+        "GET",
+        &format!("/Items/{item}/PlaybackInfo"),
+        Some(&viewer),
+        "",
+    )
+    .await;
     assert_eq!(info.status(), StatusCode::OK);
-    let value: serde_json::Value = serde_json::from_slice(
-        &to_bytes(info.into_body(), 65_536).await.unwrap(),
-    ).unwrap();
+    let value: serde_json::Value =
+        serde_json::from_slice(&to_bytes(info.into_body(), 65_536).await.unwrap()).unwrap();
     let streams = value["MediaSources"][0]["MediaStreams"].as_array().unwrap();
     assert_eq!(streams.len(), 3);
     assert_eq!(streams[2]["Index"], 2);
@@ -823,23 +835,62 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
     assert_eq!(streams[2]["IsTextSubtitleStream"], true);
     let url = streams[2]["DeliveryUrl"].as_str().unwrap();
     assert_eq!(url, format!("/Videos/{item}/{item}/Subtitles/2/Stream.srt"));
-    assert_eq!(request(&app, "GET", url, None, "").await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        request(&app, "GET", url, None, "").await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let response = request(&app, "GET", url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/x-subrip");
-    assert_eq!(to_bytes(response.into_body(), 1_024).await.unwrap().as_ref(), subtitle);
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "application/x-subrip"
+    );
+    assert_eq!(
+        to_bytes(response.into_body(), 1_024)
+            .await
+            .unwrap()
+            .as_ref(),
+        subtitle
+    );
     let response = request(&app, "HEAD", url, Some(&viewer), "").await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_LENGTH], subtitle.len().to_string());
-    assert!(to_bytes(response.into_body(), 1_024).await.unwrap().is_empty());
     assert_eq!(
-        request(&app, "GET", &format!("/Videos/{item}/wrong/Subtitles/2/Stream.srt"), Some(&viewer), "").await.status(),
+        response.headers()[header::CONTENT_LENGTH],
+        subtitle.len().to_string()
+    );
+    assert!(
+        to_bytes(response.into_body(), 1_024)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{item}/wrong/Subtitles/2/Stream.srt"),
+            Some(&viewer),
+            ""
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        request(&app, "GET", &format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt"), Some(&viewer), "").await.status(),
+        request(
+            &app,
+            "GET",
+            &format!("/Videos/{item}/{item}/Subtitles/3/Stream.srt"),
+            Some(&viewer),
+            ""
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
-    assert_eq!(request(&app, "GET", url, Some(&viewer), "").await.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        request(&app, "GET", url, Some(&viewer), "").await.status(),
+        StatusCode::NOT_FOUND
+    );
 }

@@ -290,7 +290,10 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
         let Ok(filename) = entry.file_name().into_string() else {
             continue;
         };
-        let Some(suffix) = filename.strip_prefix(stem).and_then(|rest| rest.strip_prefix('.')) else {
+        let Some(suffix) = filename
+            .strip_prefix(stem)
+            .and_then(|rest| rest.strip_prefix('.'))
+        else {
             continue;
         };
         let language = if suffix.eq_ignore_ascii_case("srt") {
@@ -299,13 +302,17 @@ fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<Externa
             let Some(language) = suffix.strip_suffix(".srt") else {
                 continue;
             };
-            if !(2..=3).contains(&language.len()) || !language.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+            if !(2..=3).contains(&language.len())
+                || !language.bytes().all(|byte| byte.is_ascii_alphabetic())
+            {
                 continue;
             }
             Some(language.to_ascii_lowercase())
         };
         if entry.file_type().is_ok_and(|kind| kind.is_file())
-            && entry.metadata().is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
+            && entry
+                .metadata()
+                .is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
         {
             names.push((filename, language));
         }
@@ -864,14 +871,12 @@ async fn serve_external_srt(
         CONTENT_TYPE,
         HeaderValue::from_static("application/x-subrip"),
     );
-    response.headers_mut().insert(
-        CACHE_CONTROL,
-        HeaderValue::from_static("private, no-store"),
-    );
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     response.headers_mut().insert(
         CONTENT_LENGTH,
-        HeaderValue::from_str(&size.to_string())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        HeaderValue::from_str(&size.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
     Ok(response)
 }
