@@ -35,7 +35,13 @@ async fn body_string(response: Response) -> String {
     .unwrap()
 }
 
-async fn segment_bytes(app: &Router, id: &str, manifest: &str, token: &str, segment: usize) -> Vec<u8> {
+async fn segment_bytes(
+    app: &Router,
+    id: &str,
+    manifest: &str,
+    token: &str,
+    segment: usize,
+) -> Vec<u8> {
     let line = manifest
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
@@ -58,8 +64,13 @@ fn bright_pixels(media: &[u8], path: &std::path::Path) -> usize {
         .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(path)
         .args([
-            "-frames:v", "1", "-vf", "select=eq(n\\,3),format=gray",
-            "-f", "rawvideo", "pipe:1",
+            "-frames:v",
+            "1",
+            "-vf",
+            "select=eq(n\\,3),format=gray",
+            "-f",
+            "rawvideo",
+            "pipe:1",
         ])
         .output()
         .unwrap();
@@ -91,13 +102,21 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     .unwrap();
     let created = Command::new("ffmpeg")
         .args([
-            "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
-            "color=c=black:s=320x128:r=5:d=4", "-f", "srt", "-i",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x128:r=5:d=4",
+            "-f",
+            "srt",
+            "-i",
         ])
         .arg(&subtitles)
         .args([
-            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "srt",
-            "-y",
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "srt", "-y",
         ])
         .arg(&source)
         .output()
@@ -120,15 +139,9 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     )));
     let items = call(&app, "/Items", Some(&token)).await;
     assert_eq!(items.status(), StatusCode::OK);
-    let values: Value =
-        serde_json::from_str(&body_string(items).await).unwrap();
+    let values: Value = serde_json::from_str(&body_string(items).await).unwrap();
     let id = values["Items"][0]["Id"].as_str().unwrap();
-    let info = call(
-        &app,
-        &format!("/Items/{id}/PlaybackInfo"),
-        Some(&token),
-    )
-    .await;
+    let info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
     let info: Value = serde_json::from_str(&body_string(info).await).unwrap();
     let subtitle = info["MediaSources"][0]["MediaStreams"]
         .as_array()
@@ -141,11 +154,18 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
 
     let plain_url = format!("/Videos/{id}/main.m3u8?segmentLength=2");
     let burn_url = format!("{plain_url}&subtitleStreamIndex={index}");
-    assert_eq!(call(&app, &burn_url, None).await.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
-        call(&app, &format!("{plain_url}&subtitleStreamIndex=999"), Some(&token))
-            .await
-            .status(),
+        call(&app, &burn_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(
+            &app,
+            &format!("{plain_url}&subtitleStreamIndex=999"),
+            Some(&token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(
