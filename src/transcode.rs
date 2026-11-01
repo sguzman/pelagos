@@ -922,28 +922,14 @@ mod tests {
 
         let invalid = temp.path().join("invalid.ts");
         let error = controller
-            .try_run_window_external_srt_capped(
-                &source,
-                &invalid,
-                1.0,
-                1.5,
-                1024,
-                &[0xff, 0xfe],
-            )
+            .try_run_window_external_srt_capped(&source, &invalid, 1.0, 1.5, 1024, &[0xff, 0xfe])
             .await
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(!invalid.exists());
         let oversized = vec![b'A'; 4 * 1024 * 1024 + 1];
         let error = controller
-            .try_run_window_external_srt_capped(
-                &source,
-                &invalid,
-                1.0,
-                1.5,
-                1024,
-                &oversized,
-            )
+            .try_run_window_external_srt_capped(&source, &invalid, 1.0, 1.5, 1024, &oversized)
             .await
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
