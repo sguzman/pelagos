@@ -3,7 +3,9 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
+    process::Stdio,
+    time::Duration,
 };
 
 use axum::{
@@ -21,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
-use tokio::io::AsyncReadExt;
+use tokio::{io::AsyncReadExt, process::Command, sync::Semaphore};
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Deserialize, Default)]
@@ -1050,6 +1052,62 @@ fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
     (count > 0).then(|| output.into_bytes())
 }
 
+// Bound on-demand embedded subtitle extraction without a persistent process.
+static SUBTITLE_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+
+async fn extract_embedded_srt(
+    executable: &Path,
+    source: &Path,
+    index: i64,
+) -> Result<Vec<u8>, StatusCode> {
+    let workers = SUBTITLE_WORKERS
+        .get_or_init(|| Arc::new(Semaphore::new(2)))
+        .clone();
+    let _permit = workers
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    let mut child = Command::new(executable)
+        .arg("-nostdin")
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-i")
+        .arg(source)
+        .arg("-map")
+        .arg(format!("0:{index}"))
+        .arg("-c:s")
+        .arg("srt")
+        .arg("-f")
+        .arg("srt")
+        .arg("pipe:1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    tokio::time::timeout(Duration::from_secs(30), async {
+        let stdout = child.stdout.take().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut payload = Vec::new();
+        stdout
+            .take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut payload)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if payload.len() > 4 * 1024 * 1024 {
+            let _ = child.kill().await;
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let status = child.wait().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        if !status.success() || payload.is_empty() {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        Ok(payload)
+    })
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+}
+
 // Only identity subtitle requests are supported. Timestamp conversion,
 // subtitle transcoding, and graphical subtitles need separate implementations.
 async fn serve_external_subtitle(
@@ -1061,17 +1119,23 @@ async fn serve_external_subtitle(
     headers: HeaderMap,
     head: bool,
 ) -> Result<Response, StatusCode> {
-    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
+    let (_, scope) = auth_api::library_scope(state.clone(), headers.clone()).await?;
     if item != media_source {
         return Err(StatusCode::NOT_FOUND);
     }
-    let (source, kind) = media_file(&state, item, scope).await?;
+    let (source, kind) = media_file(&state, item.clone(), scope).await?;
     if kind != "video" {
         return Err(StatusCode::NOT_FOUND);
     }
+    let source_metadata = tokio::fs::metadata(&source).await.map_err(|_| StatusCode::NOT_FOUND)?;
     let report = probe::probe(&source, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let embedded = report.streams.iter().any(|stream| {
+        number(&stream["index"]) == Some(index)
+            && stream["codec_type"] == "subtitle"
+            && is_text_subtitle(stream["codec_name"].as_str())
+    });
     let discovered_source = source.clone();
     let sidecar = tokio::task::spawn_blocking(move || {
         external_subtitles(&discovered_source, &report)
@@ -1082,8 +1146,55 @@ async fn serve_external_subtitle(
             })
     })
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    .ok_or(StatusCode::NOT_FOUND)?;
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if sidecar.is_none() {
+        if !embedded {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        if !(0..=i64::from(i32::MAX)).contains(&index) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        let bytes = extract_embedded_srt(state.ffmpeg_executable(), &source, index).await?;
+        let payload = if format == "vtt" {
+            convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
+        } else {
+            bytes
+        };
+        // Revalidate the original user/session, grants and media revision
+        // after FFmpeg completes but before returning extracted bytes.
+        let (_, latest_scope) = auth_api::library_scope(state.clone(), headers).await?;
+        let (latest_source, _) = media_file(&state, item, latest_scope).await?;
+        let current = tokio::fs::metadata(&latest_source)
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        if latest_source != source
+            || current.len() != source_metadata.len()
+            || current.modified().ok() != source_metadata.modified().ok()
+        {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        let length = payload.len();
+        let mut response = Response::new(if head { Body::empty() } else { Body::from(payload) });
+        response.headers_mut().insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static(if format == "vtt" {
+                "text/vtt; charset=utf-8"
+            } else {
+                "application/x-subrip"
+            }),
+        );
+        response.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("private, no-store"),
+        );
+        response.headers_mut().insert(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&length.to_string())
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+        return Ok(response);
+    }
+    let sidecar = sidecar.ok_or(StatusCode::NOT_FOUND)?;
     let convert_to_vtt = sidecar.format == "srt" && format == "vtt";
     let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
     let filename = sidecar.filename;

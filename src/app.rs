@@ -23,6 +23,7 @@ pub struct AppState {
     server_id: String,
     auth_dir: Option<PathBuf>,
     probe_executable: PathBuf,
+    ffmpeg_executable: PathBuf,
     local_address: Option<String>,
     hls_registry: crate::hls_http::HlsRegistry,
 }
@@ -33,6 +34,7 @@ impl AppState {
             server_id,
             auth_dir: None,
             probe_executable: PathBuf::from("ffprobe"),
+            ffmpeg_executable: PathBuf::from("ffmpeg"),
             local_address: None,
             hls_registry: crate::hls_http::HlsRegistry::new(PathBuf::from("ffmpeg")),
         }
@@ -43,6 +45,7 @@ impl AppState {
             server_id,
             auth_dir: Some(auth_dir),
             probe_executable: PathBuf::from("ffprobe"),
+            ffmpeg_executable: PathBuf::from("ffmpeg"),
             local_address: None,
             hls_registry: crate::hls_http::HlsRegistry::new(PathBuf::from("ffmpeg")),
         }
@@ -65,7 +68,8 @@ impl AppState {
 
     /// Locally select FFmpeg without accepting HTTP-controlled executables.
     pub fn with_ffmpeg_executable(mut self, executable: PathBuf) -> Self {
-        self.hls_registry = crate::hls_http::HlsRegistry::new(executable);
+        self.hls_registry = crate::hls_http::HlsRegistry::new(executable.clone());
+        self.ffmpeg_executable = executable;
         self
     }
 
@@ -75,6 +79,10 @@ impl AppState {
 
     pub fn probe_executable(&self) -> &Path {
         &self.probe_executable
+    }
+
+    pub(crate) fn ffmpeg_executable(&self) -> &Path {
+        &self.ffmpeg_executable
     }
 
     pub fn auth_dir(&self) -> Option<PathBuf> {

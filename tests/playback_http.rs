@@ -1007,3 +1007,70 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         StatusCode::NOT_FOUND
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn embedded_mov_text_subtitles_are_extracted_under_authentication() {
+    use axum::body::to_bytes;
+    use pelagos::catalog;
+    use std::{fs, process::Command};
+
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    let library = fixture.path().join("Movies");
+    let state_dir = fixture.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let subtitle = fixture.path().join("input.srt");
+    fs::write(&subtitle, b"1\n00:00:00,400 --> 00:00:01,200\nExtracted cue!\n").unwrap();
+    let video = library.join("Embedded.mp4");
+    let encoded = Command::new("ffmpeg")
+        .args([
+            "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=size=160x90:rate=10:duration=2",
+            "-i",
+        ])
+        .arg(&subtitle)
+        .args(["-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "mov_text", "-y"])
+        .arg(&video)
+        .output()
+        .unwrap();
+    assert!(encoded.status.success(), "{}", String::from_utf8_lossy(&encoded.stderr));
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "embedded-admin-password").unwrap();
+    auth::create_user(&state_dir, "viewer", "embedded-viewer-password").unwrap();
+    let admin = auth::authenticate(&state_dir, "admin", "embedded-admin-password", "server")
+        .unwrap().unwrap().access_token;
+    let viewer = auth::authenticate(&state_dir, "viewer", "embedded-viewer-password", "server")
+        .unwrap().unwrap().access_token;
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    let app = app::router(Arc::new(AppState::with_auth_dir("server".to_owned(), state_dir.clone())));
+    let response = request(&app, "GET", "/Items", Some(&admin), "").await;
+    let listing: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
+    let item = listing["Items"][0]["Id"].as_str().unwrap();
+    let info = request(&app, "GET", &format!("/Items/{item}/PlaybackInfo"), Some(&viewer), "").await;
+    assert_eq!(info.status(), StatusCode::OK);
+    let details: serde_json::Value =
+        serde_json::from_slice(&to_bytes(info.into_body(), 65_536).await.unwrap()).unwrap();
+    let streams = details["MediaSources"][0]["MediaStreams"].as_array().unwrap();
+    let embedded = streams.iter().find(|stream| stream["Type"] == "Subtitle").unwrap();
+    assert_eq!(embedded["IsTextSubtitleStream"], true);
+    assert_eq!(embedded["IsExternal"], false);
+    let index = embedded["Index"].as_i64().unwrap();
+    let route = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.srt");
+    assert_eq!(request(&app, "GET", &route, None, "").await.status(), StatusCode::UNAUTHORIZED);
+    let response = request(&app, "GET", &route, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let data = to_bytes(response.into_body(), 64_000).await.unwrap();
+    assert!(std::str::from_utf8(&data).unwrap().contains("Extracted cue!"));
+    let vtt_route = format!("/Videos/{item}/{item}/Subtitles/{index}/Stream.vtt");
+    let response = request(&app, "GET", &vtt_route, Some(&viewer), "").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let vtt = to_bytes(response.into_body(), 64_000).await.unwrap();
+    assert!(std::str::from_utf8(&vtt).unwrap().starts_with("WEBVTT\n\n"));
+    assert!(std::str::from_utf8(&vtt).unwrap().contains("Extracted cue!"));
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(request(&app, "GET", &route, Some(&viewer), "").await.status(), StatusCode::NOT_FOUND);
+}
