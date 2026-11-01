@@ -888,20 +888,24 @@ async fn playback_info(
     // caller-supplied query value has already overridden the POST body.
     // Neither a measured over-budget static file nor unknown source bitrate
     // can be offered without a transcoding fallback.
-    let profile_bitrate = profile
-        .as_ref()
-        .and_then(|profile| profile.get("MaxStreamingBitrate"))
-        .filter(|value| !value.is_null())
-        .map(|value| {
-            value
-                .as_i64()
-                .filter(|bitrate| *bitrate > 0)
-                .ok_or(StatusCode::BAD_REQUEST)
-        })
-        .transpose()?;
     if req.max_streaming_bitrate.is_some_and(|limit| limit <= 0) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let profile_bitrate = if req.max_streaming_bitrate.is_none() {
+        profile
+            .as_ref()
+            .and_then(|profile| profile.get("MaxStreamingBitrate"))
+            .filter(|value| !value.is_null())
+            .map(|value| {
+                value
+                    .as_i64()
+                    .filter(|bitrate| *bitrate > 0)
+                    .ok_or(StatusCode::BAD_REQUEST)
+            })
+            .transpose()?
+    } else {
+        None
+    };
     if let Some(limit) = req.max_streaming_bitrate.or(profile_bitrate)
         && measured_bitrate(&probed).is_none_or(|bitrate| bitrate > limit)
     {

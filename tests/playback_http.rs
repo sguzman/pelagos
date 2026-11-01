@@ -487,6 +487,16 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
             }),
             StatusCode::BAD_REQUEST,
         ),
+        (
+            serde_json::json!({
+                "MaxStreamingBitrate": 4_000_000,
+                "DeviceProfile": {
+                    "MaxStreamingBitrate": 0,
+                    "DirectPlayProfiles": [{"Type": "Video", "Container": "mp4"}]
+                }
+            }),
+            StatusCode::OK,
+        ),
     ] {
         assert_eq!(
             request(&router, "POST", &route, Some(&token), &body.to_string())
