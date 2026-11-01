@@ -249,6 +249,32 @@ async fn embedded_ass_preserves_native_styles_and_does_not_modify_source() {
             }
             assert_eq!(length.to_str().unwrap(), body.len().to_string());
         }
+        // The same text conversion is usable by the bounded short-VOD HLS
+        // subtitle playlist and its header-authenticated segment routes.
+        let manifest_url = format!(
+            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/subtitles.m3u8?segmentLength=2"
+        );
+        assert_eq!(
+            request(&app, "GET", &manifest_url, None).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let manifest = request(&app, "GET", &manifest_url, Some(&viewer)).await;
+        assert_eq!(manifest.status(), StatusCode::OK);
+        let manifest = to_bytes(manifest.into_body(), 65_536).await.unwrap();
+        let segment = std::str::from_utf8(&manifest)
+            .unwrap()
+            .lines()
+            .find(|line| line.starts_with("stream.vtt?"))
+            .unwrap();
+        let segment_url = format!(
+            "/Videos/{id}/{id}/Subtitles/{sidecar_index}/{segment}"
+        );
+        let segment = request(&app, "GET", &segment_url, Some(&viewer)).await;
+        assert_eq!(segment.status(), StatusCode::OK);
+        let segment = to_bytes(segment.into_body(), 65_536).await.unwrap();
+        let text = std::str::from_utf8(&segment).unwrap();
+        assert!(text.contains(caption));
+        assert!(text.starts_with("WEBVTT\\nX-TIMESTAMP-MAP="));
     }
     let embedded = info["MediaSources"][0]["MediaStreams"]
         .as_array()
