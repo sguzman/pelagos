@@ -251,8 +251,7 @@ fn source_from_probe(
             seconds.is_finite() && *seconds >= 0.0 && *seconds <= i64::MAX as f64 / 10_000_000.0
         })
         .map(|seconds| (seconds * 10_000_000.0).round() as i64);
-    let media_streams: Vec<MediaStream> =
-        result.streams.iter().filter_map(mapped_stream).collect();
+    let media_streams: Vec<MediaStream> = result.streams.iter().filter_map(mapped_stream).collect();
     let mut audio_tracks = media_streams
         .iter()
         .filter(|stream| stream.stream_type == "Audio");
@@ -260,7 +259,13 @@ fn source_from_probe(
     let default_audio_stream_index = media_streams
         .iter()
         .find(|stream| stream.stream_type == "Audio" && stream.is_default)
-        .or_else(|| audio_tracks.next().is_none().then_some(first_audio).flatten())
+        .or_else(|| {
+            audio_tracks
+                .next()
+                .is_none()
+                .then_some(first_audio)
+                .flatten()
+        })
         .map(|stream| stream.index)
         .filter(|index| i32::try_from(*index).is_ok());
     MediaSource {
