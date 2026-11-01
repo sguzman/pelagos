@@ -324,7 +324,10 @@ async fn validate_hls_track_selection(
             return Err(StatusCode::NOT_IMPLEMENTED);
         };
         if position > 31
-            || !matches!(stream["codec_name"].as_str(), Some("subrip" | "ass" | "ssa"))
+            || !matches!(
+                stream["codec_name"].as_str(),
+                Some("subrip" | "ass" | "ssa")
+            )
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -1312,7 +1315,7 @@ mod tests {
                 target_seconds: 2,
                 start_time_ticks: 0,
                 rendition_count: 1,
-                    subtitle_stream_index: None,
+                subtitle_stream_index: None,
                 private_root: root,
                 main_playlist: String::new(),
                 master_playlist: String::new(),
@@ -1347,7 +1350,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             rendition_count: 1,
-                    subtitle_stream_index: None,
+            subtitle_stream_index: None,
         };
         // Multiple synthetic entries use the same cache key; the most
         // recently used publication is now returned, rather than the one
@@ -1418,7 +1421,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             rendition_count: 1,
-                    subtitle_stream_index: None,
+            subtitle_stream_index: None,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
