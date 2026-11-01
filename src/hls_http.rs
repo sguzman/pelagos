@@ -288,9 +288,10 @@ async fn validate_hls_track_selection(
         .subtitle_method
         .as_deref()
         .is_some_and(|method| method.eq_ignore_ascii_case("encode") || method == "0");
-    let supported_method = query.subtitle_method.as_deref().is_none_or(|method| {
-        encode || method.eq_ignore_ascii_case("external") || method == "2"
-    });
+    let supported_method = query
+        .subtitle_method
+        .as_deref()
+        .is_none_or(|method| encode || method.eq_ignore_ascii_case("external") || method == "2");
     if !supported_method
         || (query.subtitle_stream_index.is_some_and(|index| index >= 0) && !encode)
         || (kind == "audio" && query.video_stream_index.is_some())
