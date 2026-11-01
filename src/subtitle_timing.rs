@@ -266,7 +266,9 @@ pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
     if source.len() > 4 * 1024 * 1024 {
         return None;
     }
-    let source = std::str::from_utf8(source).ok()?.trim_start_matches('\u{feff}');
+    let source = std::str::from_utf8(source)
+        .ok()?
+        .trim_start_matches('\u{feff}');
     let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
     let (header, body) = normalized.split_once("\n\n")?;
     if !(header == "WEBVTT" || header.starts_with("WEBVTT ") || header.starts_with("WEBVTT\t"))
@@ -289,10 +291,7 @@ pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
         }
         let timing = if first.contains(" --> ") {
             first
-        } else if !first.is_empty()
-            && first.len() <= 128
-            && !first.chars().any(char::is_control)
-        {
+        } else if !first.is_empty() && first.len() <= 128 && !first.chars().any(char::is_control) {
             lines.next()?.trim()
         } else {
             return None;
@@ -308,7 +307,9 @@ pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
         }
         let caption = lines.collect::<Vec<_>>().join("\n");
         if caption.trim().is_empty()
-            || caption.chars().any(|ch| ch.is_control() && ch != '\n' && ch != '\t')
+            || caption
+                .chars()
+                .any(|ch| ch.is_control() && ch != '\n' && ch != '\t')
         {
             return None;
         }
