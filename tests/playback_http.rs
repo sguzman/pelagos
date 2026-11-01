@@ -400,6 +400,58 @@ async fn indexed_video_playback_metadata_comes_from_bounded_ffprobe_fixture() {
         StatusCode::OK
     );
 
+    // The explicit playback bitrate wins over the profile's fallback;
+    // the profile itself remains authoritative when no value was posted.
+    for (body, expected) in [
+        (
+            serde_json::json!({
+                "DeviceProfile": {
+                    "MaxStreamingBitrate": 3_000_000,
+                    "DirectPlayProfiles": [{"Type": "Video", "Container": "mp4"}]
+                }
+            }),
+            StatusCode::NOT_IMPLEMENTED,
+        ),
+        (
+            serde_json::json!({
+                "MaxStreamingBitrate": 4_000_000,
+                "DeviceProfile": {
+                    "MaxStreamingBitrate": 3_000_000,
+                    "DirectPlayProfiles": [{"Type": "Video", "Container": "mp4"}]
+                }
+            }),
+            StatusCode::OK,
+        ),
+        (
+            serde_json::json!({
+                "DeviceProfile": {
+                    "MaxStreamingBitrate": 0,
+                    "DirectPlayProfiles": [{"Type": "Video", "Container": "mp4"}]
+                }
+            }),
+            StatusCode::BAD_REQUEST,
+        ),
+    ] {
+        assert_eq!(
+            request(&router, "POST", &route, Some(&token), &body.to_string())
+                .await
+                .status(),
+            expected
+        );
+    }
+    assert_eq!(
+        request(
+            &router,
+            "POST",
+            &format!("{route}?maxStreamingBitrate=4000000"),
+            Some(&token),
+            r#"{"DeviceProfile":{"MaxStreamingBitrate":3000000,"DirectPlayProfiles":[{"Type":"Video","Container":"mp4"}]}}"#,
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+
     let accepted_user = format!("{route}?userId={current_user}");
     assert_eq!(
         request(&router, "GET", &accepted_user, Some(&token), "")

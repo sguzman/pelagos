@@ -551,14 +551,6 @@ async fn playback_info(
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     // Without an FFmpeg/remux fallback, never claim a static source can fit
     // requested stream bandwidth or output-channel limits when it cannot.
-    if let Some(limit) = req.max_streaming_bitrate {
-        if limit <= 0 {
-            return Err(StatusCode::BAD_REQUEST);
-        }
-        if measured_bitrate(&probed).is_none_or(|bitrate| bitrate > limit) {
-            return Err(StatusCode::NOT_IMPLEMENTED);
-        }
-    }
     if let Some(limit) = req.max_audio_channels {
         if limit <= 0 {
             return Err(StatusCode::BAD_REQUEST);
@@ -585,6 +577,30 @@ async fn playback_info(
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         }
     };
+    // Jellyfin's posted PlaybackInfo uses an explicit MaxStreamingBitrate
+    // first, then the effective DeviceProfile's MaxStreamingBitrate. A
+    // caller-supplied query value has already overridden the POST body.
+    // Neither a measured over-budget static file nor unknown source bitrate
+    // can be offered without a transcoding fallback.
+    let profile_bitrate = profile
+        .as_ref()
+        .and_then(|profile| profile.get("MaxStreamingBitrate"))
+        .filter(|value| !value.is_null())
+        .map(|value| {
+            value
+                .as_i64()
+                .filter(|bitrate| *bitrate > 0)
+                .ok_or(StatusCode::BAD_REQUEST)
+        })
+        .transpose()?;
+    if req.max_streaming_bitrate.is_some_and(|limit| limit <= 0) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if let Some(limit) = req.max_streaming_bitrate.or(profile_bitrate)
+        && measured_bitrate(&probed).is_none_or(|bitrate| bitrate > limit)
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     if let Some(profile) = profile.as_ref() {
         if !profile_allows_direct_file(profile, &source, &probed)? {
             // There is no remux or transcode fallback yet. Refuse the
