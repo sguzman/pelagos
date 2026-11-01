@@ -77,6 +77,19 @@ fn write_stamp(ticks: u64) -> String {
     format!("{hours:02}:{minutes:02}:{seconds:02}.{remainder:03}")
 }
 
+// Cue positioning is valid VTT syntax but has no SRT equivalent.
+// Reuse the same narrow whitelist when clipping and converting.
+fn supported_cue_settings(settings: &str) -> bool {
+    settings.len() <= 128
+        && settings.split_whitespace().all(|setting| {
+            setting.starts_with("align:")
+                || setting.starts_with("line:")
+                || setting.starts_with("position:")
+                || setting.starts_with("size:")
+                || setting.starts_with("vertical:")
+        })
+}
+
 /// Clip simple cue ranges into a short VOD window. Clamp overlapping cues,
 /// preserving source-clock timestamps only when explicitly requested.
 /// An empty output is valid for a subtitle-free window.
@@ -124,15 +137,7 @@ pub(crate) fn clip_vtt(
         let (end, settings) = end_with_settings
             .split_once(' ')
             .unwrap_or((end_with_settings, ""));
-        if settings.len() > 128
-            || !settings.split_whitespace().all(|setting| {
-                setting.starts_with("align:")
-                    || setting.starts_with("line:")
-                    || setting.starts_with("position:")
-                    || setting.starts_with("size:")
-                    || setting.starts_with("vertical:")
-            })
-        {
+        if !supported_cue_settings(settings) {
             return None;
         }
         let cue_start = parse_stamp(start)?;
@@ -178,8 +183,14 @@ pub(crate) fn vtt_to_srt(source: &[u8]) -> Option<Vec<u8>> {
         .enumerate()
     {
         let (timing, caption) = block.split_once('\n')?;
-        let (start, end) = timing.split_once(" --> ")?;
-        if parse_stamp(start).is_none() || parse_stamp(end).is_none() {
+        let (start, end_with_settings) = timing.split_once(" --> ")?;
+        let (end, settings) = end_with_settings
+            .split_once(' ')
+            .unwrap_or((end_with_settings, ""));
+        if parse_stamp(start).is_none()
+            || parse_stamp(end).is_none()
+            || !supported_cue_settings(settings)
+        {
             return None;
         }
         result.push_str(&(number + 1).to_string());
@@ -246,6 +257,16 @@ mod tests {
             result,
             b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 align:start\nHello!\n\n"
         );
+        // SRT has no cue-positioning attributes: discard only the settings,
+        // preserving the clipped timestamps and caption text.
+        assert_eq!(
+            vtt_to_srt(&result).unwrap(),
+            b"1\n00:00:00,000 --> 00:00:01,000\nHello!\n\n"
+        );
+        assert!(vtt_to_srt(
+            b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 unknown:setting\nHello!\n\n"
+        )
+        .is_none());
         assert!(
             clip_vtt(
                 b"WEBVTT\n\nSTYLE\n::cue{color:red}\n\n",
