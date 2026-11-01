@@ -1504,8 +1504,7 @@ async fn subtitle_response(
             )
             .ok_or(StatusCode::NOT_IMPLEMENTED)?;
             output = if format == "srt" {
-                crate::subtitle_timing::vtt_to_srt(&clipped)
-                    .ok_or(StatusCode::NOT_IMPLEMENTED)?
+                crate::subtitle_timing::vtt_to_srt(&clipped).ok_or(StatusCode::NOT_IMPLEMENTED)?
             } else {
                 clipped
             };
@@ -2071,10 +2070,7 @@ mod tests {
         );
         let invalid: SubtitleQuery =
             serde_json::from_value(json!({"endPositionTicks": 100})).unwrap();
-        assert_eq!(
-            invalid.validate("item", "item", 2, "vtt", 0),
-            Ok(false)
-        );
+        assert_eq!(invalid.validate("item", "item", 2, "vtt", 0), Ok(false));
         let negative: SubtitleQuery =
             serde_json::from_value(json!({"startPositionTicks": -1})).unwrap();
         assert_eq!(

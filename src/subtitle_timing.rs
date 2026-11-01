@@ -54,7 +54,9 @@ pub(crate) fn clip_vtt(
     if end_ticks <= start_ticks || end_ticks - start_ticks > 600_000_000 {
         return None;
     }
-    let source = std::str::from_utf8(source).ok()?.trim_start_matches('\u{feff}');
+    let source = std::str::from_utf8(source)
+        .ok()?
+        .trim_start_matches('\u{feff}');
     let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
     let body = normalized.strip_prefix("WEBVTT\n\n")?;
     let mut result = String::from("WEBVTT\n\n");
@@ -154,11 +156,30 @@ mod tests {
     #[test]
     fn empty_window_and_malformed_timing_fail_closed() {
         let input = b"WEBVTT\n\n00:00:04.000 --> 00:00:05.000\nCaption\n\n";
-        assert_eq!(clip_vtt(input, 0, 10_000_000, false).unwrap(), b"WEBVTT\n\n");
+        assert_eq!(
+            clip_vtt(input, 0, 10_000_000, false).unwrap(),
+            b"WEBVTT\n\n"
+        );
         assert!(clip_vtt(input, 10_000_000, 10_000_000, false).is_none());
         assert!(clip_vtt(input, 0, 610_000_000, false).is_none());
-        assert!(clip_vtt(b"WEBVTT\n\n00:00:70.000 --> 00:01:00.000\nBad\n\n", 0, 20_000_000, false).is_none());
-        assert!(clip_vtt(b"WEBVTT\n\nX-TIMESTAMP-MAP=broken\n\n", 0, 20_000_000, false).is_none());
+        assert!(
+            clip_vtt(
+                b"WEBVTT\n\n00:00:70.000 --> 00:01:00.000\nBad\n\n",
+                0,
+                20_000_000,
+                false
+            )
+            .is_none()
+        );
+        assert!(
+            clip_vtt(
+                b"WEBVTT\n\nX-TIMESTAMP-MAP=broken\n\n",
+                0,
+                20_000_000,
+                false
+            )
+            .is_none()
+        );
         assert!(vtt_to_srt(b"WEBVTT\n\nbad\n").is_none());
     }
 }
