@@ -211,12 +211,18 @@ pub(crate) async fn native_ass_stream_indices(
         Ok(result) => result?,
         Err(_) => {
             child.kill().await?;
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "ASS probe timed out"));
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "ASS probe timed out",
+            ));
         }
     };
     let bytes = output_reader.await.map_err(io::Error::other)??;
     if !status.success() || bytes.len() > 256 * 1024 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "ASS probe refused"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "ASS probe refused",
+        ));
     }
     let json: Value = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
     let streams = json["streams"]
@@ -230,9 +236,7 @@ pub(crate) async fn native_ass_stream_indices(
         let index = stream["index"]
             .as_i64()
             .filter(|index| (0..=i64::from(i32::MAX)).contains(index));
-        let script = stream["extradata"]
-            .as_str()
-            .and_then(decode_extradata_hex);
+        let script = stream["extradata"].as_str().and_then(decode_extradata_hex);
         if let (Some(index), Some(script)) = (index, script)
             && is_native_ass_script(&script)
         {
