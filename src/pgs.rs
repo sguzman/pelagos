@@ -242,6 +242,7 @@ pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
     }
     let mut offset = 0_u64;
     let mut packets = 0_usize;
+    let mut ended_display_set = false;
     let mut payload = Vec::new();
     let mut pending_objects = BTreeMap::new();
     while offset < size {
@@ -269,9 +270,10 @@ pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
             return false;
         };
         offset = next;
+        ended_display_set = header[10] == 0x80;
         packets += 1;
     }
-    packets > 0 && pending_objects.is_empty()
+    packets > 0 && ended_display_set && pending_objects.is_empty()
 }
 
 #[cfg(test)]
@@ -328,7 +330,9 @@ mod tests {
             complete.len() as u64
         ));
 
-        let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 0xaa, 0xbb]);
+        let mut single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 0xaa, 0xbb]);
+        assert!(!packets_valid(&mut single.as_slice(), single.len() as u64));
+        single.extend(packet(0x80, &[]));
         assert!(packets_valid(&mut single.as_slice(), single.len() as u64));
 
         // A valid colored-run escape may span three ODS fragments.
