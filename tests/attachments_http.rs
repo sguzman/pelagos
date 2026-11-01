@@ -83,11 +83,7 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
             "-attach",
         ])
         .arg(&spoofed)
-        .args([
-            "-metadata:s:t:3",
-            "mimetype=font/ttf",
-            "-y",
-        ])
+        .args(["-metadata:s:t:3", "mimetype=font/ttf", "-y"])
         .arg(&movie)
         .output()
         .unwrap();
