@@ -1233,10 +1233,15 @@ mod tests {
     fn auth_schema_upgrade_is_atomic_preserves_legacy_users_and_rejects_future_versions() {
         let dir = tempfile::tempdir().unwrap();
         let admin = create_user(dir.path(), "admin", "safe-migration-test-password").unwrap();
-        let token = authenticate(dir.path(), "admin", "safe-migration-test-password", "server")
-            .unwrap()
-            .unwrap()
-            .access_token;
+        let token = authenticate(
+            dir.path(),
+            "admin",
+            "safe-migration-test-password",
+            "server",
+        )
+        .unwrap()
+        .unwrap()
+        .access_token;
         let path = dir.path().join(DB_NAME);
         let old = Connection::open(&path).unwrap();
         assert_eq!(
@@ -1263,10 +1268,7 @@ mod tests {
             .unwrap();
         assert_eq!(id, admin.id);
         assert_eq!(
-            identify(dir.path(), &token, "server")
-                .unwrap()
-                .unwrap()
-                .id,
+            identify(dir.path(), &token, "server").unwrap().unwrap().id,
             admin.id
         );
         upgraded.execute_batch("PRAGMA user_version=2;").unwrap();
@@ -1303,15 +1305,19 @@ mod tests {
             AUTH_SCHEMA_VERSION
         );
         let user_columns: i64 = db
-            .query_row("SELECT COUNT(*) FROM pragma_table_info('pelagos_users')", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('pelagos_users')",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(user_columns, 6);
         let session_columns: i64 = db
-            .query_row("SELECT COUNT(*) FROM pragma_table_info('pelagos_sessions')", [], |row| {
-                row.get(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('pelagos_sessions')",
+                [],
+                |row| row.get(0),
+            )
             .unwrap();
         assert_eq!(session_columns, 6);
     }
