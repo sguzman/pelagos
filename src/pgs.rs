@@ -11,7 +11,9 @@ pub(crate) fn header_valid(bytes: &[u8; 13], remaining: u64) -> bool {
     &bytes[..2] == b"PG"
         && matches!(bytes[10], 0x14 | 0x15 | 0x16 | 0x17 | 0x80)
         && (bytes[10] != 0x80 || length == 0)
-        && 13_u64.checked_add(length).is_some_and(|end| end <= remaining)
+        && 13_u64
+            .checked_add(length)
+            .is_some_and(|end| end <= remaining)
 }
 
 fn be16(bytes: &[u8]) -> u16 {
@@ -25,8 +27,7 @@ fn be16(bytes: &[u8]) -> u16 {
 fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
     match kind {
         // Palette ID + version, then zero or more five-byte color entries.
-        0x14 => bytes.len() >= 2 && (bytes.len() - 2) % 5 == 0
-            && (bytes.len() - 2) / 5 <= 256,
+        0x14 => bytes.len() >= 2 && (bytes.len() - 2) % 5 == 0 && (bytes.len() - 2) / 5 <= 256,
         // Object ID, version, sequence flags, and optionally image metadata.
         0x15 => {
             if bytes.len() < 4 || bytes[3] & 0x3f != 0 {
@@ -73,9 +74,9 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
                 return false;
             }
             bytes.len() == 1 + usize::from(bytes[0]) * 9
-                && bytes[1..].chunks_exact(9).all(|window| {
-                    be16(&window[5..7]) > 0 && be16(&window[7..9]) > 0
-                })
+                && bytes[1..]
+                    .chunks_exact(9)
+                    .all(|window| be16(&window[5..7]) > 0 && be16(&window[7..9]) > 0)
         }
         // Display set terminator is strictly empty.
         0x80 => bytes.is_empty(),
@@ -130,10 +131,7 @@ mod tests {
     }
 
     fn valid_clear_set() -> Vec<u8> {
-        let mut bytes = packet(
-            0x16,
-            &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0],
-        );
+        let mut bytes = packet(0x16, &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]);
         bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 0, 32, 0, 32]));
         bytes.extend(packet(0x14, &[0, 0]));
         bytes.extend(packet(0x80, &[]));
@@ -182,13 +180,13 @@ mod tests {
                 "segment kind: {kind:#04x}"
             );
         }
-        let valid_first_object = [
-            0, 1, 0, 0xc0, 0, 0, 8, 0, 8, 0, 8, 0xaa, 0xbb, 0xcc, 0xdd,
-        ];
+        let valid_first_object = [0, 1, 0, 0xc0, 0, 0, 8, 0, 8, 0, 8, 0xaa, 0xbb, 0xcc, 0xdd];
         assert!(segment_shape_valid(0x15, &valid_first_object));
         assert!(segment_shape_valid(
             0x16,
-            &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0]
+            &[
+                0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0
+            ]
         ));
     }
 }
