@@ -1147,7 +1147,7 @@ async fn playback_info(
             .await
             .unwrap_or_default()
     } else {
-        HashSet::new()
+        std::collections::HashMap::new()
     };
     // Read-only sidecar directory enumeration can touch hundreds of metadata
     // entries. Keep it off Tokio's I/O worker threads.
