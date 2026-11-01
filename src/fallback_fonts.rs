@@ -359,7 +359,7 @@ mod tests {
             system_time_utc(UNIX_EPOCH).as_deref(),
             Some("1970-01-01T00:00:00.0000000Z")
         );
-        let leap = UNIX_EPOCH + std::time::Duration::from_secs(951_825_600);
+        let leap = UNIX_EPOCH + std::time::Duration::from_secs(951_782_400);
         assert_eq!(
             system_time_utc(leap).as_deref(),
             Some("2000-02-29T00:00:00.0000000Z")
