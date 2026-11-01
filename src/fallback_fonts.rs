@@ -310,15 +310,37 @@ mod tests {
     #[test]
     fn fallback_font_names_lookup_ignore_ascii_case_without_ambiguity() {
         let fonts = vec![
-            FontInfo { name: "Family.ttf".to_owned(), size: 28, mime: "font/ttf" },
-            FontInfo { name: "Other.otf".to_owned(), size: 32, mime: "font/otf" },
+            FontInfo {
+                name: "Family.ttf".to_owned(),
+                size: 28,
+                mime: "font/ttf",
+            },
+            FontInfo {
+                name: "Other.otf".to_owned(),
+                size: 32,
+                mime: "font/otf",
+            },
         ];
-        assert_eq!(select_font(fonts.clone(), "family.TTF").unwrap().name, "Family.ttf");
-        assert_eq!(select_font(fonts.clone(), "Other.otf").unwrap().name, "Other.otf");
+        assert_eq!(
+            select_font(fonts.clone(), "family.TTF").unwrap().name,
+            "Family.ttf"
+        );
+        assert_eq!(
+            select_font(fonts.clone(), "Other.otf").unwrap().name,
+            "Other.otf"
+        );
         assert!(select_font(fonts.clone(), "missing.ttf").is_none());
         let ambiguous = vec![
-            FontInfo { name: "Face.ttf".to_owned(), size: 28, mime: "font/ttf" },
-            FontInfo { name: "FACE.TTF".to_owned(), size: 28, mime: "font/ttf" },
+            FontInfo {
+                name: "Face.ttf".to_owned(),
+                size: 28,
+                mime: "font/ttf",
+            },
+            FontInfo {
+                name: "FACE.TTF".to_owned(),
+                size: 28,
+                mime: "font/ttf",
+            },
         ];
         assert!(select_font(ambiguous.clone(), "face.ttf").is_none());
         assert_eq!(select_font(ambiguous, "Face.ttf").unwrap().name, "Face.ttf");
