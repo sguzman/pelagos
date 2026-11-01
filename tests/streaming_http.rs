@@ -89,9 +89,16 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
         .unwrap();
     let full_after_stale = app.clone().oneshot(stale).await.unwrap();
     assert_eq!(full_after_stale.status(), StatusCode::OK);
-    assert!(!full_after_stale.headers().contains_key(header::CONTENT_RANGE));
+    assert!(
+        !full_after_stale
+            .headers()
+            .contains_key(header::CONTENT_RANGE)
+    );
     assert_eq!(
-        to_bytes(full_after_stale.into_body(), 100).await.unwrap().as_ref(),
+        to_bytes(full_after_stale.into_body(), 100)
+            .await
+            .unwrap()
+            .as_ref(),
         b"0123456789"
     );
 
