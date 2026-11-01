@@ -10,7 +10,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    body::Body,
+    body::{Body, to_bytes},
     extract::{Path as RoutePath, Query, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
@@ -1335,115 +1335,117 @@ async fn serve_external_subtitle(
     Ok(response)
 }
 
+/// Route and deprecated query selectors are constrained to the exact
+/// authorized source. Nonzero shifts/trim ranges are rejected until real
+/// conversion is available; never silently ignore client constraints.
+async fn subtitle_response(
+    state: Arc<AppState>,
+    (item, media_source, index, ticks): (String, String, i64, i64),
+    format: &'static str,
+    headers: HeaderMap,
+    head: bool,
+    query: SubtitleQuery,
+) -> Result<Response, StatusCode> {
+    let map = query.validate(&item, &media_source, index, format, ticks)?;
+    let mut response = serve_external_subtitle(
+        state,
+        item,
+        media_source,
+        index,
+        format,
+        headers,
+        head && !map,
+    )
+    .await?;
+    if map {
+        let payload = to_bytes(
+            std::mem::replace(response.body_mut(), Body::empty()),
+            4 * 1024 * 1024 + 4096,
+        )
+        .await
+        .map_err(|_| StatusCode::NOT_IMPLEMENTED)?;
+        let mapped = add_vtt_timestamp_map(&payload)?;
+        let length = mapped.len();
+        *response.body_mut() = if head { Body::empty() } else { Body::from(mapped) };
+        response.headers_mut().insert(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&length.to_string())
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+    }
+    Ok(response)
+}
+
 async fn get_external_srt(
     State(state): State<Arc<AppState>>,
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_subtitle(state, item, media_source, index, "srt", headers, false).await
+    subtitle_response(state, (item, media_source, index, 0), "srt", headers, false, query).await
 }
 
 async fn head_external_srt(
     State(state): State<Arc<AppState>>,
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_subtitle(state, item, media_source, index, "srt", headers, true).await
+    subtitle_response(state, (item, media_source, index, 0), "srt", headers, true, query).await
 }
 
 async fn get_external_vtt(
     State(state): State<Arc<AppState>>,
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_subtitle(state, item, media_source, index, "vtt", headers, false).await
+    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, false, query).await
 }
 
 async fn head_external_vtt(
     State(state): State<Arc<AppState>>,
     RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    serve_external_subtitle(state, item, media_source, index, "vtt", headers, true).await
-}
-
-// Pinned Jellyfin v12.3 also exposes timestamp-scoped subtitle URLs.
-// Zero ticks is the identity operation; nonzero seek rebasing is not yet
-// available in this bounded subtitle delivery subset.
-async fn timed_subtitle(
-    state: Arc<AppState>,
-    (item, media_source, index, start_ticks): (String, String, i64, i64),
-    format: &'static str,
-    headers: HeaderMap,
-    head: bool,
-) -> Result<Response, StatusCode> {
-    if start_ticks < 0 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if start_ticks != 0 {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
-    serve_external_subtitle(state, item, media_source, index, format, headers, head).await
+    subtitle_response(state, (item, media_source, index, 0), "vtt", headers, true, query).await
 }
 
 async fn get_timed_srt(
     State(state): State<Arc<AppState>>,
-    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(
-        state,
-        (item, media_source, index, start),
-        "srt",
-        headers,
-        false,
-    )
-    .await
+    subtitle_response(state, route, "srt", headers, false, query).await
 }
 
 async fn head_timed_srt(
     State(state): State<Arc<AppState>>,
-    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(
-        state,
-        (item, media_source, index, start),
-        "srt",
-        headers,
-        true,
-    )
-    .await
+    subtitle_response(state, route, "srt", headers, true, query).await
 }
 
 async fn get_timed_vtt(
     State(state): State<Arc<AppState>>,
-    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(
-        state,
-        (item, media_source, index, start),
-        "vtt",
-        headers,
-        false,
-    )
-    .await
+    subtitle_response(state, route, "vtt", headers, false, query).await
 }
 
 async fn head_timed_vtt(
     State(state): State<Arc<AppState>>,
-    RoutePath((item, media_source, index, start)): RoutePath<(String, String, i64, i64)>,
+    RoutePath(route): RoutePath<(String, String, i64, i64)>,
+    Query(query): Query<SubtitleQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    timed_subtitle(
-        state,
-        (item, media_source, index, start),
-        "vtt",
-        headers,
-        true,
-    )
-    .await
+    subtitle_response(state, route, "vtt", headers, true, query).await
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -1749,6 +1751,22 @@ mod tests {
             reauthorize_subtitle_source(state, headers, item, &source, &original,).await,
             Err(StatusCode::NOT_FOUND)
         );
+    }
+
+    #[test]
+    fn subtitle_query_preserves_pinned_zero_offset_semantics() {
+        let query: SubtitleQuery = serde_json::from_value(json!({
+            "startPositionTicks": 0, "copyTimestamps": true,
+            "addVttTimeMap": true, "mediaSourceId": "item"
+        })).unwrap();
+        assert_eq!(query.validate("item", "item", 2, "vtt", 99), Ok(true));
+        assert_eq!(query.validate("item", "item", 2, "srt", 0), Err(StatusCode::NOT_IMPLEMENTED));
+        let invalid: SubtitleQuery = serde_json::from_value(json!({"endPositionTicks": 100})).unwrap();
+        assert_eq!(invalid.validate("item", "item", 2, "vtt", 0), Err(StatusCode::NOT_IMPLEMENTED));
+        let negative: SubtitleQuery = serde_json::from_value(json!({"startPositionTicks": -1})).unwrap();
+        assert_eq!(negative.validate("item", "item", 2, "vtt", 0), Err(StatusCode::BAD_REQUEST));
+        assert_eq!(add_vtt_timestamp_map(b"WEBVTT\n\nCue").unwrap(),
+            b"WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:900000,LOCAL:00:00:00.000\n\nCue");
     }
 
     #[test]
