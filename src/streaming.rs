@@ -14,7 +14,7 @@ use axum::{
         HeaderMap, HeaderValue, StatusCode,
         header::{
             ACCEPT_RANGES, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE,
-            CONTENT_TYPE, RANGE,
+            CONTENT_TYPE, IF_RANGE, RANGE,
         },
     },
     response::Response,
@@ -313,17 +313,24 @@ async fn serve_file(
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
-    let mut ranges = headers.get_all(RANGE).iter();
-    let first = ranges.next();
-    if ranges.next().is_some() {
-        return Ok(invalid_range(size));
-    }
-    let range = match first {
-        None => None,
-        Some(value) => match value.to_str().ok().and_then(|raw| parse_range(raw, size)) {
-            Some(range) => Some(range),
-            None => return Ok(invalid_range(size)),
-        },
+    // No static-file ETag or Last-Modified validator is advertised yet.
+    // Under RFC 9110 an If-Range we cannot verify must send the complete
+    // representation, never honor a byte range against a stale revision.
+    let range = if headers.contains_key(IF_RANGE) {
+        None
+    } else {
+        let mut ranges = headers.get_all(RANGE).iter();
+        let first = ranges.next();
+        if ranges.next().is_some() {
+            return Ok(invalid_range(size));
+        }
+        match first {
+            None => None,
+            Some(value) => match value.to_str().ok().and_then(|raw| parse_range(raw, size)) {
+                Some(range) => Some(range),
+                None => return Ok(invalid_range(size)),
+            },
+        }
     };
     let (start, length, status) = match &range {
         Some(range) => (

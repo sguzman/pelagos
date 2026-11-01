@@ -77,6 +77,24 @@ async fn static_video_supports_ranges_head_auth_and_no_transcode_claims() {
         b"2345"
     );
 
+    // A stale If-Range validator cannot authorize a partial static file.
+    // Without a known strong validator Pelagos must send the whole source.
+    let stale = Request::builder()
+        .method("GET")
+        .uri(&path)
+        .header("X-Emby-Token", &token)
+        .header(header::RANGE, "bytes=2-5")
+        .header(header::IF_RANGE, "\"stale-movie-etag\"")
+        .body(Body::empty())
+        .unwrap();
+    let full_after_stale = app.clone().oneshot(stale).await.unwrap();
+    assert_eq!(full_after_stale.status(), StatusCode::OK);
+    assert!(!full_after_stale.headers().contains_key(header::CONTENT_RANGE));
+    assert_eq!(
+        to_bytes(full_after_stale.into_body(), 100).await.unwrap().as_ref(),
+        b"0123456789"
+    );
+
     for (uri, expected) in [
         (
             format!("/Videos/{id}/stream?static=true&container=mp4"),
