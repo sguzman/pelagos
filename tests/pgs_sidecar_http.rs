@@ -112,8 +112,8 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     // This RLE object declares four valid image bytes and correct dimensions,
     // but its colored run of three pixels crosses a two-pixel scanline.
     crossing_row.extend_from_slice(&[
-        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 15, 0, 4, 0, 0xc0, 0, 0, 8, 0, 2, 0, 2,
-        0, 0x83, 7, 0xaa,
+        b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 15, 0, 4, 0, 0xc0, 0, 0, 8, 0, 2, 0, 2, 0,
+        0x83, 7, 0xaa,
     ]);
     crossing_row.extend_from_slice(&PGS[24..]);
     fs::write(root.join("Feature.ko.sup"), &crossing_row).unwrap();
