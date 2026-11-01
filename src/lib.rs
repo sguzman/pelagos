@@ -1,7 +1,7 @@
 //! Native Rust media server. The Jellyfin API compatibility surface is incomplete.
 pub mod app;
-pub mod attachments;
 pub mod artwork;
+pub mod attachments;
 pub mod auth;
 pub mod auth_api;
 pub mod bitrate;

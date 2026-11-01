@@ -1,12 +1,23 @@
 //! Pinned video font attachment GET/HEAD: authenticated, bounded and read-only.
-use std::{path::Path, process::Stdio, sync::{Arc, OnceLock}, time::Duration};
+use crate::{app::AppState, auth_api, playback, probe};
 use axum::{
-    Router, body::Body, extract::{Path as RoutePath, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header::{CONTENT_TYPE, CONTENT_LENGTH, CACHE_CONTROL}},
-    response::Response, routing::get,
+    Router,
+    body::Body,
+    extract::{Path as RoutePath, State},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE},
+    },
+    response::Response,
+    routing::get,
+};
+use std::{
+    path::Path,
+    process::Stdio,
+    sync::{Arc, OnceLock},
+    time::Duration,
 };
 use tokio::{io::AsyncReadExt, process::Command, sync::Semaphore};
-use crate::{app::AppState, auth_api, playback, probe};
 
 const MAX_FONT_BYTES: usize = 4 * 1024 * 1024;
 static FONT_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
@@ -14,7 +25,9 @@ static FONT_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 fn font_mime(raw: &str) -> Option<&'static str> {
     match raw.to_ascii_lowercase().as_str() {
         "font/ttf" | "application/x-truetype-font" | "application/x-font-ttf" => Some("font/ttf"),
-        "font/otf" | "application/vnd.ms-opentype" | "application/x-font-opentype" => Some("font/otf"),
+        "font/otf" | "application/vnd.ms-opentype" | "application/x-font-opentype" => {
+            Some("font/otf")
+        }
         "font/woff" => Some("font/woff"),
         "font/woff2" => Some("font/woff2"),
         _ => None,
@@ -22,32 +35,51 @@ fn font_mime(raw: &str) -> Option<&'static str> {
 }
 
 async fn dump_font(ffmpeg: &Path, file: &Path, index: i64) -> Result<Vec<u8>, StatusCode> {
-    let semaphore = FONT_WORKERS.get_or_init(|| Arc::new(Semaphore::new(2))).clone();
-    let _permit = semaphore.try_acquire_owned().map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+    let semaphore = FONT_WORKERS
+        .get_or_init(|| Arc::new(Semaphore::new(2)))
+        .clone();
+    let _permit = semaphore
+        .try_acquire_owned()
+        .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     let mut child = Command::new(ffmpeg)
         .args(["-nostdin", "-hide_banner", "-loglevel", "error"])
         .arg(format!("-dump_attachment:{index}"))
         .arg("pipe:1")
-        .arg("-i").arg(file)
+        .arg("-i")
+        .arg(file)
         .args(["-t", "0", "-f", "null", "-"])
-        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .kill_on_drop(true)
-        .spawn().map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        .spawn()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     tokio::time::timeout(Duration::from_secs(30), async {
-        let stdout = child.stdout.take().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         let mut data = Vec::new();
-        stdout.take((MAX_FONT_BYTES + 1) as u64)
-            .read_to_end(&mut data).await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        stdout
+            .take((MAX_FONT_BYTES + 1) as u64)
+            .read_to_end(&mut data)
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if data.len() > MAX_FONT_BYTES {
             let _ = child.kill().await;
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        let exit = child.wait().await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+        let exit = child
+            .wait()
+            .await
+            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
         if !exit.success() || data.is_empty() {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         Ok(data)
-    }).await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
+    })
+    .await
+    .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
 }
 
 async fn serve(
@@ -61,26 +93,47 @@ async fn serve(
         return Err(StatusCode::NOT_FOUND);
     }
     let (file, kind) = playback::media_file(&state, item.clone(), scope).await?;
-    if kind != "video" { return Err(StatusCode::NOT_FOUND); }
-    let revision = tokio::fs::metadata(&file).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    if kind != "video" {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let revision = tokio::fs::metadata(&file)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
     let report = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
-        .await.map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    let mime = report.streams.iter()
-        .find(|stream| stream["codec_type"] == "attachment" && stream["index"].as_i64() == Some(index))
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let mime = report
+        .streams
+        .iter()
+        .find(|stream| {
+            stream["codec_type"] == "attachment" && stream["index"].as_i64() == Some(index)
+        })
         .and_then(|stream| stream["tags"]["mimetype"].as_str())
         .and_then(font_mime)
         .ok_or(StatusCode::NOT_FOUND)?;
     let data = dump_font(state.ffmpeg_executable(), &file, index).await?;
     playback::reauthorize_video_source(state, headers, item, &file, &revision).await?;
     let length = data.len();
-    let mut response = Response::new(if head { Body::empty() } else { Body::from(data) });
-    response.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static(mime));
-    response.headers_mut().insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    let mut response = Response::new(if head {
+        Body::empty()
+    } else {
+        Body::from(data)
+    });
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static(mime));
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     response.headers_mut().insert(
         CONTENT_LENGTH,
-        HeaderValue::from_str(&length.to_string()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        HeaderValue::from_str(&length.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
-    response.headers_mut().insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    response.headers_mut().insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     Ok(response)
 }
 
