@@ -550,8 +550,13 @@ fn source_from_probe(
                 && (0..=i64::from(i32::MAX)).contains(&stream.index)
             {
                 stream.delivery_method = Some("External");
+                let format = if stream.codec.as_deref() == Some("ass") {
+                    "ass"
+                } else {
+                    "srt"
+                };
                 stream.delivery_url = Some(format!(
-                    "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.srt",
+                    "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{format}",
                     stream.index
                 ));
             }
@@ -1237,10 +1242,11 @@ fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
 // Bound on-demand embedded subtitle extraction without a persistent process.
 static SUBTITLE_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
-async fn extract_embedded_srt(
+async fn extract_embedded_text(
     executable: &Path,
     source: &Path,
     index: i64,
+    native_ass: bool,
 ) -> Result<Vec<u8>, StatusCode> {
     let workers = SUBTITLE_WORKERS
         .get_or_init(|| Arc::new(Semaphore::new(2)))
@@ -1258,9 +1264,9 @@ async fn extract_embedded_srt(
         .arg("-map")
         .arg(format!("0:{index}"))
         .arg("-c:s")
-        .arg("srt")
+        .arg(if native_ass { "copy" } else { "srt" })
         .arg("-f")
-        .arg("srt")
+        .arg(if native_ass { "ass" } else { "srt" })
         .arg("pipe:1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1345,11 +1351,16 @@ async fn serve_external_subtitle(
     let report = probe::probe(&source, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    let embedded = report.streams.iter().any(|stream| {
-        number(&stream["index"]) == Some(index)
-            && stream["codec_type"] == "subtitle"
-            && is_text_subtitle(stream["codec_name"].as_str())
-    });
+    let embedded_codec = report
+        .streams
+        .iter()
+        .find(|stream| {
+            number(&stream["index"]) == Some(index)
+                && stream["codec_type"] == "subtitle"
+                && is_text_subtitle(stream["codec_name"].as_str())
+        })
+        .and_then(|stream| stream["codec_name"].as_str())
+        .map(str::to_owned);
     let discovered_source = source.clone();
     let sidecar = tokio::task::spawn_blocking(move || {
         external_subtitles(&discovered_source, &report)
@@ -1362,19 +1373,23 @@ async fn serve_external_subtitle(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if sidecar.is_none() {
-        if !embedded {
+        if embedded_codec.is_none() {
             return Err(StatusCode::NOT_FOUND);
         }
-        // Embedded extraction currently encodes SRT only, with optional
-        // SRT-to-WebVTT conversion. Never label those bytes as native
-        // ASS or SSA when the requested route has that extension.
-        if !matches!(format, "srt" | "vtt") {
+        // Native Matroska ASS can be stream-copied into the ASS muxer,
+        // preserving style metadata; other embedded text is still delivered
+        // as bounded SRT with an optional WebVTT conversion.
+        if !matches!(format, "srt" | "vtt" | "ass")
+            || (format == "ass" && embedded_codec.as_deref() != Some("ass"))
+        {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         if !(0..=i64::from(i32::MAX)).contains(&index) {
             return Err(StatusCode::BAD_REQUEST);
         }
-        let bytes = extract_embedded_srt(state.ffmpeg_executable(), &source, index).await?;
+        let bytes =
+            extract_embedded_text(state.ffmpeg_executable(), &source, index, format == "ass")
+                .await?;
         let payload = if format == "vtt" {
             convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else {
@@ -2416,6 +2431,7 @@ mod tests {
                 json!({"index":1,"codec_type":"subtitle","codec_name":"mov_text"}),
                 json!({"index":2,"codec_type":"subtitle","codec_name":"hdmv_pgs_subtitle"}),
                 json!({"index":3,"codec_type":"subtitle","codec_name":"unknown_text_codec"}),
+                json!({"index":4,"codec_type":"subtitle","codec_name":"ass"}),
             ],
             chapters: vec![],
         };
@@ -2429,6 +2445,10 @@ mod tests {
         );
         assert_eq!(source.media_streams[2].delivery_url, None);
         assert_eq!(source.media_streams[3].delivery_url, None);
+        assert_eq!(
+            source.media_streams[4].delivery_url.as_deref(),
+            Some("/Videos/item/item/Subtitles/4/Stream.ass")
+        );
         let mut selected_source = source;
         selected_source.default_subtitle_stream_index = Some(1);
         assert_eq!(
