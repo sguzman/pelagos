@@ -27,7 +27,7 @@ Use the repository's current CI-equivalent gates (and any relevant targeted test
 ```sh
 cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
-PELAGOS_REQUIRE_FFMPEG=1 cargo test --all-targets
+env PELAGOS_REQUIRE_FFMPEG=1 cargo test --all-targets
 cargo run --quiet --bin pelagos-roadmap -- --check
 cargo run --quiet --bin pelagos-matrix -- --check
 cargo run --quiet --bin pelagos-api-matrix -- --check
