@@ -243,10 +243,7 @@ struct PlaylistQuery {
 
 /// Recognize explicit pinned v12.3 codec/container constraints without
 /// silently accepting an output this bounded FFmpeg pipeline cannot produce.
-fn validate_hls_output_request(
-    query: &PlaylistQuery,
-    kind: &str,
-) -> Result<(), StatusCode> {
+fn validate_hls_output_request(query: &PlaylistQuery, kind: &str) -> Result<(), StatusCode> {
     if query
         .segment_container
         .as_deref()

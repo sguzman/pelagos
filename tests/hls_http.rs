@@ -1193,9 +1193,8 @@ async fn concurrent_adaptive_clients_keep_independent_switchable_renditions() {
     // Match the pinned controller's explicit output codec/container options.
     // The already completed publication is safe to reuse because the encoder
     // has exactly the requested format.
-    let compatible_format = format!(
-        "{route}&audioCodec=aac&videoCodec=h264&segmentContainer=ts&requireAvc=true"
-    );
+    let compatible_format =
+        format!("{route}&audioCodec=aac&videoCodec=h264&segmentContainer=ts&requireAvc=true");
     assert_eq!(
         text_body(request(&app, "GET", &compatible_format, Some(&alice)).await).await,
         alice_master
