@@ -139,6 +139,28 @@ fn supported_cue_settings(settings: &str) -> bool {
     true
 }
 
+// WebVTT timing lines permit one or more horizontal spaces or tabs around
+// the arrow and before cue settings. Reject omitted separators and invalid
+// timing lines rather than requiring exactly one literal space.
+fn vtt_timing_parts(line: &str) -> Option<(&str, &str, &str)> {
+    let (left, right) = line.split_once("-->")?;
+    if !(left.ends_with(' ') || left.ends_with('\t'))
+        || !(right.starts_with(' ') || right.starts_with('\t'))
+    {
+        return None;
+    }
+    let horizontal = |ch: char| ch == ' ' || ch == '\t';
+    let start = left.trim_matches(horizontal);
+    let right = right.trim_start_matches(horizontal);
+    let split = right.find(horizontal).unwrap_or(right.len());
+    let end = &right[..split];
+    let settings = right[split..].trim_matches(horizontal);
+    if start.is_empty() || end.is_empty() {
+        return None;
+    }
+    Some((start, end, settings))
+}
+
 /// Clip simple cue ranges into a short VOD window. Clamp overlapping cues,
 /// preserving source-clock timestamps only when explicitly requested.
 /// An empty output is valid for a subtitle-free window.
@@ -175,17 +197,14 @@ pub(crate) fn clip_vtt(
         if matches!(first, "STYLE" | "REGION") {
             return None;
         }
-        let timing = if first.contains(" --> ") {
+        let timing = if first.contains("-->") {
             first
         } else if !first.is_empty() && first.len() <= 128 && !first.chars().any(char::is_control) {
             lines.next()?.trim()
         } else {
             return None;
         };
-        let (start, end_with_settings) = timing.split_once(" --> ")?;
-        let (end, settings) = end_with_settings
-            .split_once(' ')
-            .unwrap_or((end_with_settings, ""));
+        let (start, end, settings) = vtt_timing_parts(timing)?;
         if !supported_cue_settings(settings) {
             return None;
         }
@@ -232,10 +251,7 @@ pub(crate) fn vtt_to_srt(source: &[u8]) -> Option<Vec<u8>> {
         .enumerate()
     {
         let (timing, caption) = block.split_once('\n')?;
-        let (start, end_with_settings) = timing.split_once(" --> ")?;
-        let (end, settings) = end_with_settings
-            .split_once(' ')
-            .unwrap_or((end_with_settings, ""));
+        let (start, end, settings) = vtt_timing_parts(timing)?;
         if parse_stamp(start).is_none()
             || parse_stamp(end).is_none()
             || !supported_cue_settings(settings)
@@ -289,17 +305,14 @@ pub(crate) fn vtt_sidecar_to_srt(source: &[u8]) -> Option<Vec<u8>> {
         if matches!(first, "STYLE" | "REGION") {
             return None;
         }
-        let timing = if first.contains(" --> ") {
+        let timing = if first.contains("-->") {
             first
         } else if !first.is_empty() && first.len() <= 128 && !first.chars().any(char::is_control) {
             lines.next()?.trim()
         } else {
             return None;
         };
-        let (start, end_with_settings) = timing.split_once(" --> ")?;
-        let (end, settings) = end_with_settings
-            .split_once(' ')
-            .unwrap_or((end_with_settings, ""));
+        let (start, end, settings) = vtt_timing_parts(timing)?;
         let start = parse_stamp(start)?;
         let end = parse_stamp(end)?;
         if end <= start || !supported_cue_settings(settings) {
@@ -359,6 +372,32 @@ mod tests {
             "not WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nBad\n\n",
         ] {
             assert!(vtt_sidecar_to_srt(input.as_bytes()).is_none(), "{input:?}");
+        }
+    }
+
+    #[test]
+    fn webvtt_timing_accepts_horizontal_whitespace_but_rejects_missing_separators() {
+        let source = b"WEBVTT\n\nintro\n00:01.000\t-->\t00:03.000\talign:start  position:50%\nHola\n\n";
+        let expected = b"1\n00:00:01,000 --> 00:00:03,000\nHola\n\n";
+        assert_eq!(vtt_sidecar_to_srt(source).unwrap(), expected);
+        let clipped = clip_vtt(source, 10_000_000, 20_000_000, false).unwrap();
+        assert_eq!(
+            clipped,
+            b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000 align:start  position:50%\nHola\n\n"
+        );
+        assert_eq!(
+            vtt_to_srt(&clipped).unwrap(),
+            b"1\n00:00:00,000 --> 00:00:01,000\nHola\n\n"
+        );
+        for malformed in [
+            "00:01.000--> 00:03.000",
+            "00:01.000 -->00:03.000",
+            "00:01.000\t-->\t",
+            "00:01.000 --> \t00:03.000 invalid:cue",
+        ] {
+            let input = format!("WEBVTT\n\n{malformed}\nCaption\n\n");
+            assert!(vtt_sidecar_to_srt(input.as_bytes()).is_none(), "{malformed}");
+            assert!(clip_vtt(input.as_bytes(), 0, 40_000_000, false).is_none(), "{malformed}");
         }
     }
 
