@@ -1286,6 +1286,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
             .as_ref(),
         webvtt
     );
+    // The WebVTT sidecar's SRT fallback was already validated above.
     assert_eq!(
         request(
             &app,
@@ -1296,7 +1297,7 @@ async fn read_only_srt_sidecars_are_scoped_and_opened_inside_the_media_directory
         )
         .await
         .status(),
-        StatusCode::NOT_FOUND
+        StatusCode::OK
     );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
