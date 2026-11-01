@@ -1175,6 +1175,11 @@ fn convert_srt_to_webvtt(source: &[u8]) -> Option<Vec<u8>> {
         let (begin, end) = cue.split_once(" --> ")?;
         let start = srt_timestamp(begin.trim())?;
         let finish = srt_timestamp(end.trim())?;
+        if crate::subtitle_timing::parse_stamp(&start)?
+            >= crate::subtitle_timing::parse_stamp(&finish)?
+        {
+            return None;
+        }
         let text = lines.collect::<Vec<_>>().join("\n");
         if text.trim().is_empty() {
             return None;
@@ -2358,6 +2363,12 @@ mod tests {
             "WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello!\n\n00:01:00.050 --> 00:01:01.000\nBye\n\n"
         );
         assert!(convert_srt_to_webvtt(b"1\n00:00:70,000 --> 00:00:02,000\ninvalid\n").is_none());
+        assert!(
+            convert_srt_to_webvtt(b"1\n00:00:02,000 --> 00:00:01,000\nReversed\n").is_none()
+        );
+        assert!(
+            convert_srt_to_webvtt(b"1\n00:00:01,000 --> 00:00:01,000\nZero duration\n").is_none()
+        );
         assert!(convert_srt_to_webvtt(b"not a timestamp\ninvalid\n").is_none());
         assert!(convert_srt_to_webvtt(&[0xFF, 0xFF]).is_none());
     }
