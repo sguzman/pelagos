@@ -1489,10 +1489,11 @@ async fn convert_script_sidecar_to_srt(
                 .write_all(source)
                 .await
                 .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-            input
-                .shutdown()
-                .await
-                .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
+            // FFmpeg reads until EOF. ChildStdin::shutdown alone does not
+            // release the pipe descriptor; explicitly dropping it lets the
+            // muxer finish instead of waiting until the 30-second deadline.
+            drop(input);
+            Ok::<(), StatusCode>(())
         };
         let read = async {
             stdout
