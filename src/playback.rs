@@ -223,10 +223,8 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         "audio" => "Audio",
         "subtitle" => "Subtitle",
         "attachment"
-            if crate::attachments::font_mime(
-                value["tags"]["mimetype"].as_str().unwrap_or(""),
-            )
-            .is_some()
+            if crate::attachments::font_mime(value["tags"]["mimetype"].as_str().unwrap_or(""))
+                .is_some()
                 && number(&value["extradata_size"]).is_none_or(|size| {
                     (0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size)
                 }) =>
@@ -248,8 +246,7 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         sample_rate: number(&value["sample_rate"]),
         profile: text_field(&value["profile"]),
         title: if stream_type == "Attachment" {
-            text_field(&value["tags"]["filename"])
-                .or_else(|| text_field(&value["tags"]["title"]))
+            text_field(&value["tags"]["filename"]).or_else(|| text_field(&value["tags"]["title"]))
         } else {
             text_field(&value["tags"]["title"])
         },
