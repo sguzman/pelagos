@@ -15,12 +15,7 @@ use pelagos::{
 };
 use tower::ServiceExt;
 
-async fn send(
-    router: &Router,
-    uri: &str,
-    token: Option<&str>,
-    range: Option<&str>,
-) -> Response {
+async fn send(router: &Router, uri: &str, token: Option<&str>, range: Option<&str>) -> Response {
     let mut request = Request::builder().method("GET").uri(uri);
     if let Some(value) = token {
         request = request.header("X-Emby-Token", value);
@@ -70,9 +65,22 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
     let stream = format!("/Videos/{allowed_id}/stream?static=true");
     let hidden_stream = format!("/Videos/{hidden_id}/stream?static=true");
     let symlink_stream = format!("/Videos/{symlink_id}/stream?static=true");
-    assert_eq!(send(&router, &stream, None, None).await.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(send(&router, &hidden_stream, Some(&token), None).await.status(), StatusCode::NOT_FOUND);
-    assert_eq!(send(&router, &symlink_stream, Some(&token), None).await.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        send(&router, &stream, None, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        send(&router, &hidden_stream, Some(&token), None)
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(&router, &symlink_stream, Some(&token), None)
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         send(
             &router,
@@ -86,7 +94,10 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
     );
     let good = send(&router, &stream, Some(&token), None).await;
     assert_eq!(good.status(), StatusCode::OK);
-    assert_eq!(to_bytes(good.into_body(), 1024).await.unwrap().as_ref(), content);
+    assert_eq!(
+        to_bytes(good.into_body(), 1024).await.unwrap().as_ref(),
+        content
+    );
 
     // Encoded dot/slash, path separators, NULs and very long paths must not
     // escape the catalog's indexed authorized-item boundary.
@@ -142,5 +153,8 @@ async fn synthetic_library_permissions_path_escapes_and_range_mutations_fail_clo
         assert!(!bytes.windows(forbidden.len()).any(|part| part == forbidden));
     }
     auth::revoke_library(&state, "viewer", &allowed).unwrap();
-    assert_eq!(send(&router, &stream, Some(&token), None).await.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        send(&router, &stream, Some(&token), None).await.status(),
+        StatusCode::NOT_FOUND
+    );
 }
