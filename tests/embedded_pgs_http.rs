@@ -7,7 +7,10 @@ use axum::{
     http::{Request, StatusCode, header},
     response::Response,
 };
-use pelagos::{app::{self, AppState}, auth, catalog};
+use pelagos::{
+    app::{self, AppState},
+    auth, catalog,
+};
 use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
@@ -27,7 +30,10 @@ async fn request(
     if let Some(range) = range {
         builder = builder.header("Range", range);
     }
-    app.clone().oneshot(builder.body(Body::empty()).unwrap()).await.unwrap()
+    app.clone()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
 }
 
 #[tokio::test]
@@ -43,40 +49,64 @@ async fn embedded_matroska_pgs_stream_is_extracted_raw_and_read_by_ranges() {
     fs::write(&sup, RAW_PGS).unwrap();
     let movie = root.join("Embedded.mkv");
     let result = Command::new("ffmpeg")
-        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-               "-i", "color=s=32x32:r=5:d=3", "-i"])
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=s=32x32:r=5:d=3",
+            "-i",
+        ])
         .arg(&sup)
-        .args(["-map", "0:v:0", "-map", "1:s:0",
-               "-c:v", "mpeg4", "-c:s", "copy", "-y"])
+        .args([
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "copy", "-y",
+        ])
         .arg(&movie)
-        .output().unwrap();
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     let original = fs::read(&movie).unwrap();
     catalog::index(&state, &root).unwrap();
     auth::create_user(&state, "admin", "embedded-pgs-admin-password").unwrap();
     auth::create_user(&state, "viewer", "embedded-pgs-viewer-password").unwrap();
-    let token = auth::authenticate(
-        &state, "viewer", "embedded-pgs-viewer-password", "server",
-    ).unwrap().unwrap().access_token;
+    let token = auth::authenticate(&state, "viewer", "embedded-pgs-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     auth::grant_library(&state, "viewer", &root).unwrap();
     let app = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(), state.clone(),
+        "server".to_owned(),
+        state.clone(),
     )));
     let response = request(&app, "GET", "/Items", Some(&token), None).await;
     assert_eq!(response.status(), StatusCode::OK);
-    let items: serde_json::Value = serde_json::from_slice(
-        &to_bytes(response.into_body(), 65_536).await.unwrap()
-    ).unwrap();
+    let items: serde_json::Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
     let id = items["Items"][0]["Id"].as_str().unwrap();
     let info = request(
-        &app, "GET", &format!("/Items/{id}/PlaybackInfo"), Some(&token), None,
-    ).await;
+        &app,
+        "GET",
+        &format!("/Items/{id}/PlaybackInfo"),
+        Some(&token),
+        None,
+    )
+    .await;
     assert_eq!(info.status(), StatusCode::OK);
-    let info: serde_json::Value = serde_json::from_slice(
-        &to_bytes(info.into_body(), 65_536).await.unwrap()
-    ).unwrap();
-    let sub = info["MediaSources"][0]["MediaStreams"].as_array().unwrap()
-        .iter().find(|stream| stream["Type"] == "Subtitle").unwrap();
+    let info: serde_json::Value =
+        serde_json::from_slice(&to_bytes(info.into_body(), 65_536).await.unwrap()).unwrap();
+    let sub = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Type"] == "Subtitle")
+        .unwrap();
     assert_eq!(sub["Codec"], "hdmv_pgs_subtitle");
     assert_eq!(sub["IsExternal"], false);
     assert_eq!(sub["IsTextSubtitleStream"], false);
@@ -90,10 +120,19 @@ async fn embedded_matroska_pgs_stream_is_extracted_raw_and_read_by_ranges() {
     );
     let response = request(&app, "GET", &url, Some(&token), None).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()[header::CONTENT_LENGTH], RAW_PGS.len().to_string());
+    assert_eq!(
+        response.headers()[header::CONTENT_LENGTH],
+        RAW_PGS.len().to_string()
+    );
     assert_eq!(response.headers()[header::ACCEPT_RANGES], "bytes");
-    assert_eq!(response.headers()[header::CONTENT_TYPE], "application/octet-stream");
-    assert_eq!(to_bytes(response.into_body(), 1024).await.unwrap().as_ref(), RAW_PGS);
+    assert_eq!(
+        response.headers()[header::CONTENT_TYPE],
+        "application/octet-stream"
+    );
+    assert_eq!(
+        to_bytes(response.into_body(), 1024).await.unwrap().as_ref(),
+        RAW_PGS
+    );
     let response = request(&app, "GET", &url, Some(&token), Some("bytes=2-7")).await;
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()[header::CONTENT_LENGTH], "6");
@@ -110,18 +149,23 @@ async fn embedded_matroska_pgs_stream_is_extracted_raw_and_read_by_ranges() {
     assert!(to_bytes(response.into_body(), 64).await.unwrap().is_empty());
     assert_eq!(
         request(&app, "GET", &url, Some(&token), Some("bytes=99-"))
-            .await.status(),
+            .await
+            .status(),
         StatusCode::RANGE_NOT_SATISFIABLE
     );
     let unsupported = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.srt");
     assert_eq!(
-        request(&app, "GET", &unsupported, Some(&token), None).await.status(),
+        request(&app, "GET", &unsupported, Some(&token), None)
+            .await
+            .status(),
         StatusCode::NOT_IMPLEMENTED
     );
     assert_eq!(fs::read(&movie).unwrap(), original);
     auth::revoke_library(&state, "viewer", &root).unwrap();
     assert_eq!(
-        request(&app, "GET", &url, Some(&token), None).await.status(),
+        request(&app, "GET", &url, Some(&token), None)
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
 }
