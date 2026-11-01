@@ -121,7 +121,9 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
         serde_json::from_slice(&to_bytes(source.into_body(), 65_536).await.unwrap()).unwrap();
     let streams = info["MediaSources"][0]["MediaStreams"].as_array().unwrap();
     assert_eq!(streams.len(), 1);
-    let attachments = info["MediaSources"][0]["MediaAttachments"].as_array().unwrap();
+    let attachments = info["MediaSources"][0]["MediaAttachments"]
+        .as_array()
+        .unwrap();
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0]["Index"], 1);
     assert_eq!(attachments[0]["Codec"], "ttf");

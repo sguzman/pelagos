@@ -152,12 +152,12 @@ fn mapped_attachment(value: &Value, item_id: &str) -> Option<MediaAttachment> {
     if value["codec_type"] != "attachment" {
         return None;
     }
-    let index = number(&value["index"])
-        .filter(|value| (0..=i64::from(i32::MAX)).contains(value))?;
+    let index =
+        number(&value["index"]).filter(|value| (0..=i64::from(i32::MAX)).contains(value))?;
     let mime = crate::attachments::font_mime(value["tags"]["mimetype"].as_str()?)?;
-    if number(&value["extradata_size"]).is_some_and(|size| {
-        !(0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size)
-    }) {
+    if number(&value["extradata_size"])
+        .is_some_and(|size| !(0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size))
+    {
         return None;
     }
     Some(MediaAttachment {
