@@ -353,6 +353,10 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
     })
 }
 
+fn is_pgs_codec(codec: &str) -> bool {
+    matches!(codec, "hdmv_pgs_subtitle" | "pgssub")
+}
+
 // Bounded, deterministic read-only sidecar discovery; reject symlinks
 // and never enumerate beyond the already authorized video's directory.
 // Raw PGS SUP files may be larger than ordinary 4 MiB text sidecars, but
@@ -584,23 +588,33 @@ fn source_from_probe(
         // have a delivery path, and preserve their embedded source identity.
         for stream in &mut media_streams {
             if stream.stream_type == "Subtitle"
-                && stream.is_text_subtitle_stream
-                && matches!(
-                    stream.codec.as_deref(),
-                    Some("subrip" | "ass" | "ssa" | "mov_text" | "webvtt")
-                )
                 && (0..=i64::from(i32::MAX)).contains(&stream.index)
             {
-                stream.delivery_method = Some("External");
-                let format = if stream.codec.as_deref() == Some("ass") {
-                    "ass"
-                } else {
-                    "srt"
-                };
-                stream.delivery_url = Some(format!(
-                    "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{format}",
-                    stream.index
-                ));
+                if stream.is_text_subtitle_stream
+                    && matches!(
+                        stream.codec.as_deref(),
+                        Some("subrip" | "ass" | "ssa" | "mov_text" | "webvtt")
+                    )
+                {
+                    stream.delivery_method = Some("External");
+                    let format = if stream.codec.as_deref() == Some("ass") {
+                        "ass"
+                    } else {
+                        "srt"
+                    };
+                    stream.delivery_url = Some(format!(
+                        "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.{format}",
+                        stream.index
+                    ));
+                } else if stream.codec.as_deref().is_some_and(is_pgs_codec) {
+                    // Raw PGS extraction is supported separately from text
+                    // transcoding; preserve this graphical stream identity.
+                    stream.delivery_method = Some("External");
+                    stream.delivery_url = Some(format!(
+                        "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.pgssub",
+                        stream.index
+                    ));
+                }
             }
         }
         for sidecar in external_subtitles(file, result) {
