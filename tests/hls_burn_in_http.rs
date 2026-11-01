@@ -208,3 +208,109 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     assert!(second_white > reference + 20);
     assert_eq!(fs::read(&source).unwrap(), original);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn selected_ass_uses_subtitle_relative_position_not_global_stream_index() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let source = library.join("Multiple.mkv");
+    let srt = temp.path().join("late.srt");
+    let ass = temp.path().join("early.ass");
+    fs::write(
+        &srt,
+        b"1\n00:00:02,100 --> 00:00:03,600\nLATER SUBRIP TRACK\n\n",
+    )
+    .unwrap();
+    fs::write(
+        &ass,
+        r#"[Script Info]
+ScriptType: v4.00+
+PlayResX: 320
+PlayResY: 128
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,DejaVu Sans,32,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.10,0:00:01.90,Default,,0,0,0,,ASS SECOND TRACK
+"#,
+    )
+    .unwrap();
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+            "-i", "color=c=black:s=320x128:r=5:d=4", "-f", "srt", "-i",
+        ])
+        .arg(&srt)
+        .args(["-f", "ass", "-i"])
+        .arg(&ass)
+        .args([
+            "-map", "0:v:0", "-map", "1:s:0", "-map", "2:s:0",
+            "-c:v", "mpeg4", "-c:s", "copy", "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "fixture FFmpeg failed: {}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let untouched = fs::read(&source).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "multiple-subtitles-password").unwrap();
+    let token = auth::authenticate(&state_dir, "admin", "multiple-subtitles-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    let items: Value = serde_json::from_str(&body_string(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    let info: Value = serde_json::from_str(&body_string(info).await).unwrap();
+    let streams = info["MediaSources"][0]["MediaStreams"].as_array().unwrap();
+    let srt_index = streams
+        .iter()
+        .find(|stream| stream["Codec"] == "subrip")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let ass_index = streams
+        .iter()
+        .find(|stream| stream["Codec"] == "ass")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    assert_ne!(srt_index, ass_index);
+
+    let base = format!("/Videos/{id}/main.m3u8?segmentLength=2");
+    let first = format!("{base}&subtitleStreamIndex={srt_index}");
+    let second = format!("{base}&subtitleStreamIndex={ass_index}");
+    let srt_response = call(&app, &first, Some(&token)).await;
+    assert_eq!(srt_response.status(), StatusCode::OK);
+    let srt_manifest = body_string(srt_response).await;
+    let ass_response = call(&app, &second, Some(&token)).await;
+    assert_eq!(ass_response.status(), StatusCode::OK);
+    let ass_manifest = body_string(ass_response).await;
+    assert_ne!(srt_manifest, ass_manifest);
+    assert_eq!(
+        body_string(call(&app, &second, Some(&token)).await).await,
+        ass_manifest
+    );
+    let srt_bytes = segment_bytes(&app, id, &srt_manifest, &token, 0).await;
+    let ass_bytes = segment_bytes(&app, id, &ass_manifest, &token, 0).await;
+    let srt_bright = bright_pixels(&srt_bytes, &temp.path().join("srt.ts"));
+    let ass_bright = bright_pixels(&ass_bytes, &temp.path().join("ass.ts"));
+    assert!(ass_bright > srt_bright + 20);
+    assert_eq!(fs::read(&source).unwrap(), untouched);
+}
