@@ -135,10 +135,9 @@ async fn legacy_ssa_does_not_serve_a_mislabeled_native_ass_response() {
         let response = app.clone().oneshot(req).await.unwrap();
         assert_eq!(response.status(), expected, "{format}");
         if expected == StatusCode::OK {
-            let info: serde_json::Value = serde_json::from_slice(
-                &to_bytes(response.into_body(), 65_536).await.unwrap()
-            )
-            .unwrap();
+            let info: serde_json::Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap())
+                    .unwrap();
             let selected = info["MediaSources"][0]["MediaStreams"]
                 .as_array()
                 .unwrap()
