@@ -377,7 +377,8 @@ mod tests {
 
     #[test]
     fn webvtt_timing_accepts_horizontal_whitespace_but_rejects_missing_separators() {
-        let source = b"WEBVTT\n\nintro\n00:01.000\t-->\t00:03.000\talign:start  position:50%\nHola\n\n";
+        let source =
+            b"WEBVTT\n\nintro\n00:01.000\t-->\t00:03.000\talign:start  position:50%\nHola\n\n";
         let expected = b"1\n00:00:01,000 --> 00:00:03,000\nHola\n\n";
         assert_eq!(vtt_sidecar_to_srt(source).unwrap(), expected);
         let clipped = clip_vtt(source, 10_000_000, 20_000_000, false).unwrap();
@@ -396,8 +397,14 @@ mod tests {
             "00:01.000 --> \t00:03.000 invalid:cue",
         ] {
             let input = format!("WEBVTT\n\n{malformed}\nCaption\n\n");
-            assert!(vtt_sidecar_to_srt(input.as_bytes()).is_none(), "{malformed}");
-            assert!(clip_vtt(input.as_bytes(), 0, 40_000_000, false).is_none(), "{malformed}");
+            assert!(
+                vtt_sidecar_to_srt(input.as_bytes()).is_none(),
+                "{malformed}"
+            );
+            assert!(
+                clip_vtt(input.as_bytes(), 0, 40_000_000, false).is_none(),
+                "{malformed}"
+            );
         }
     }
 
