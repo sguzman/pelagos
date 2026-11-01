@@ -415,7 +415,8 @@ mod tests {
 
     #[test]
     fn tab_delimited_webvtt_notes_do_not_reject_valid_captions() {
-        let source = b"WEBVTT\n\nNOTE\tEditorial annotation\nnot a cue\n\n00:01.000 --> 00:03.000\nHola\n\n";
+        let source =
+            b"WEBVTT\n\nNOTE\tEditorial annotation\nnot a cue\n\n00:01.000 --> 00:03.000\nHola\n\n";
         assert_eq!(
             vtt_sidecar_to_srt(source).unwrap(),
             b"1\n00:00:01,000 --> 00:00:03,000\nHola\n\n"
