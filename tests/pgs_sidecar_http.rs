@@ -107,7 +107,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .position(|part| part == [0, 1, 0, 0x40, 0xbb])
         .expect("completed ODS continuation");
     invalid_rle[continuation + 4] = 0;
-    fs::write(root.join("Feature.it.sup"), &invalid_rle).unwrap();
+    fs::write(root.join("Feature.ja.sup"), &invalid_rle).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -305,7 +305,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         StatusCode::OK
     );
     // A properly completed pair of RLE object fragments stays deliverable
-    // without any mutation or attempted bitmap decoding.
+    // without rewriting the validated raw graphical stream.
     let complete_index = pgs.iter().find(|track| track["Language"] == "nl").unwrap()["Index"]
         .as_i64()
         .unwrap();
@@ -316,7 +316,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         to_bytes(complete.into_body(), 1024).await.unwrap().as_ref(),
         completed_object.as_slice()
     );
-    for language in ["fr", "de", "pt", "it"] {
+    for language in ["fr", "de", "pt", "ja"] {
         let invalid_index = pgs
             .iter()
             .find(|track| track["Language"] == language)
@@ -354,7 +354,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         fs::read(root.join("Feature.nl.sup")).unwrap(),
         completed_object
     );
-    assert_eq!(fs::read(root.join("Feature.it.sup")).unwrap(), invalid_rle);
+    assert_eq!(fs::read(root.join("Feature.ja.sup")).unwrap(), invalid_rle);
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
