@@ -516,8 +516,7 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     let unicode_manifest = body_string(unicode_response).await;
     assert_ne!(unicode_manifest, updated);
     let unicode_bytes = segment_bytes(&app, id, &unicode_manifest, &token, 0).await;
-    let unicode_bright =
-        bright_pixels(&unicode_bytes, &temp.path().join("external-utf16.ts"));
+    let unicode_bright = bright_pixels(&unicode_bytes, &temp.path().join("external-utf16.ts"));
     assert!(unicode_bright > black + 20);
     assert_eq!(fs::read(&sidecar).unwrap(), utf16);
     assert_eq!(fs::read(&source).unwrap(), original);
