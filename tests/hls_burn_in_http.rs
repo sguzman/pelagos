@@ -153,11 +153,23 @@ async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reu
     assert_eq!(subtitle["Codec"], "subrip");
 
     let plain_url = format!("/Videos/{id}/main.m3u8?segmentLength=2");
-    let burn_url = format!("{plain_url}&subtitleStreamIndex={index}");
+    let burn_url = format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=Encode");
     assert_eq!(
         call(&app, &burn_url, None).await.status(),
         StatusCode::UNAUTHORIZED
     );
+    // Upstream v12.3 defaults to External delivery. An index alone cannot
+    // silently trigger burn-in. Embed/Hls/Drop are not implemented here.
+    for unsupported in [
+        format!("{plain_url}&subtitleStreamIndex={index}"),
+        format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=External"),
+        format!("{plain_url}&subtitleStreamIndex={index}&subtitleMethod=Embed"),
+    ] {
+        assert_eq!(
+            call(&app, &unsupported, Some(&token)).await.status(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+    }
     assert_eq!(
         call(
             &app,
@@ -303,8 +315,8 @@ Dialogue: 0,0:00:00.10,0:00:01.90,Default,,0,0,0,,ASS SECOND TRACK
     assert_ne!(srt_index, ass_index);
 
     let base = format!("/Videos/{id}/main.m3u8?segmentLength=2");
-    let first = format!("{base}&subtitleStreamIndex={srt_index}");
-    let second = format!("{base}&subtitleStreamIndex={ass_index}");
+    let first = format!("{base}&subtitleStreamIndex={srt_index}&subtitleMethod=Encode");
+    let second = format!("{base}&subtitleStreamIndex={ass_index}&subtitleMethod=Encode");
     let srt_response = call(&app, &first, Some(&token)).await;
     assert_eq!(srt_response.status(), StatusCode::OK);
     let srt_manifest = body_string(srt_response).await;
