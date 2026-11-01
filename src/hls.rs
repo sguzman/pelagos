@@ -521,9 +521,7 @@ async fn generate_segmented_vod_configured(
         }
         let size = if let Some(track) = options.external_text {
             controller
-                .try_run_window_external_text_capped(
-                    source, &path, start, duration, budget, track,
-                )
+                .try_run_window_external_text_capped(source, &path, start, duration, budget, track)
                 .await?
         } else if let Some(subtitle_index) = options.subtitle_index {
             controller
