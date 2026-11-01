@@ -59,6 +59,7 @@ struct Published {
     start_time_ticks: u64,
     rendition_count: u8,
     subtitle_stream_index: Option<i64>,
+    sidecar: Option<SidecarRevision>,
     private_root: PathBuf,
     main_playlist: String,
     master_playlist: String,
@@ -72,6 +73,45 @@ impl Drop for Published {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SidecarRevision {
+    filename: String,
+    digest: [u8; 32],
+}
+
+enum HlsSubtitle {
+    Embedded(u8),
+    ExternalSrt {
+        bytes: Vec<u8>,
+        revision: SidecarRevision,
+    },
+}
+
+/// Read through the same confined descriptor path used by direct subtitle
+/// delivery. No filename is passed to FFmpeg; the renderer receives only
+/// validated UTF-8 bytes from this bounded read.
+async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, StatusCode> {
+    let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
+    let filename = filename.to_owned();
+    tokio::task::spawn_blocking(move || {
+        use std::io::Read;
+        let (mut file, _, size) =
+            streaming::open_confined(&parent, Path::new(&filename))?;
+        if size == 0 || size > 4 * 1024 * 1024 {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let mut bytes = Vec::with_capacity(size as usize);
+        file.read_to_end(&mut bytes)
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        if bytes.len() as u64 != size {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+}
+
 struct CacheLookup<'a> {
     item: &'a str,
     kind: &'a str,
@@ -83,6 +123,7 @@ struct CacheLookup<'a> {
     start_time_ticks: u64,
     rendition_count: u8,
     subtitle_stream_index: Option<i64>,
+    sidecar: Option<&'a SidecarRevision>,
 }
 
 /// Small private LRU cache; segment access promotes active publications and
@@ -163,6 +204,7 @@ impl HlsRegistry {
                 && entry.start_time_ticks == query.start_time_ticks
                 && entry.rendition_count == query.rendition_count
                 && entry.subtitle_stream_index == query.subtitle_stream_index
+                && entry.sidecar.as_ref() == query.sidecar
         })?;
         let entry = entries.remove(index)?;
         entries.push_back(entry.clone());
@@ -270,17 +312,15 @@ fn validate_hls_output_request(query: &PlaylistQuery, kind: &str) -> Result<(), 
     Ok(())
 }
 
-/// The fixed FFmpeg maps honor only the first audio/video tracks.
-/// An explicitly selected global subtitle stream ID is translated to
-/// FFmpeg's *subtitle-relative* "si" filter position. Only bounded embedded
-/// ASS/SubRip text can be burned in; graphical tracks and other layouts
-/// fail closed instead of silently omitting the chosen subtitles.
+/// Honor a selected FFprobe global index through either an embedded
+/// text-subtitle-relative position or the same deterministic external SRT
+/// inventory used by PlaybackInfo. Only explicit Encode requests burn in.
 async fn validate_hls_track_selection(
     state: &AppState,
     source: &Path,
     query: &PlaylistQuery,
     kind: &str,
-) -> Result<Option<u8>, StatusCode> {
+) -> Result<Option<HlsSubtitle>, StatusCode> {
     // The pinned v12.3 DynamicHlsController defaults SubtitleMethod to
     // External. Burn-in is only the explicit Encode (=0) delivery method;
     // never silently turn an external subtitle request into a video overlay.
@@ -334,18 +374,28 @@ async fn validate_hls_track_selection(
             .filter(|stream| stream["codec_type"] == "subtitle")
             .enumerate()
             .find(|(_, stream)| stream["index"].as_i64() == Some(global_index));
-        let Some((position, stream)) = track else {
-            return Err(StatusCode::NOT_IMPLEMENTED);
-        };
-        if position > 31
-            || !matches!(
-                stream["codec_name"].as_str(),
-                Some("subrip" | "ass" | "ssa")
-            )
-        {
-            return Err(StatusCode::NOT_IMPLEMENTED);
+        if let Some((position, stream)) = track {
+            if position > 31
+                || !matches!(
+                    stream["codec_name"].as_str(),
+                    Some("subrip" | "ass" | "ssa")
+                )
+            {
+                return Err(StatusCode::NOT_IMPLEMENTED);
+            }
+            return Ok(Some(HlsSubtitle::Embedded(position as u8)));
         }
-        return Ok(Some(position as u8));
+        if let Some(filename) =
+            playback::hls_srt_sidecar_filename(source, &report, global_index)
+        {
+            let bytes = read_confined_srt(source, &filename).await?;
+            let revision = SidecarRevision {
+                filename,
+                digest: Sha256::digest(&bytes).into(),
+            };
+            return Ok(Some(HlsSubtitle::ExternalSrt { bytes, revision }));
+        }
+        return Err(StatusCode::NOT_IMPLEMENTED);
     }
     if query.subtitle_stream_index.is_some_and(|index| index != -1) {
         return Err(StatusCode::NOT_IMPLEMENTED);
@@ -413,6 +463,13 @@ async fn reauthorize_publication(
     if metadata.len() != query.size || metadata.modified().ok() != query.modified {
         return Err(StatusCode::NOT_FOUND);
     }
+    if let Some(sidecar) = query.sidecar {
+        let bytes = read_confined_srt(source, &sidecar.filename).await?;
+        let digest: [u8; 32] = Sha256::digest(&bytes).into();
+        if digest != sidecar.digest {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
     Ok(())
 }
 
@@ -471,6 +528,10 @@ async fn generate_hls_playlist(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     let selected_index = query.subtitle_stream_index.filter(|index| *index >= 0);
+    let sidecar_revision = match burn_in_subtitle.as_ref() {
+        Some(HlsSubtitle::ExternalSrt { revision, .. }) => Some(revision.clone()),
+        _ => None,
+    };
     let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -488,6 +549,7 @@ async fn generate_hls_playlist(
         start_time_ticks,
         rendition_count,
         subtitle_stream_index: selected_index,
+        sidecar: sidecar_revision.as_ref(),
     };
     if let Some(existing) = registry.cached(&cache_key) {
         return Ok(playlist_response(if master {
@@ -653,6 +715,7 @@ async fn generate_hls_playlist(
             start_time_ticks,
             rendition_count,
             subtitle_stream_index: selected_index,
+            sidecar: sidecar_revision.clone(),
             private_root,
             main_playlist: String::new(),
             master_playlist,
@@ -664,27 +727,42 @@ async fn generate_hls_playlist(
         registry.publish(publication);
         return Ok(response);
     }
-    let artifact = if let Some(index) = burn_in_subtitle {
-        hls::generate_segmented_vod_with_burn_in_from(
-            &registry.controller,
-            state.probe_executable(),
-            &source,
-            &private_root.join("bundle"),
-            target_seconds,
-            start_time_ticks as f64 / 10_000_000.0,
-            index,
-        )
-        .await
-    } else {
-        hls::generate_segmented_vod_from(
-            &registry.controller,
-            state.probe_executable(),
-            &source,
-            &private_root.join("bundle"),
-            target_seconds,
-            start_time_ticks as f64 / 10_000_000.0,
-        )
-        .await
+    let artifact = match burn_in_subtitle.as_ref() {
+        Some(HlsSubtitle::Embedded(index)) => {
+            hls::generate_segmented_vod_with_burn_in_from(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                start_time_ticks as f64 / 10_000_000.0,
+                *index,
+            )
+            .await
+        }
+        Some(HlsSubtitle::ExternalSrt { bytes, .. }) => {
+            hls::generate_segmented_vod_with_external_srt_from(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                start_time_ticks as f64 / 10_000_000.0,
+                bytes,
+            )
+            .await
+        }
+        None => {
+            hls::generate_segmented_vod_from(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                start_time_ticks as f64 / 10_000_000.0,
+            )
+            .await
+        }
     }
     .map_err(|err| match err.kind() {
         io::ErrorKind::WouldBlock => StatusCode::TOO_MANY_REQUESTS,
@@ -737,6 +815,7 @@ async fn generate_hls_playlist(
         start_time_ticks,
         rendition_count,
         subtitle_stream_index: selected_index,
+        sidecar: sidecar_revision.clone(),
         private_root,
         main_playlist: playlist,
         master_playlist,
@@ -778,6 +857,13 @@ async fn serve_segment(
         || metadata.modified().ok() != publication.source_modified
     {
         return Err(StatusCode::NOT_FOUND);
+    }
+    if let Some(sidecar) = publication.sidecar.as_ref() {
+        let bytes = read_confined_srt(&source, &sidecar.filename).await?;
+        let digest: [u8; 32] = Sha256::digest(&bytes).into();
+        if digest != sidecar.digest {
+            return Err(StatusCode::NOT_FOUND);
+        }
     }
 
     let (name, media_playlist, segments, etag_variant) =
@@ -1177,6 +1263,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
+                sidecar: None,
                 },
             )
             .await,
@@ -1204,6 +1291,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
+                sidecar: None,
                 },
             )
             .await
@@ -1253,6 +1341,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
+                sidecar: None,
                 },
             )
             .await,
@@ -1274,6 +1363,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
+                sidecar: None,
                 },
             )
             .await,
@@ -1295,6 +1385,7 @@ mod tests {
                     start_time_ticks: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
+                sidecar: None,
                 },
             )
             .await,
@@ -1330,6 +1421,7 @@ mod tests {
                 start_time_ticks: 0,
                 rendition_count: 1,
                 subtitle_stream_index: None,
+                sidecar: None,
                 private_root: root,
                 main_playlist: String::new(),
                 master_playlist: String::new(),
@@ -1365,6 +1457,7 @@ mod tests {
             start_time_ticks: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
+                sidecar: None,
         };
         // Multiple synthetic entries use the same cache key; the most
         // recently used publication is now returned, rather than the one
@@ -1448,6 +1541,7 @@ mod tests {
             start_time_ticks: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
+                sidecar: None,
             private_root: fourth_root.clone(),
             main_playlist: String::new(),
             master_playlist: String::new(),
