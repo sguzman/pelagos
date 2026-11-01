@@ -1158,6 +1158,30 @@ async fn extract_embedded_srt(
     .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
 }
 
+/// Recheck durable token/grant scope and indexed source revision after
+/// asynchronous probing, encoding or filesystem work and before delivery.
+async fn reauthorize_subtitle_source(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    item: String,
+    source: &Path,
+    original: &std::fs::Metadata,
+) -> Result<(), StatusCode> {
+    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
+    let (latest, kind) = media_file(&state, item, scope).await?;
+    let current = tokio::fs::metadata(&latest)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    if kind != "video"
+        || latest != source
+        || current.len() != original.len()
+        || current.modified().ok() != original.modified().ok()
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    Ok(())
+}
+
 // Only identity subtitle requests are supported. Timestamp conversion,
 // subtitle transcoding, and graphical subtitles need separate implementations.
 async fn serve_external_subtitle(
@@ -1214,17 +1238,14 @@ async fn serve_external_subtitle(
         };
         // Revalidate the original user/session, grants and media revision
         // after FFmpeg completes but before returning extracted bytes.
-        let (_, latest_scope) = auth_api::library_scope(state.clone(), headers).await?;
-        let (latest_source, _) = media_file(&state, item, latest_scope).await?;
-        let current = tokio::fs::metadata(&latest_source)
-            .await
-            .map_err(|_| StatusCode::NOT_FOUND)?;
-        if latest_source != source
-            || current.len() != source_metadata.len()
-            || current.modified().ok() != source_metadata.modified().ok()
-        {
-            return Err(StatusCode::NOT_FOUND);
-        }
+        reauthorize_subtitle_source(
+            state.clone(),
+            headers.clone(),
+            item.clone(),
+            &source,
+            &source_metadata,
+        )
+        .await?;
         let length = payload.len();
         let mut response = Response::new(if head {
             Body::empty()
@@ -1291,6 +1312,16 @@ async fn serve_external_subtitle(
         };
         (body, size)
     };
+    // Sidecar decoding/reading can also span grant or source revision
+    // changes. Revalidate before releasing even a previously opened file.
+    reauthorize_subtitle_source(
+        state.clone(),
+        headers,
+        item,
+        &source,
+        &source_metadata,
+    )
+    .await?;
     let mut response = Response::new(body);
     response.headers_mut().insert(
         CONTENT_TYPE,
@@ -1673,6 +1704,78 @@ mod tests {
         report.format = None;
         let unknown = source_from_probe("id", "video", Path::new("movie.mp4"), &report);
         assert_eq!(unknown.bitrate, None);
+    }
+
+    #[tokio::test]
+    async fn subtitle_source_revalidation_rejects_revoked_grants_and_revisions() {
+        use axum::http::HeaderValue;
+        let fixture = tempfile::tempdir().unwrap();
+        let library = fixture.path().join("Movies");
+        let state_dir = fixture.path().join("state");
+        std::fs::create_dir_all(&library).unwrap();
+        let movie = library.join("Feature.mp4");
+        std::fs::write(&movie, b"video contents").unwrap();
+        catalog::index(&state_dir, &library).unwrap();
+        auth::create_user(&state_dir, "admin", "subtitle-revalidation-admin-password").unwrap();
+        auth::create_user(&state_dir, "viewer", "subtitle-revalidation-viewer-password").unwrap();
+        auth::grant_library(&state_dir, "viewer", &library).unwrap();
+        let token = auth::authenticate(
+            &state_dir,
+            "viewer",
+            "subtitle-revalidation-viewer-password",
+            "server",
+        )
+        .unwrap()
+        .unwrap()
+        .access_token;
+        let mut headers = HeaderMap::new();
+        headers.insert("x-emby-token", HeaderValue::from_str(&token).unwrap());
+        let state = Arc::new(AppState::with_auth_dir(
+            "server".to_owned(),
+            state_dir.clone(),
+        ));
+        let item = catalog_api::stable_id(
+            library.to_str().unwrap(),
+            "Feature.mp4",
+        );
+        let original = std::fs::metadata(&movie).unwrap();
+        let source = std::fs::canonicalize(&movie).unwrap();
+        assert_eq!(
+            reauthorize_subtitle_source(
+                state.clone(),
+                headers.clone(),
+                item.clone(),
+                &source,
+                &original,
+            )
+            .await,
+            Ok(())
+        );
+        auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+        assert_eq!(
+            reauthorize_subtitle_source(
+                state.clone(),
+                headers.clone(),
+                item.clone(),
+                &source,
+                &original,
+            )
+            .await,
+            Err(StatusCode::NOT_FOUND)
+        );
+        auth::grant_library(&state_dir, "viewer", &library).unwrap();
+        std::fs::write(&movie, b"updated media revision").unwrap();
+        assert_eq!(
+            reauthorize_subtitle_source(
+                state,
+                headers,
+                item,
+                &source,
+                &original,
+            )
+            .await,
+            Err(StatusCode::NOT_FOUND)
+        );
     }
 
     #[test]
