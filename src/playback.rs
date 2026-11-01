@@ -1314,14 +1314,7 @@ async fn serve_external_subtitle(
     };
     // Sidecar decoding/reading can also span grant or source revision
     // changes. Revalidate before releasing even a previously opened file.
-    reauthorize_subtitle_source(
-        state.clone(),
-        headers,
-        item,
-        &source,
-        &source_metadata,
-    )
-    .await?;
+    reauthorize_subtitle_source(state.clone(), headers, item, &source, &source_metadata).await?;
     let mut response = Response::new(body);
     response.headers_mut().insert(
         CONTENT_TYPE,
@@ -1674,7 +1667,12 @@ mod tests {
         std::fs::write(&movie, b"video contents").unwrap();
         catalog::index(&state_dir, &library).unwrap();
         auth::create_user(&state_dir, "admin", "subtitle-revalidation-admin-password").unwrap();
-        auth::create_user(&state_dir, "viewer", "subtitle-revalidation-viewer-password").unwrap();
+        auth::create_user(
+            &state_dir,
+            "viewer",
+            "subtitle-revalidation-viewer-password",
+        )
+        .unwrap();
         auth::grant_library(&state_dir, "viewer", &library).unwrap();
         let token = auth::authenticate(
             &state_dir,
@@ -1691,10 +1689,7 @@ mod tests {
             "server".to_owned(),
             state_dir.clone(),
         ));
-        let item = catalog_api::stable_id(
-            library.to_str().unwrap(),
-            "Feature.mp4",
-        );
+        let item = catalog_api::stable_id(library.to_str().unwrap(), "Feature.mp4");
         let original = std::fs::metadata(&movie).unwrap();
         let source = std::fs::canonicalize(&movie).unwrap();
         assert_eq!(
@@ -1723,14 +1718,7 @@ mod tests {
         auth::grant_library(&state_dir, "viewer", &library).unwrap();
         std::fs::write(&movie, b"updated media revision").unwrap();
         assert_eq!(
-            reauthorize_subtitle_source(
-                state,
-                headers,
-                item,
-                &source,
-                &original,
-            )
-            .await,
+            reauthorize_subtitle_source(state, headers, item, &source, &original,).await,
             Err(StatusCode::NOT_FOUND)
         );
     }
