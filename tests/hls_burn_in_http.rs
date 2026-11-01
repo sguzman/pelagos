@@ -244,15 +244,24 @@ Dialogue: 0,0:00:00.10,0:00:01.90,Default,,0,0,0,,ASS SECOND TRACK
     .unwrap();
     let created = Command::new("ffmpeg")
         .args([
-            "-nostdin", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
-            "-i", "color=c=black:s=320x128:r=5:d=4", "-f", "srt", "-i",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x128:r=5:d=4",
+            "-f",
+            "srt",
+            "-i",
         ])
         .arg(&srt)
         .args(["-f", "ass", "-i"])
         .arg(&ass)
         .args([
-            "-map", "0:v:0", "-map", "1:s:0", "-map", "2:s:0",
-            "-c:v", "mpeg4", "-c:s", "copy", "-y",
+            "-map", "0:v:0", "-map", "1:s:0", "-map", "2:s:0", "-c:v", "mpeg4", "-c:s", "copy",
+            "-y",
         ])
         .arg(&source)
         .output()
