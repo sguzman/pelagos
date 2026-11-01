@@ -72,8 +72,9 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         &disabled,
         "GET",
         "/FallbackFont/Fonts/Family.ttf",
-        Some(&token)
-    ).await;
+        Some(&token),
+    )
+    .await;
     assert_eq!(missing.status(), StatusCode::OK);
     assert_eq!(missing.headers()[header::CONTENT_LENGTH], "0");
     assert!(to_bytes(missing.into_body(), 64).await.unwrap().is_empty());
@@ -163,9 +164,14 @@ async fn fallback_fonts_are_opt_in_bounded_and_scoped_to_authenticated_users() {
         assert!(to_bytes(missing.into_body(), 64).await.unwrap().is_empty());
     }
     assert_eq!(
-        request(&active, "GET", "/FallbackFont/Fonts/trailing.ttf.", Some(&token))
-            .await
-            .status(),
+        request(
+            &active,
+            "GET",
+            "/FallbackFont/Fonts/trailing.ttf.",
+            Some(&token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
     for name in ["Spoof.ttf", "missing.ttf"] {
