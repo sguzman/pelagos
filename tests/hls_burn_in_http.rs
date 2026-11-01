@@ -503,6 +503,31 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
     let updated = body_string(updated_response).await;
     assert_ne!(updated, burned);
     assert_eq!(fs::read(&source).unwrap(), original);
+
+    fs::write(&sidecar, b"this is not a valid SRT cue").unwrap();
+    assert_eq!(
+        call(&app, &burn, Some(&token)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    // Replacement with an escape symlink must not allow FFmpeg to consume
+    // files outside this user's authorized, canonical media directory.
+    let outside = temp.path().join("outside.srt");
+    fs::write(&outside, first_srt).unwrap();
+    fs::remove_file(&sidecar).unwrap();
+    std::os::unix::fs::symlink(&outside, &sidecar).unwrap();
+    assert_eq!(
+        call(&app, &burn, Some(&token)).await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(fs::read(&source).unwrap(), original);
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         call(&app, &burn, Some(&token)).await.status(),
