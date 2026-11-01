@@ -17,6 +17,12 @@ These checks use **isolated synthetic media and accounts**. They do not require 
 - A deterministic seeded corpus of malformed and valid byte-range header candidates goes through the actual authenticated HTTP transport. The test rejects server failures, unexpected response statuses, oversized bodies and cross-library content disclosure.
 - This is a **deterministic mutation regression**, not a claim that native libFuzzer coverage, automated penetration testing, every authorization route, or production security validation has been completed.
 
+## Process lifecycle and signal handling
+
+- `tests/lifecycle_signal.rs` starts the compiled Pelagos binary as an isolated child process, binding a temporary loopback port with a fresh temporary state directory. It tests both `SIGINT` and `SIGTERM` and requires a successful exit. It never signals an existing user session, an installed service, or the desktop.
+- The daemon uses Axum graceful HTTP draining on normal shutdown. After the server stops, it cancels any opt-in UDP discovery worker; the drain has a 30-second upper bound before the process reports a shutdown error rather than hanging indefinitely.
+- This test establishes a narrow Linux process-lifecycle regression, not a systemd deployment, actual remote-client interruption test, long stream drain guarantee, or production operational acceptance.
+
 ## Commands
 
 Run from the repository root using the existing Rust toolchain. Media-specific tests require the `ffmpeg` and `ffprobe` executables, as the CI workflow provides.
