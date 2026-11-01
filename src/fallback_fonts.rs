@@ -134,7 +134,9 @@ fn available(root: &Path) -> Result<Vec<FontInfo>, StatusCode> {
         if size < 12 || size > attachments::MAX_FONT_BYTES as u64 {
             continue;
         }
-        scanned = scanned.checked_add(size).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        scanned = scanned
+            .checked_add(size)
+            .ok_or(StatusCode::NOT_IMPLEMENTED)?;
         if scanned > MAX_SCANNED_BYTES {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
