@@ -751,11 +751,19 @@ fn profile_allows_external_subtitles(
             let allowed_container = rule["Container"].as_str().unwrap_or("");
             let allowed_language = rule["Language"].as_str().unwrap_or("");
             let allowed_format = rule["Format"].as_str().unwrap_or("");
-            let codec = stream.codec.as_deref().unwrap_or("");
+            // Match the format actually sent to the client, not the
+            // embedded source codec: ASS may be delivered as SRT or VTT.
+            let delivered_codec = match ext {
+                "srt" => "subrip",
+                "vtt" => "webvtt",
+                _ => ext,
+            };
             let compatible_format = if allowed_format.starts_with('-') {
-                profile_contains(allowed_format, ext) && profile_contains(allowed_format, codec)
+                profile_contains(allowed_format, ext)
+                    && profile_contains(allowed_format, delivered_codec)
             } else {
-                profile_contains(allowed_format, ext) || profile_contains(allowed_format, codec)
+                profile_contains(allowed_format, ext)
+                    || profile_contains(allowed_format, delivered_codec)
             };
             compatible_format
                 && profile_contains(allowed_container, &source.container)
@@ -769,6 +777,57 @@ fn profile_allows_external_subtitles(
         }
     }
     Ok(found)
+}
+
+/// A selected embedded ASS track can be separately extracted as native ASS,
+/// SRT, or VTT. Offer a fallback URL only when the device's explicit external
+/// subtitle profile permits that *delivered* format. Never rewrite source
+/// codecs, selection indices, or the file used for direct-play.
+fn negotiate_embedded_ass_delivery(
+    profile: &Value,
+    source: &mut MediaSource,
+) -> Result<(), StatusCode> {
+    let Some(profiles) = profile.get("SubtitleProfiles").and_then(Value::as_array) else {
+        // Invalid profile types are rejected by profile_allows_direct_file.
+        return Ok(());
+    };
+    if profiles.is_empty() {
+        return Ok(());
+    }
+    let Some(selected_index) = source.default_subtitle_stream_index else {
+        return Ok(());
+    };
+    let Some(position) = source.media_streams.iter().position(|stream| {
+        stream.stream_type == "Subtitle" && stream.index == selected_index
+    }) else {
+        return Ok(());
+    };
+    let stream = &source.media_streams[position];
+    if stream.is_external || stream.codec.as_deref() != Some("ass") {
+        return Ok(());
+    }
+    let Some(original) = stream
+        .delivery_url
+        .as_ref()
+        .filter(|url| url.ends_with("/Stream.ass"))
+        .cloned()
+    else {
+        return Ok(());
+    };
+    // Preserve the style-bearing native ASS path whenever the client accepts
+    // it. Only use text conversion when native delivery is not supported.
+    if profile_allows_external_subtitles(profiles, source)? {
+        return Ok(());
+    }
+    let prefix = original.strip_suffix(".ass").expect("validated ASS suffix");
+    for format in ["srt", "vtt"] {
+        source.media_streams[position].delivery_url = Some(format!("{prefix}.{format}"));
+        if profile_allows_external_subtitles(profiles, source)? {
+            return Ok(());
+        }
+    }
+    source.media_streams[position].delivery_url = Some(original);
+    Ok(())
 }
 
 /// This is a conservative, bounded direct-file subset, not full DLNA
@@ -1137,6 +1196,7 @@ async fn playback_info(
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     if let Some(profile) = profile.as_ref() {
+        negotiate_embedded_ass_delivery(profile, &mut source)?;
         if !profile_allows_direct_file(profile, &source, &probed)? {
             // There is no remux or transcode fallback yet. Refuse the
             // unmatched profile rather than advertising unsupported playback.
@@ -2468,6 +2528,61 @@ mod tests {
                 &selected_source
             ),
             Ok(false)
+        );
+    }
+
+    #[test]
+    fn selected_embedded_ass_uses_only_profile_permitted_external_delivery() {
+        let fixture = tempfile::tempdir().unwrap();
+        let movie = fixture.path().join("Feature.mkv");
+        std::fs::write(&movie, b"media").unwrap();
+        let report = probe::ProbeReport {
+            path: movie.clone(),
+            size_bytes: 5,
+            format: None,
+            streams: vec![
+                json!({"index":0,"codec_type":"video","codec_name":"mpeg4"}),
+                json!({"index":1,"codec_type":"subtitle","codec_name":"ass","tags":{"language":"eng"}}),
+            ],
+            chapters: vec![],
+        };
+        let native = "/Videos/item/item/Subtitles/1/Stream.ass";
+        for (rules, expected) in [
+            (json!([{"Method":"External","Format":"ass"}]), native),
+            (
+                json!([{"Method":"External","Format":"srt"}]),
+                "/Videos/item/item/Subtitles/1/Stream.srt",
+            ),
+            (
+                json!([{"Method":2,"Format":"webvtt"}]),
+                "/Videos/item/item/Subtitles/1/Stream.vtt",
+            ),
+            (
+                json!([{"Method":"External","Format":"-ass"}]),
+                "/Videos/item/item/Subtitles/1/Stream.srt",
+            ),
+            (
+                json!([{"Method":"External","Format":"srt","Language":"fra"}]),
+                native,
+            ),
+            (json!([{"Method":"Embed","Format":"srt"}]), native),
+        ] {
+            let mut source = source_from_probe("item", "video", &movie, &report);
+            source.default_subtitle_stream_index = Some(1);
+            let profile = json!({"SubtitleProfiles":rules});
+            assert_eq!(negotiate_embedded_ass_delivery(&profile, &mut source), Ok(()));
+            let selected = &source.media_streams[1];
+            assert_eq!(selected.delivery_url.as_deref(), Some(expected), "{profile:?}");
+            assert_eq!(selected.codec.as_deref(), Some("ass"));
+            assert!(!selected.is_external);
+            assert_eq!(source.default_subtitle_stream_index, Some(1));
+        }
+        let mut source = source_from_probe("item", "video", &movie, &report);
+        source.default_subtitle_stream_index = Some(1);
+        let malformed = json!({"SubtitleProfiles":[{"Method":"External","Unknown":true}]});
+        assert_eq!(
+            negotiate_embedded_ass_delivery(&malformed, &mut source),
+            Err(StatusCode::BAD_REQUEST)
         );
     }
 
