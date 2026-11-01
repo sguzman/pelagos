@@ -25,14 +25,14 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[cfg(test)]
+use crate::pgs::header_valid as pgs_header_valid;
 use crate::{
     app::AppState,
     auth, auth_api, catalog, catalog_api,
     pgs::{MAX_SUP_BYTES, packets_valid as pgs_packets_valid},
     probe, streaming,
 };
-#[cfg(test)]
-use crate::pgs::header_valid as pgs_header_valid;
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
     process::Command,
