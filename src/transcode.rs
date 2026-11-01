@@ -220,6 +220,45 @@ impl TranscodeController {
             self.max_bytes.min(remaining_bytes),
             quality,
             Some(window),
+            None,
+        )
+        .await
+    }
+
+    /// Opt-in FFmpeg/libass burn-in for one embedded subtitle track of a
+    /// selected video window. The index is relative to subtitle streams in
+    /// the input (FFmpeg subtitles filter "si"), not a global stream ID.
+    /// No client routing or external subtitle negotiation is implied here.
+    pub async fn try_run_window_with_burn_in(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        subtitle_index: u8,
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        if subtitle_index > 31 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid embedded subtitle position",
+            ));
+        }
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_inner(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes,
+            None,
+            Some(window),
+            Some(subtitle_index),
         )
         .await
     }
@@ -277,7 +316,7 @@ pub async fn transcode_mpegts(
     deadline: Duration,
     max_bytes: u64,
 ) -> io::Result<u64> {
-    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None, None).await
+    transcode_mpegts_inner(executable, source, output, deadline, max_bytes, None, None, None).await
 }
 
 /// Separate, validated encoder profile used for media variants. No shell
@@ -304,6 +343,7 @@ pub async fn transcode_mpegts_with_quality(
         max_bytes,
         Some(quality),
         None,
+        None,
     )
     .await
 }
@@ -316,6 +356,7 @@ async fn transcode_mpegts_inner(
     max_bytes: u64,
     quality: Option<MpegTsQuality>,
     window: Option<TranscodeWindow>,
+    burn_in_subtitle: Option<u8>,
 ) -> io::Result<u64> {
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -330,6 +371,34 @@ async fn transcode_mpegts_inner(
             "FFmpeg source must be a regular file",
         ));
     }
+    if burn_in_subtitle.is_some_and(|index| index > 31) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid embedded subtitle position",
+        ));
+    }
+    // FFmpeg filter expressions are not shell-escaped path arguments. Never
+    // interpolate the user's media pathname into libavfilter's syntax.
+    // Instead, use a private directory and an invariant relative filename
+    // pointing read-only at the already approved source.
+    let burn_in_dir = if burn_in_subtitle.is_some() {
+        #[cfg(unix)]
+        {
+            let resolved = fs::canonicalize(source).await?;
+            let dir = tempfile::tempdir()?;
+            std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
+            Some(dir)
+        }
+        #[cfg(not(unix))]
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "subtitle burn-in requires a Unix confined link",
+            ));
+        }
+    } else {
+        None
+    };
     // create_new makes an existing file or symlink an error and does not
     // silently clobber it, including when concurrently created.
     let mut destination = OpenOptions::new()
@@ -378,6 +447,13 @@ async fn transcode_mpegts_inner(
                 .arg(format!("{}k", quality.video_kbps))
                 .arg("-b:a")
                 .arg(format!("{}k", quality.audio_kbps));
+        }
+        if let Some(index) = burn_in_subtitle {
+            let dir = burn_in_dir.as_ref().expect("subtitle directory exists");
+            command.current_dir(dir.path());
+            command
+                .arg("-vf")
+                .arg(format!("subtitles=input.mkv:si={index}"));
         }
         command
             .arg("-f")
