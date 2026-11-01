@@ -91,6 +91,11 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         b"WEBVTT\n\nSTYLE\n::cue {color: red}\n\n",
     )
     .unwrap();
+    fs::write(
+        root.join("Feature.it.srt"),
+        b"1\n00:00:01,000 --> 00:00:00,500\nReversed cue\n",
+    )
+    .unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "subtitle-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "subtitle-viewer-password").unwrap();
@@ -204,6 +209,22 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
     );
     assert_eq!(
         request(&app, "HEAD", &malformed_playlist, Some(&viewer))
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    let malformed_srt = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Language"] == "it" && stream["Type"] == "Subtitle")
+        .unwrap();
+    let malformed_srt_index = malformed_srt["Index"].as_i64().unwrap();
+    let malformed_srt_playlist = format!(
+        "/Videos/{id}/{id}/Subtitles/{malformed_srt_index}/subtitles.m3u8?segmentLength=2"
+    );
+    assert_eq!(
+        request(&app, "GET", &malformed_srt_playlist, Some(&viewer))
             .await
             .status(),
         StatusCode::NOT_IMPLEMENTED
