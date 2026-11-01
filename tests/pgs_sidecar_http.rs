@@ -73,7 +73,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     );
     let source_bytes = fs::read(&movie).unwrap();
     fs::write(root.join("Feature.es.sup"), PGS).unwrap();
-    fs::write(root.join("Feature.fr.sup"), b"not a PGS stream").unwrap();
+    // A valid first packet must not hide trailing malformed PGS bytes.
+    let mut malformed = PGS.to_vec();
+    malformed.extend_from_slice(b"trailing non-PGS bytes");
+    fs::write(root.join("Feature.fr.sup"), &malformed).unwrap();
     // Unsupported large graphical tracks must not enter playback metadata.
     let giant = fs::File::create(root.join("Feature.it.sup")).unwrap();
     giant.set_len(32 * 1024 * 1024 + 1).unwrap();
@@ -292,6 +295,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .status(),
         StatusCode::NOT_FOUND
     );
+    assert_eq!(fs::read(root.join("Feature.fr.sup")).unwrap(), malformed);
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
