@@ -599,6 +599,66 @@ async fn external_srt_burn_in_rechecks_content_and_grants_without_mutating_media
         StatusCode::NOT_IMPLEMENTED
     );
 
+    // Preserve native ASS and legacy SSA styles rather than converting
+    // them through SRT and discarding typography instructions.
+    let ass = library.join("Feature.de.ass");
+    let ssa = library.join("Feature.it.ssa");
+    let script = r#"[Script Info]
+ScriptType: v4.00+
+PlayResX: 320
+PlayResY: 128
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,DejaVu Sans,32,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,STYLED TEXT VISIBLE
+"#;
+    fs::write(&ass, script).unwrap();
+    let legacy = script
+        .replace("ScriptType: v4.00+", "ScriptType: v4.00")
+        .replace("[V4+ Styles]", "[V4 Styles]");
+    fs::write(&ssa, &legacy).unwrap();
+    let info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    let info: Value = serde_json::from_str(&body_string(info).await).unwrap();
+    for (codec, label) in [("ass", "modern"), ("ssa", "legacy")] {
+        let index = info["MediaSources"][0]["MediaStreams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stream| stream["IsExternal"] == true && stream["Codec"] == codec)
+            .unwrap()["Index"]
+            .as_i64()
+            .unwrap();
+        let route = format!("{base}&subtitleStreamIndex={index}&subtitleMethod=Encode");
+        let response = call(&app, &route, Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK, "{label}");
+        let manifest = body_string(response).await;
+        let bytes = segment_bytes(&app, id, &manifest, &token, 0).await;
+        let filename = temp.path().join(format!("external-{label}.ts"));
+        let bright = bright_pixels(&bytes, &filename);
+        assert!(bright > black + 20, "{label}");
+    }
+    // An SSA file mislabeled as modern ASS must fail strict ScriptType
+    // validation without corrupting the already-published SSA rendition.
+    fs::write(&ass, &legacy).unwrap();
+    let bad_ass_index = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "ass")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let invalid_ass_route =
+        format!("{base}&subtitleStreamIndex={bad_ass_index}&subtitleMethod=Encode");
+    assert_eq!(
+        call(&app, &invalid_ass_route, Some(&token))
+            .await
+            .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+
     fs::write(&sidecar, b"this is not a valid SRT cue").unwrap();
     assert_eq!(
         call(&app, &burn, Some(&token)).await.status(),
