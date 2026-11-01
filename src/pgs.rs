@@ -1,7 +1,7 @@
 //! Bounded, read-only structural preflight for raw Blu-ray PGS SUP tracks.
 //! This validates packet framing and the supported segment *shapes* before
 //! delivery, not palettes, RLE pixels, composition references, or rendering.
-use std::io::Read;
+use std::{collections::BTreeMap, io::Read};
 
 pub(crate) const MAX_SUP_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_PGS_PACKETS: usize = 100_000;
@@ -84,6 +84,55 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
     }
 }
 
+/// Validate the declared RLE object-data byte count across first, middle
+/// and last ODS fragments, without decoding or interpreting any RLE pixels.
+/// An incomplete object's sequence cannot silently pass a display-set END.
+fn object_fragment_valid(pending: &mut BTreeMap<u16, u32>, bytes: &[u8]) -> bool {
+    let id = be16(&bytes[..2]);
+    let flags = bytes[3];
+    let last = flags & 0x40 != 0;
+    if flags & 0x80 != 0 {
+        if pending.contains_key(&id) {
+            return false;
+        }
+        let declared = u32::from_be_bytes([0, bytes[4], bytes[5], bytes[6]]);
+        let Some(image_bytes) = declared.checked_sub(4) else {
+            return false;
+        };
+        let received = (bytes.len() - 11) as u32;
+        if image_bytes == 0 || received > image_bytes {
+            return false;
+        }
+        if last {
+            return received == image_bytes;
+        }
+        if received == image_bytes || pending.len() >= 64 {
+            return false;
+        }
+        pending.insert(id, image_bytes - received);
+        return true;
+    }
+    let Some(remaining) = pending.get(&id).copied() else {
+        return false;
+    };
+    let received = (bytes.len() - 4) as u32;
+    if received == 0 || received > remaining {
+        return false;
+    }
+    if last {
+        if received != remaining {
+            return false;
+        }
+        pending.remove(&id);
+    } else {
+        if received == remaining {
+            return false;
+        }
+        pending.insert(id, remaining - received);
+    }
+    true
+}
+
 /// The total size, packet count, and per-packet allocation are bounded.
 pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
     if !(13..=MAX_SUP_BYTES).contains(&size) {
@@ -92,6 +141,7 @@ pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
     let mut offset = 0_u64;
     let mut packets = 0_usize;
     let mut payload = Vec::new();
+    let mut pending_objects = BTreeMap::new();
     while offset < size {
         if packets >= MAX_PGS_PACKETS || size - offset < 13 {
             return false;
@@ -105,6 +155,11 @@ pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
         if reader.read_exact(&mut payload).is_err() || !segment_shape_valid(header[10], &payload) {
             return false;
         }
+        if (header[10] == 0x15 && !object_fragment_valid(&mut pending_objects, &payload))
+            || (header[10] == 0x80 && !pending_objects.is_empty())
+        {
+            return false;
+        }
         let Some(next) = offset
             .checked_add(13)
             .and_then(|offset| offset.checked_add(length as u64))
@@ -114,7 +169,7 @@ pub(crate) fn packets_valid<R: Read>(reader: &mut R, size: u64) -> bool {
         offset = next;
         packets += 1;
     }
-    packets > 0
+    packets > 0 && pending_objects.is_empty()
 }
 
 #[cfg(test)]
@@ -157,6 +212,34 @@ mod tests {
             &mut bad_header.as_slice(),
             bad_header.len() as u64
         ));
+    }
+
+    #[test]
+    fn fragmented_pgs_objects_must_complete_their_declared_rle_lengths() {
+        let first = packet(0x15, &[0, 1, 0, 0x80, 0, 0, 6, 0, 8, 0, 8, 0xaa]);
+        let last = packet(0x15, &[0, 1, 0, 0x40, 0xbb]);
+        let mut complete = first.clone();
+        complete.extend(&last);
+        complete.extend(packet(0x80, &[]));
+        assert!(packets_valid(&mut complete.as_slice(), complete.len() as u64));
+
+        let single = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 8, 0, 8, 0xaa, 0xbb]);
+        assert!(packets_valid(&mut single.as_slice(), single.len() as u64));
+
+        // Incomplete, unmatched, repeated and oversized final fragments all
+        // fail closed, including when a display set is otherwise well framed.
+        let mut unfinished = first.clone();
+        unfinished.extend(packet(0x80, &[]));
+        let mut wrong_id = first.clone();
+        wrong_id.extend(packet(0x15, &[0, 2, 0, 0x40, 0xbb]));
+        let mut repeated = first.clone();
+        repeated.extend(&first);
+        let mut oversized = first.clone();
+        oversized.extend(packet(0x15, &[0, 1, 0, 0x40, 0xbb, 0xcc]));
+        let short_declared = packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 7, 0, 8, 0, 8, 0xaa, 0xbb]);
+        for bad in [first, unfinished, wrong_id, repeated, oversized, short_declared] {
+            assert!(!packets_valid(&mut bad.as_slice(), bad.len() as u64));
+        }
     }
 
     #[test]
