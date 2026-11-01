@@ -8,14 +8,20 @@ use std::{
 
 use axum::{
     Json, Router,
+    body::Body,
     extract::{Path as RoutePath, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::{
+        HeaderMap, HeaderValue, StatusCode,
+        header::{CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE},
+    },
+    response::Response,
     routing::get,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe};
+use crate::{app::AppState, auth, auth_api, catalog, catalog_api, probe, streaming};
+use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
@@ -156,6 +162,10 @@ pub struct MediaStream {
     is_original: bool,
     is_default: bool,
     is_forced: bool,
+    is_external: bool,
+    is_text_subtitle_stream: bool,
+    delivery_method: Option<&'static str>,
+    delivery_url: Option<String>,
 }
 
 fn number(value: &Value) -> Option<i64> {
@@ -224,7 +234,93 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         is_original: number(&value["disposition"]["original"]) == Some(1),
         is_default: number(&value["disposition"]["default"]) == Some(1),
         is_forced: number(&value["disposition"]["forced"]) == Some(1),
+        is_external: false,
+        is_text_subtitle_stream: false,
+        delivery_method: None,
+        delivery_url: None,
     })
+}
+
+// Bounded, deterministic read-only local SRT discovery; reject symlinks
+// and never enumerate beyond the already authorized video's directory.
+#[derive(Debug)]
+struct ExternalSubtitle {
+    index: i64,
+    filename: String,
+    language: Option<String>,
+}
+
+fn external_subtitles(source: &Path, report: &probe::ProbeReport) -> Vec<ExternalSubtitle> {
+    let Some(dir) = source.parent() else {
+        return Vec::new();
+    };
+    let Some(stem) = source.file_stem().and_then(|name| name.to_str()) else {
+        return Vec::new();
+    };
+    let Some(prefix) = stem.len().checked_add(1) else {
+        return Vec::new();
+    };
+    if prefix > 256 {
+        return Vec::new();
+    }
+    let max_index = report
+        .streams
+        .iter()
+        .filter_map(|stream| number(&stream["index"]))
+        .filter(|index| *index >= 0)
+        .max()
+        .unwrap_or(-1);
+    let Some(first_index) = max_index.checked_add(1) else {
+        return Vec::new();
+    };
+    if first_index > i64::from(i32::MAX) - 16 {
+        return Vec::new();
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names = Vec::new();
+    for (count, result) in entries.enumerate() {
+        if count >= 512 {
+            return Vec::new();
+        }
+        let Ok(entry) = result else {
+            continue;
+        };
+        let Ok(filename) = entry.file_name().into_string() else {
+            continue;
+        };
+        let Some(suffix) = filename.strip_prefix(stem).and_then(|rest| rest.strip_prefix('.')) else {
+            continue;
+        };
+        let language = if suffix.eq_ignore_ascii_case("srt") {
+            None
+        } else {
+            let Some(language) = suffix.strip_suffix(".srt") else {
+                continue;
+            };
+            if !(2..=3).contains(&language.len()) || !language.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+                continue;
+            }
+            Some(language.to_ascii_lowercase())
+        };
+        if entry.file_type().is_ok_and(|kind| kind.is_file())
+            && entry.metadata().is_ok_and(|meta| meta.len() <= 4 * 1024 * 1024)
+        {
+            names.push((filename, language));
+        }
+    }
+    names.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    names
+        .into_iter()
+        .take(16)
+        .enumerate()
+        .map(|(offset, (filename, language))| ExternalSubtitle {
+            index: first_index + offset as i64,
+            filename,
+            language,
+        })
+        .collect()
 }
 
 fn source_from_probe(
@@ -251,7 +347,28 @@ fn source_from_probe(
             seconds.is_finite() && *seconds >= 0.0 && *seconds <= i64::MAX as f64 / 10_000_000.0
         })
         .map(|seconds| (seconds * 10_000_000.0).round() as i64);
-    let media_streams: Vec<MediaStream> = result.streams.iter().filter_map(mapped_stream).collect();
+    let mut media_streams: Vec<MediaStream> =
+        result.streams.iter().filter_map(mapped_stream).collect();
+    if kind == "video" {
+        for sidecar in external_subtitles(file, result) {
+            let language = sidecar.language.as_deref();
+            let mut stream = mapped_stream(&serde_json::json!({
+                "index": sidecar.index,
+                "codec_type": "subtitle",
+                "codec_name": "subrip",
+                "tags": {"language": language}
+            }))
+            .expect("local sidecar subtitle has a supported type and index");
+            stream.is_external = true;
+            stream.is_text_subtitle_stream = true;
+            stream.delivery_method = Some("External");
+            stream.delivery_url = Some(format!(
+                "/Videos/{item_id}/{item_id}/Subtitles/{}/Stream.srt",
+                sidecar.index
+            ));
+            media_streams.push(stream);
+        }
+    }
     let mut audio_tracks = media_streams
         .iter()
         .filter(|stream| stream.stream_type == "Audio");
@@ -701,11 +818,90 @@ async fn post_playback(
     playback_info(state, item_id, headers, query.apply(body)).await
 }
 
+// Only identity subtitle requests are supported. Timestamp conversion,
+// subtitle transcoding, and graphical subtitles need separate implementations.
+async fn serve_external_srt(
+    state: Arc<AppState>,
+    item: String,
+    media_source: String,
+    index: i64,
+    headers: HeaderMap,
+    head: bool,
+) -> Result<Response, StatusCode> {
+    let (_, scope) = auth_api::library_scope(state.clone(), headers).await?;
+    if item != media_source {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let (source, kind) = media_file(&state, item, scope).await?;
+    if kind != "video" {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let report = probe::probe(&source, state.probe_executable(), probe::DEFAULT_TIMEOUT)
+        .await
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    let sidecar = external_subtitles(&source, &report)
+        .into_iter()
+        .find(|sidecar| sidecar.index == index)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
+    let filename = sidecar.filename;
+    let (opened, _, size) = tokio::task::spawn_blocking(move || {
+        streaming::open_confined(&parent, Path::new(&filename))
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+    if size > 4 * 1024 * 1024 {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let mut response = if head {
+        Response::new(Body::empty())
+    } else {
+        Response::new(Body::from_stream(ReaderStream::new(
+            tokio::fs::File::from_std(opened),
+        )))
+    };
+    response.headers_mut().insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/x-subrip"),
+    );
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    response.headers_mut().insert(
+        CONTENT_LENGTH,
+        HeaderValue::from_str(&size.to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
+    Ok(response)
+}
+
+async fn get_external_srt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_external_srt(state, item, media_source, index, headers, false).await
+}
+
+async fn head_external_srt(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, media_source, index)): RoutePath<(String, String, i64)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    serve_external_srt(state, item, media_source, index, headers, true).await
+}
+
 pub fn router() -> Router<Arc<AppState>> {
-    Router::new().route(
-        "/Items/{item_id}/PlaybackInfo",
-        get(get_playback).post(post_playback),
-    )
+    Router::new()
+        .route(
+            "/Items/{item_id}/PlaybackInfo",
+            get(get_playback).post(post_playback),
+        )
+        .route(
+            "/Videos/{item_id}/{media_source_id}/Subtitles/{subtitle_index}/Stream.srt",
+            get(get_external_srt).head(head_external_srt),
+        )
 }
 
 #[cfg(test)]
