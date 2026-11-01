@@ -1857,9 +1857,17 @@ async fn serve_external_subtitle(
         if !(13..=MAX_SUP_BYTES).contains(&size) {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
-        // Inspect every packet boundary from the already confined descriptor.
-        // Keep blocking file seeks off the async executor; the validator does
-        // not read, cache or decode the potentially large bitmap payloads.
+        // Bound concurrent full-payload PGS scans using the existing subtitle
+        // worker pool. A malformed or large sidecar cannot launch unbounded
+        // blocking readers in parallel with embedded subtitle extraction.
+        let workers = SUBTITLE_WORKERS
+            .get_or_init(|| Arc::new(Semaphore::new(2)))
+            .clone();
+        let _permit = workers
+            .try_acquire_owned()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+        // Inspect the entire confined stream off the async executor, with
+        // bounded per-packet buffers and no bitmap decoding or output copies.
         let (opened, valid) = tokio::task::spawn_blocking(move || {
             let mut reader = std::io::BufReader::new(opened);
             let valid = pgs_packets_valid(&mut reader, size);
