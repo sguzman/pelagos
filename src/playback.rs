@@ -2643,7 +2643,7 @@ mod tests {
             "font:alternate.ttf",
             "..",
             " trailing.ttf ",
-            "invalid\\nname.ttf",
+            "invalid\nname.ttf",
         ] {
             let mapped = make(unsafe_name);
             assert_eq!(mapped.file_name, None, "{unsafe_name:?}");
