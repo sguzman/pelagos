@@ -1745,9 +1745,7 @@ struct SubtitlePlaylistQuery {
 
 async fn subtitle_playlist(
     state: Arc<AppState>,
-    item: String,
-    media_source: String,
-    index: i64,
+    (item, media_source, index): (String, String, i64),
     segment_length: u64,
     headers: HeaderMap,
     head: bool,
@@ -1836,7 +1834,14 @@ async fn get_subtitle_playlist(
     Query(query): Query<SubtitlePlaylistQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_playlist(state, item, media_source, index, query.segment_length, headers, false).await
+    subtitle_playlist(
+        state,
+        (item, media_source, index),
+        query.segment_length,
+        headers,
+        false,
+    )
+    .await
 }
 
 async fn head_subtitle_playlist(
@@ -1845,7 +1850,14 @@ async fn head_subtitle_playlist(
     Query(query): Query<SubtitlePlaylistQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
-    subtitle_playlist(state, item, media_source, index, query.segment_length, headers, true).await
+    subtitle_playlist(
+        state,
+        (item, media_source, index),
+        query.segment_length,
+        headers,
+        true,
+    )
+    .await
 }
 
 // Segments use the pinned lowercase stream.vtt URL relative to subtitles.m3u8.
