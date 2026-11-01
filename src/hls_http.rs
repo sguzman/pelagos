@@ -100,12 +100,20 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
         let mut bytes = Vec::with_capacity(size as usize);
-        file.read_to_end(&mut bytes)
+        // Metadata is only a snapshot. A concurrent writer may extend a
+        // sidecar after the size check, so bound the actual descriptor read.
+        file.take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
             .map_err(|_| StatusCode::NOT_FOUND)?;
         if bytes.len() as u64 != size {
             return Err(StatusCode::NOT_FOUND);
         }
-        playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)
+        let normalized =
+            playback::hls_normalized_srt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?;
+        if normalized.len() > 4 * 1024 * 1024 {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        Ok(normalized)
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
