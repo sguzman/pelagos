@@ -19,10 +19,10 @@ use std::{
 };
 use tokio::{io::AsyncReadExt, process::Command, sync::Semaphore};
 
-const MAX_FONT_BYTES: usize = 4 * 1024 * 1024;
+pub(crate) const MAX_FONT_BYTES: usize = 4 * 1024 * 1024;
 static FONT_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
-fn font_mime(raw: &str) -> Option<&'static str> {
+pub(crate) fn font_mime(raw: &str) -> Option<&'static str> {
     match raw.to_ascii_lowercase().as_str() {
         "font/ttf" | "application/x-truetype-font" | "application/x-font-ttf" => Some("font/ttf"),
         "font/otf" | "application/vnd.ms-opentype" | "application/x-font-opentype" => {
@@ -102,15 +102,23 @@ async fn serve(
     let report = probe::probe(&file, state.probe_executable(), probe::DEFAULT_TIMEOUT)
         .await
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    let mime = report
+    let attachment = report
         .streams
         .iter()
         .find(|stream| {
             stream["codec_type"] == "attachment" && stream["index"].as_i64() == Some(index)
         })
-        .and_then(|stream| stream["tags"]["mimetype"].as_str())
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let mime = attachment["tags"]["mimetype"]
+        .as_str()
         .and_then(font_mime)
         .ok_or(StatusCode::NOT_FOUND)?;
+    if attachment["extradata_size"]
+        .as_u64()
+        .is_some_and(|size| size > MAX_FONT_BYTES as u64)
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let data = dump_font(state.ffmpeg_executable(), &file, index).await?;
     playback::reauthorize_video_source(state, headers, item, &file, &revision).await?;
     let length = data.len();

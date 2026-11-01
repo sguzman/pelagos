@@ -112,6 +112,19 @@ async fn scoped_matroska_font_attachment_never_modifies_media() {
     let items: serde_json::Value =
         serde_json::from_slice(&to_bytes(response.into_body(), 65_536).await.unwrap()).unwrap();
     let id = items["Items"][0]["Id"].as_str().unwrap();
+    // A Jellyfin client needs the real font attachment stream index
+    // advertised through PlaybackInfo, without exposing arbitrary blobs.
+    let media_info = format!("/Items/{id}/PlaybackInfo");
+    let source = request(&app, "GET", &media_info, Some(&viewer)).await;
+    assert_eq!(source.status(), StatusCode::OK);
+    let info: serde_json::Value =
+        serde_json::from_slice(&to_bytes(source.into_body(), 65_536).await.unwrap()).unwrap();
+    let streams = info["MediaSources"][0]["MediaStreams"].as_array().unwrap();
+    assert_eq!(streams.len(), 2);
+    assert_eq!(streams[1]["Index"], 1);
+    assert_eq!(streams[1]["Type"], "Attachment");
+    assert_eq!(streams[1]["Codec"], "ttf");
+    assert_eq!(streams[1]["Title"], "fixture.ttf");
     let url = format!("/Videos/{id}/{id}/Attachments/1");
     assert_eq!(
         request(&app, "GET", &url, None).await.status(),

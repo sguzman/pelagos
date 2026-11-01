@@ -222,6 +222,17 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         "video" => "Video",
         "audio" => "Audio",
         "subtitle" => "Subtitle",
+        "attachment"
+            if crate::attachments::font_mime(
+                value["tags"]["mimetype"].as_str().unwrap_or(""),
+            )
+            .is_some()
+                && number(&value["extradata_size"]).is_none_or(|size| {
+                    (0..=crate::attachments::MAX_FONT_BYTES as i64).contains(&size)
+                }) =>
+        {
+            "Attachment"
+        }
         _ => return None,
     };
     let index = number(&value["index"])?;
@@ -236,7 +247,12 @@ fn mapped_stream(value: &Value) -> Option<MediaStream> {
         channels: number(&value["channels"]),
         sample_rate: number(&value["sample_rate"]),
         profile: text_field(&value["profile"]),
-        title: text_field(&value["tags"]["title"]),
+        title: if stream_type == "Attachment" {
+            text_field(&value["tags"]["filename"])
+                .or_else(|| text_field(&value["tags"]["title"]))
+        } else {
+            text_field(&value["tags"]["title"])
+        },
         aspect_ratio: text_field(&value["display_aspect_ratio"]),
         pixel_format: text_field(&value["pix_fmt"]),
         channel_layout: text_field(&value["channel_layout"]),
