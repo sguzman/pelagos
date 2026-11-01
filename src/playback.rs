@@ -1166,10 +1166,7 @@ async fn playback_info(
             && let Some(url) = stream.delivery_url.as_deref()
             && let Some(prefix) = url.strip_suffix("/Stream.ass")
         {
-            let format = native_scripts
-                .get(&stream.index)
-                .copied()
-                .unwrap_or("srt");
+            let format = native_scripts.get(&stream.index).copied().unwrap_or("srt");
             stream.delivery_url = Some(format!("{prefix}/Stream.{format}"));
         }
     }
@@ -1365,9 +1362,17 @@ async fn extract_embedded_text(
         .arg("-map")
         .arg(format!("0:{index}"))
         .arg("-c:s")
-        .arg(if native_format.is_some() { "copy" } else { "srt" })
+        .arg(if native_format.is_some() {
+            "copy"
+        } else {
+            "srt"
+        })
         .arg("-f")
-        .arg(if native_format.is_some() { "ass" } else { "srt" })
+        .arg(if native_format.is_some() {
+            "ass"
+        } else {
+            "srt"
+        })
         .arg("pipe:1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1487,8 +1492,7 @@ async fn serve_external_subtitle(
         // preserving style metadata; other embedded text is still delivered
         // as bounded SRT with an optional WebVTT conversion.
         if !matches!(format, "srt" | "vtt" | "ass" | "ssa")
-            || (matches!(format, "ass" | "ssa")
-                && embedded_codec.as_deref() != Some("ass"))
+            || (matches!(format, "ass" | "ssa") && embedded_codec.as_deref() != Some("ass"))
         {
             return Err(StatusCode::NOT_IMPLEMENTED);
         }
@@ -1497,8 +1501,7 @@ async fn serve_external_subtitle(
         }
         let native_format = matches!(format, "ass" | "ssa").then_some(format);
         let bytes =
-            extract_embedded_text(state.ffmpeg_executable(), &source, index, native_format)
-                .await?;
+            extract_embedded_text(state.ffmpeg_executable(), &source, index, native_format).await?;
         let payload = if format == "vtt" {
             convert_srt_to_webvtt(&bytes).ok_or(StatusCode::NOT_IMPLEMENTED)?
         } else {
