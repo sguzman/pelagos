@@ -10,6 +10,7 @@ pub mod catalog_api;
 pub mod config;
 pub mod device_api;
 pub mod discovery;
+pub mod fallback_fonts;
 pub mod hls;
 pub mod hls_http;
 pub mod identity;
