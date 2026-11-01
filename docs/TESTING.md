@@ -26,7 +26,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 cargo test --test contract_replay
 cargo test --test security_harness
-PELAGOS_REQUIRE_FFMPEG=1 cargo test --all-targets
+env PELAGOS_REQUIRE_FFMPEG=1 cargo test --all-targets
 cargo run --quiet --bin pelagos-roadmap -- --check
 cargo run --quiet --bin pelagos-matrix -- --check
 cargo run --quiet --bin pelagos-api-matrix -- --check
