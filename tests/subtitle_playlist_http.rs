@@ -96,6 +96,10 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
         b"1\n00:00:01,000 --> 00:00:00,500\nReversed cue\n",
     )
     .unwrap();
+    let japanese_srt = "1\n00:00:00,000 --> 00:00:01,000\n字幕\n\n";
+    let mut utf16_srt = vec![0xff, 0xfe];
+    utf16_srt.extend(japanese_srt.encode_utf16().flat_map(u16::to_le_bytes));
+    fs::write(root.join("Feature.ja.srt"), &utf16_srt).unwrap();
     catalog::index(&state_dir, &root).unwrap();
     auth::create_user(&state_dir, "admin", "subtitle-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "subtitle-viewer-password").unwrap();
@@ -228,6 +232,25 @@ async fn short_vod_subtitle_playlist_clips_segments_and_rechecks_authorization()
             .status(),
         StatusCode::NOT_IMPLEMENTED
     );
+    let japanese = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["Language"] == "ja" && stream["Type"] == "Subtitle")
+        .unwrap();
+    let japanese_index = japanese["Index"].as_i64().unwrap();
+    let japanese_url = format!("/Videos/{id}/{id}/Subtitles/{japanese_index}/Stream.srt");
+    let response = request(&app, "GET", &japanese_url, Some(&viewer)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let length = response.headers()[header::CONTENT_LENGTH].clone();
+    let bytes = to_bytes(response.into_body(), 65_536).await.unwrap();
+    assert_eq!(bytes.as_ref(), japanese_srt.as_bytes());
+    assert_eq!(length.to_str().unwrap(), bytes.len().to_string());
+    let head = request(&app, "HEAD", &japanese_url, Some(&viewer)).await;
+    assert_eq!(head.status(), StatusCode::OK);
+    assert_eq!(head.headers()[header::CONTENT_LENGTH], length);
+    assert!(to_bytes(head.into_body(), 64).await.unwrap().is_empty());
+    assert_eq!(fs::read(root.join("Feature.ja.srt")).unwrap(), utf16_srt);
     let playlist_url =
         format!("/Videos/{id}/{id}/Subtitles/{index}/subtitles.m3u8?segmentLength=2");
     assert_eq!(
