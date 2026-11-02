@@ -796,15 +796,17 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .as_i64()
         .unwrap();
 
-    let base = format!(
-        "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6050000000"
-    );
-    let selected = format!(
-        "{base}&subtitleStreamIndex={index}&subtitleMethod=Encode"
-    );
+    let base = format!("/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6050000000");
+    let selected = format!("{base}&subtitleStreamIndex={index}&subtitleMethod=Encode");
     let excerpt = format!("{selected}&pelagosExcerptDurationTicks=40000000");
-    assert_eq!(call(&app, &excerpt, None).await.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(call(&app, &selected, Some(&token)).await.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        call(&app, &excerpt, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &selected, Some(&token)).await.status(),
+        StatusCode::BAD_REQUEST
+    );
     assert_eq!(
         call(
             &app,
@@ -825,9 +827,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(
         call(
             &app,
-            &format!(
-                "{selected}&pelagosExcerptDurationTicks=60000000"
-            ),
+            &format!("{selected}&pelagosExcerptDurationTicks=60000000"),
             Some(&token),
         )
         .await
