@@ -513,16 +513,21 @@ pub fn constant_window_graphic(
         .iter()
         .rev()
         .find(|frame| frame.pts_90khz <= start_90khz)?;
-    let end = current.pts_90khz.checked_add(current.duration_90khz?)?;
-    if end_90khz > end {
-        return None;
-    }
-    if current
+    let clear = current
         .image
         .rgba
         .chunks_exact(4)
-        .all(|pixel| pixel[3] == 0)
-    {
+        .all(|pixel| pixel[3] == 0);
+    if let Some(duration) = current.duration_90khz {
+        if end_90khz > current.pts_90khz.checked_add(duration)? {
+            return None;
+        }
+    } else if !clear {
+        // A final opaque cue has no known end, but an explicit clear
+        // composition can safely remain transparent until the VOD ends.
+        return None;
+    }
+    if clear {
         Some(WindowGraphic::Clear)
     } else {
         Some(WindowGraphic::Image(&current.image))
@@ -862,7 +867,6 @@ mod tests {
             (0, 120_000),
             (135_000, 225_000),
             (240_000, 300_000),
-            (270_000, 280_000),
             (90_000, 90_000),
             (180_000, 100_000),
         ] {
@@ -871,6 +875,10 @@ mod tests {
                 "invalid window {start}..{end} should not leak graphics"
             );
         }
+        assert!(matches!(
+            constant_window_graphic(&frames, 270_000, 300_000),
+            Some(WindowGraphic::Clear)
+        ));
         let mut inconsistent = frames.clone();
         inconsistent[0].duration_90khz = Some(1);
         assert!(constant_window_graphic(&inconsistent, 90_000, 95_000).is_none());
@@ -903,9 +911,17 @@ mod tests {
         assert_eq!(windows[0].graphic, WindowGraphic::Clear);
         assert!(matches!(windows[1].graphic, WindowGraphic::Image(_)));
         assert_eq!(windows[2].graphic, WindowGraphic::Clear);
-        assert!(plan_graphic_window_chunks(&frames, 240_000, 300_000).is_none());
+        let tail = plan_graphic_window_chunks(&frames, 240_000, 300_000).unwrap();
+        assert_eq!(tail.len(), 2);
+        assert!(tail.iter().all(|window| window.graphic == WindowGraphic::Clear));
         assert!(plan_graphic_window_chunks(&frames, 45_000, 45_000).is_none());
-        assert!(plan_graphic_window_chunks(&frames, 290_000, 300_000).is_none());
+        assert!(matches!(
+            plan_graphic_window_chunks(&frames, 290_000, 300_000)
+                .unwrap()
+                .first()
+                .map(|chunk| chunk.graphic),
+            Some(WindowGraphic::Clear)
+        ));
     }
 
     #[test]
