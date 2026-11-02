@@ -15,7 +15,10 @@ use tokio::{
 };
 
 use crate::{
-    pgs_render::{WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline_for_window},
+    pgs_render::{
+        WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline_for_window,
+        render_epoch_timeline_for_window_coalesced,
+    },
     probe,
     transcode::{
         ExternalTextFormat, ExternalTextTrack, GraphicOverlayWindow, MpegTsQuality,
@@ -513,7 +516,12 @@ async fn generate_segmented_vod_configured(
         .map(|track| {
             let first = (start_seconds * 90_000.0).round() as u32;
             let last = (playback_end_seconds * 90_000.0).round() as u32;
-            render_epoch_timeline_for_window(track, first, last).ok_or_else(|| {
+            let frames = if options.window_duration_seconds.is_some() {
+                render_epoch_timeline_for_window_coalesced(track, first, last)
+            } else {
+                render_epoch_timeline_for_window(track, first, last)
+            };
+            frames.ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     "unsupported PGS composition timeline",
@@ -1264,14 +1272,17 @@ mod tests {
             sup.extend(end);
         }
         let output = temp.path().join("coalesced");
-        let artifact = generate_segmented_vod_with_pgs_from(
+        let artifact = generate_segmented_pgs_window(
             &controller,
             &inspector,
             &source,
             &output,
             10,
-            0.0,
-            &sup,
+            PgsPlaybackWindow {
+                start_seconds: 0.0,
+                duration_seconds: 85.0,
+                sup_bytes: &sup,
+            },
         )
         .await
         .unwrap();

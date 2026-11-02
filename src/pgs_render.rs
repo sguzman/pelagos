@@ -404,7 +404,7 @@ const MAX_TIMELINE_RGBA_BYTES: usize = 64 * 1024 * 1024;
 /// complete palette and object data. It does not support epoch reuse,
 /// 32-bit PTS rollover, live streaming, or inferred final cue durations.
 pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
-    render_timeline(bytes, false, None)
+    render_timeline(bytes, false, None, false)
 }
 
 /// Decode a bounded sequence of PGS display sets retaining palette, window,
@@ -412,7 +412,7 @@ pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDispl
 /// Epoch starts/acquisition points reset the cache; the strict 64-frame,
 /// 64-MiB output budget applies. No video burn-in or client parity is implied.
 pub fn render_epoch_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
-    render_timeline(bytes, true, None)
+    render_timeline(bytes, true, None, false)
 }
 
 /// Decode only the compositions needed for a half-open playback interval.
@@ -430,13 +430,27 @@ pub fn render_epoch_timeline_for_window(
     if start_90khz >= end_90khz {
         return None;
     }
-    render_timeline(bytes, true, Some((start_90khz, end_90khz)))
+    render_timeline(bytes, true, Some((start_90khz, end_90khz)), false)
+}
+
+/// Optional image-equivalence coalescing is restricted to private excerpts.
+/// Existing exact-PCS timeline paths retain every composition boundary.
+pub fn render_epoch_timeline_for_window_coalesced(
+    bytes: &[u8],
+    start_90khz: u32,
+    end_90khz: u32,
+) -> Option<Vec<TimedRgbaDisplaySet>> {
+    if start_90khz >= end_90khz {
+        return None;
+    }
+    render_timeline(bytes, true, Some((start_90khz, end_90khz)), true)
 }
 
 fn render_timeline(
     bytes: &[u8],
     keep_epoch_state: bool,
     window: Option<(u32, u32)>,
+    coalesce_identical: bool,
 ) -> Option<Vec<TimedRgbaDisplaySet>> {
     let mut validation = bytes;
     if !packets_valid(&mut validation, bytes.len() as u64) {
@@ -487,7 +501,7 @@ fn render_timeline(
             // snapshot or force an extra short HLS segment. Preserve the
             // first composition at/after the requested end as a duration
             // sentinel, even if it has identical pixels.
-            if window.is_some_and(|(_, end)| stamp < end)
+            if coalesce_identical && window.is_some_and(|(_, end)| stamp < end)
                 && frames
                     .last()
                     .is_some_and(|previous| previous.image == image)
@@ -1108,7 +1122,9 @@ mod tests {
 
         // Whole-track rendering still has the strict 64-frame limit.
         assert!(render_epoch_timeline(&stream).is_none());
-        let frames = render_epoch_timeline_for_window(&stream, 0, 82 * 90_000).unwrap();
+        assert!(render_epoch_timeline_for_window(&stream, 0, 82 * 90_000).is_none());
+        let frames = render_epoch_timeline_for_window_coalesced(&stream, 0, 82 * 90_000)
+            .unwrap();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].pts_90khz, 0);
         assert_eq!(frames[0].duration_90khz, Some(81 * 90_000));
@@ -1121,7 +1137,8 @@ mod tests {
         // Repeated identical visible compositions are not evidence of a
         // final clear. Unknown opaque tails remain unsupported.
         let unknown_tail = &stream[..stream.len() - (13 + 11 + 13)];
-        let frames = render_epoch_timeline_for_window(unknown_tail, 0, 82 * 90_000).unwrap();
+        let frames =
+            render_epoch_timeline_for_window_coalesced(unknown_tail, 0, 82 * 90_000).unwrap();
         assert_eq!(frames.len(), 1);
         assert!(plan_graphic_window_chunks(&frames, 0, 82 * 90_000).is_none());
     }
