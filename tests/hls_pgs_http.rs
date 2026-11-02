@@ -1040,6 +1040,61 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NO_CONTENT
     );
 
+    // The selected two-quality publication must also continue with two
+    // independently encoded variants and the same exact source interval.
+    let adaptive_id = variants[0].split('/').nth(1).unwrap();
+    let adaptive_next = format!("/Videos/{id}/hls1/{adaptive_id}/next.m3u8");
+    assert_eq!(
+        call(&app, &adaptive_next, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let response = call(&app, &adaptive_next, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(
+        response.headers()["x-pelagos-excerpt-start-ticks"],
+        "6090000000"
+    );
+    let adaptive_final = body(response).await;
+    let final_variants = adaptive_final
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(final_variants.len(), 2);
+    for (variant_index, path) in final_variants.iter().enumerate() {
+        let uri = format!("/Videos/{id}/{path}");
+        let response = call(&app, &uri, Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["x-pelagos-excerpt-start-ticks"],
+            "6090000000"
+        );
+        let media_playlist = body(response).await;
+        assert_eq!(media_playlist.matches("#EXTINF:").count(), 1);
+        let prefix = path.strip_suffix("index.m3u8").unwrap();
+        let segment_url = format!("/Videos/{id}/{prefix}0.ts");
+        assert_eq!(
+            call(&app, &segment_url, Some(&other)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let response = call(&app, &segment_url, Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        assert!(!visible_center(
+            &bytes,
+            &temp.path().join(format!("adaptive-next-{variant_index}.ts"))
+        ));
+    }
+    let final_adaptive_id = final_variants[0].split('/').nth(1).unwrap();
+    let adaptive_exhausted = format!("/Videos/{id}/hls1/{final_adaptive_id}/next.m3u8");
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
     let first_uri = final_segment_uri;
     let mut modified = sup;
     let index = modified
