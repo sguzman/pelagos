@@ -519,6 +519,47 @@ mod tests {
     }
 
     #[test]
+    fn timestamps_derive_cue_duration_from_next_clear_composition() {
+        let mut first = sample(false);
+        first[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 1, 0, 0, 0, 0]);
+        clear[2..6].copy_from_slice(&180_000_u32.to_be_bytes());
+        clear.extend(packet(0x80, &[]));
+        let mut stream = first.clone();
+        stream.extend(&clear);
+        let frames = render_self_contained_timeline(&stream).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].pts_90khz, 90_000);
+        assert_eq!(frames[0].duration_90khz, Some(90_000));
+        assert_eq!(&frames[0].image.rgba[20..24], &[255, 255, 255, 255]);
+        assert_eq!(frames[1].pts_90khz, 180_000);
+        assert_eq!(frames[1].duration_90khz, None);
+        assert!(frames[1].image.rgba.iter().all(|value| *value == 0));
+
+        clear[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        let mut repeated_pts = first.clone();
+        repeated_pts.extend(&clear);
+        assert!(render_self_contained_timeline(&repeated_pts).is_none());
+
+        clear[2..6].copy_from_slice(&1_u32.to_be_bytes());
+        let mut reversed_pts = first;
+        reversed_pts.extend(clear);
+        assert!(render_self_contained_timeline(&reversed_pts).is_none());
+    }
+
+    #[test]
+    fn timeline_rejects_unbounded_number_of_clear_frames() {
+        let mut stream = Vec::new();
+        for tick in 1..=17_u32 {
+            let mut clear = packet(0x16, &[0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 0]);
+            clear[2..6].copy_from_slice(&(tick * 90_000).to_be_bytes());
+            stream.extend(clear);
+            stream.extend(packet(0x80, &[]));
+        }
+        assert!(render_self_contained_timeline(&stream).is_none());
+    }
+
+    #[test]
     fn transparent_and_translucent_overlay_preserves_color() {
         let mut pixel = [20, 30, 40, 255];
         over(&mut pixel, [255, 0, 0, 0]);
