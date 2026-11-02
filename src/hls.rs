@@ -963,6 +963,63 @@ pub async fn generate_adaptive_segmented_vod_with_subtitle_from(
     target_seconds: u32,
     request: AdaptiveWindow<'_>,
 ) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    generate_adaptive_segmented_vod_configured(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        request,
+        None,
+    )
+    .await
+}
+
+/// A private, bounded excerpt with 2–4 aligned HLS quality variants from
+/// a longer PGS-bearing source. It is not a complete VOD master playlist.
+#[derive(Debug, Clone, Copy)]
+pub struct AdaptivePgsPlaybackWindow<'a> {
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+    pub qualities: &'a [MpegTsQuality],
+    pub sup_bytes: &'a [u8],
+}
+
+/// Encode only a finite excerpt through the existing aligned adaptive
+/// rendition builder. Neither authentication nor publication is handled here.
+pub async fn generate_adaptive_segmented_pgs_window(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    window: AdaptivePgsPlaybackWindow<'_>,
+) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    generate_adaptive_segmented_vod_configured(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        AdaptiveWindow {
+            start_seconds: window.start_seconds,
+            qualities: window.qualities,
+            subtitle: Some(AdaptiveSubtitle::Pgs(window.sup_bytes)),
+        },
+        Some(window.duration_seconds),
+    )
+    .await
+}
+
+async fn generate_adaptive_segmented_vod_configured(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    request: AdaptiveWindow<'_>,
+    window_duration_seconds: Option<f64>,
+) -> io::Result<HlsAdaptiveSegmentedArtifact> {
     let AdaptiveWindow {
         start_seconds,
         qualities,
@@ -1003,7 +1060,7 @@ pub async fn generate_adaptive_segmented_vod_with_subtitle_from(
                     Some(AdaptiveSubtitle::Pgs(track)) => Some(track),
                     _ => None,
                 },
-                window_duration_seconds: None,
+                window_duration_seconds,
             },
         )
         .await?;
