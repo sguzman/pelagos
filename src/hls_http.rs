@@ -35,8 +35,8 @@ use uuid::Uuid;
 mod registry;
 mod tracks;
 pub use registry::HlsRegistry;
-use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
+use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
 
 const MAX_MANIFEST: usize = 32 * 1024;
 const MAX_SEGMENT_BYTES: u64 = 128 * 1024 * 1024;
@@ -989,8 +989,8 @@ pub fn router() -> Router<Arc<AppState>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::tracks::{read_confined_srt, read_confined_sup};
+    use super::*;
 
     #[cfg(unix)]
     #[tokio::test]
