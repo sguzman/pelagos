@@ -387,10 +387,7 @@ mod tests {
         let original = sample(false);
         let ods_start = original.len() - (13 + 15) - 13;
         let mut fragmented = original[..ods_start].to_vec();
-        fragmented.extend(packet(
-            0x15,
-            &[0, 1, 0, 0x80, 0, 0, 8, 0, 2, 0, 1, 0],
-        ));
+        fragmented.extend(packet(0x15, &[0, 1, 0, 0x80, 0, 0, 8, 0, 2, 0, 1, 0]));
         fragmented.extend(packet(0x15, &[0, 1, 0, 0x40, 0x81, 0, 1]));
         fragmented.extend(packet(0x80, &[]));
         assert_eq!(
