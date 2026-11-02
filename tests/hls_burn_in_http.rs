@@ -721,3 +721,145 @@ Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,STYLED TEXT VISIBLE
         StatusCode::NOT_FOUND
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let source = library.join("Feature.mkv");
+    let sidecar = library.join("Feature.es.srt");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=15:duration=4",
+            "-vf",
+            "drawbox=x=0:y=270:w=640:h=90:color=black:t=fill",
+            "-c:v",
+            "mpeg4",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    fs::write(
+        &sidecar,
+        b"1\n00:00:00,200 --> 00:00:01,800\nADAPTIVE SUBTITLE\n\n2\n00:00:02,200 --> 00:00:03,800\nADAPTIVE SECOND CAPTION\n\n",
+    )
+    .unwrap();
+    let unchanged = fs::read(&source).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "adaptive-caption-password").unwrap();
+    let token = auth::authenticate(&state_dir, "admin", "adaptive-caption-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    let items: Value = serde_json::from_str(&body_string(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let details = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    let details: Value = serde_json::from_str(&body_string(details).await).unwrap();
+    let subtitle_index = details["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "subrip")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let route = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={subtitle_index}&subtitleMethod=Encode"
+    );
+    assert_eq!(call(&app, &route, None).await.status(), StatusCode::UNAUTHORIZED);
+    let master_response = call(&app, &route, Some(&token)).await;
+    assert_eq!(master_response.status(), StatusCode::OK);
+    let master = body_string(master_response).await;
+    assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    assert_eq!(master.matches(",RESOLUTION=640x360").count(), 2);
+    assert_eq!(body_string(call(&app, &route, Some(&token)).await).await, master);
+    let variants = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(variants.len(), 2);
+    let mut old_segment = None;
+    for (index, variant) in variants.iter().enumerate() {
+        let media_path = format!("/Videos/{id}/{variant}");
+        let response = call(&app, &media_path, Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist = body_string(response).await;
+        assert_eq!(playlist.matches("#EXTINF:").count(), 2);
+        assert!(playlist.contains("#EXT-X-ENDLIST"));
+        let segment_name = format!("{}0.ts", variant.strip_suffix("index.m3u8").unwrap());
+        let segment_route = format!("/Videos/{id}/{segment_name}");
+        if index == 0 {
+            old_segment = Some(segment_route.clone());
+        }
+        let segment = call(&app, &segment_route, Some(&token)).await;
+        assert_eq!(segment.status(), StatusCode::OK);
+        let bytes = to_bytes(segment.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
+        let segment_file = temp.path().join(format!("variant{index}.ts"));
+        fs::write(&segment_file, &bytes).unwrap();
+        let decoded = Command::new("ffmpeg")
+            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&segment_file)
+            .args([
+                "-frames:v",
+                "1",
+                "-vf",
+                "select=eq(n\\,7),crop=640:90:0:270,format=gray",
+                "-f",
+                "rawvideo",
+                "pipe:1",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            decoded.status.success(),
+            "{}",
+            String::from_utf8_lossy(&decoded.stderr)
+        );
+        assert_eq!(decoded.stdout.len(), 640 * 90);
+        assert!(
+            decoded.stdout.iter().filter(|pixel| **pixel > 100).count() > 40,
+            "variant {index} did not render the selected caption"
+        );
+    }
+    assert_eq!(fs::read(&source).unwrap(), unchanged);
+    fs::write(
+        &sidecar,
+        b"1\n00:00:00,200 --> 00:00:01,800\nCHANGED ADAPTIVE TEXT\n\n",
+    )
+    .unwrap();
+    assert_eq!(
+        call(&app, &old_segment.unwrap(), Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let updated = call(&app, &route, Some(&token)).await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    assert_ne!(body_string(updated).await, master);
+    assert_eq!(fs::read(&source).unwrap(), unchanged);
+}
