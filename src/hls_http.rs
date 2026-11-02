@@ -1004,7 +1004,8 @@ mod tests {
 
     #[test]
     fn hls_sequence_rewrite_is_exact_and_fails_closed() {
-        let original = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXT-X-ENDLIST\n";
+        let original =
+            "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXT-X-ENDLIST\n";
         let playlist = set_media_sequence(original.to_owned(), 64).unwrap();
         assert!(playlist.contains("#EXT-X-MEDIA-SEQUENCE:64\n"));
         assert!(playlist.contains("segment00000.ts\n"));
@@ -1013,11 +1014,9 @@ mod tests {
             set_media_sequence("not HLS".to_owned(), 0),
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         );
+        let duplicate = format!("{original}{original}");
         assert_eq!(
-            set_media_sequence(
-                format!("{original}{original}"),
-                64,
-            ),
+            set_media_sequence(duplicate, 64),
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         );
     }
