@@ -18,6 +18,7 @@ pub mod latest;
 pub mod media;
 pub mod naming;
 pub(crate) mod pgs;
+pub mod pgs_render;
 pub mod playback;
 pub mod playstate;
 pub mod probe;
