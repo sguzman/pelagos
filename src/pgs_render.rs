@@ -443,10 +443,7 @@ mod tests {
     fn clear_composition_renders_transparent_and_invalid_crop_fails_closed() {
         let mut clear = packet(0x16, &[0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 0]);
         clear.extend(packet(0x80, &[]));
-        assert_eq!(
-            render_single_display_set(&clear).unwrap().rgba,
-            vec![0; 8]
-        );
+        assert_eq!(render_single_display_set(&clear).unwrap().rgba, vec![0; 8]);
         let mut bad_crop = sample(true);
         bad_crop[13 + 11 + 8 + 1] = 2; // source crop x now beyond bitmap
         assert!(render_single_display_set(&bad_crop).is_none());
