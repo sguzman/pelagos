@@ -232,5 +232,17 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         call(&app, &first_uri, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
+    // A malformed replacement must not produce a new graphical playlist,
+    // and must not resurrect the stale completed segments.
+    modified.pop();
+    fs::write(&sidecar, &modified).unwrap();
+    assert_eq!(
+        call(&app, &selected, Some(&token)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    assert_eq!(
+        call(&app, &first_uri, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(fs::read(&source).unwrap(), original);
 }
