@@ -1029,11 +1029,12 @@ mod tests {
         for (label, primary, expect_red) in
             [("red", "&H000000FF", true), ("blue", "&H00FF0000", false)]
         {
+            let alignment = if expect_red { 2 } else { 8 };
             let script = format!(
                 "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 128\n\
                  [V4+ Styles]\n\
                  Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-                 Style: Default,DejaVu Sans,32,{primary},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1\n\
+                 Style: Default,DejaVu Sans,32,{primary},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,{alignment},10,10,10,1\n\
                  [Events]\n\
                  Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\
                  Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,COLORED CAPTION\n"
@@ -1076,19 +1077,26 @@ mod tests {
                 String::from_utf8_lossy(&decoded.stderr)
             );
             assert_eq!(decoded.stdout.len(), 320 * 128 * 3);
-            let (red, blue) = decoded.stdout.chunks_exact(3).fold(
-                (0_usize, 0_usize),
-                |(red_count, blue_count), pixel| {
-                    let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
-                    let (r, g, b) = (u16::from(r), u16::from(g), u16::from(b));
-                    let red_pixel = r > 75 && 2 * r > 3 * g && 2 * r > 3 * b;
-                    let blue_pixel = b > 75 && 2 * b > 3 * g && 2 * b > 3 * r;
-                    (
-                        red_count + usize::from(red_pixel),
-                        blue_count + usize::from(blue_pixel),
-                    )
-                },
-            );
+            let (red, blue, selected_rows, selected_pixels) =
+                decoded.stdout.chunks_exact(3).enumerate().fold(
+                    (0_usize, 0_usize, 0_usize, 0_usize),
+                    |(red_count, blue_count, row_sum, count), (index, pixel)| {
+                        let (r, g, b) = (
+                            u16::from(pixel[0]),
+                            u16::from(pixel[1]),
+                            u16::from(pixel[2]),
+                        );
+                        let red_pixel = r > 75 && 2 * r > 3 * g && 2 * r > 3 * b;
+                        let blue_pixel = b > 75 && 2 * b > 3 * g && 2 * b > 3 * r;
+                        let selected = if expect_red { red_pixel } else { blue_pixel };
+                        (
+                            red_count + usize::from(red_pixel),
+                            blue_count + usize::from(blue_pixel),
+                            row_sum + if selected { index / 320 } else { 0 },
+                            count + usize::from(selected),
+                        )
+                    },
+                );
             if expect_red {
                 assert!(
                     red > 100 && red > blue * 5,
@@ -1099,6 +1107,12 @@ mod tests {
                     blue > 100 && blue > red * 5,
                     "{label}: red={red}, blue={blue}"
                 );
+            }
+            let average_row = selected_rows / selected_pixels;
+            if expect_red {
+                assert!(average_row > 75, "{label}: mean row={average_row}");
+            } else {
+                assert!(average_row < 60, "{label}: mean row={average_row}");
             }
         }
         assert_eq!(stdfs::read(&source).unwrap(), source_bytes);
