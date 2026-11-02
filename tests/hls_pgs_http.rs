@@ -1085,7 +1085,9 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             .to_vec();
         assert!(!visible_center(
             &bytes,
-            &temp.path().join(format!("adaptive-next-{variant_index}.ts"))
+            &temp
+                .path()
+                .join(format!("adaptive-next-{variant_index}.ts"))
         ));
     }
     let final_adaptive_id = final_variants[0].split('/').nth(1).unwrap();
