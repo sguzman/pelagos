@@ -20,7 +20,7 @@
 
 ## 📊 Development status
 
-`████░░░░░░ 39.35%` — 201 of 513 accepted checks across 171 atomic tasks (accepted-check arithmetic). This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
+`████░░░░░░ 39.35%` — the ledger's milestone/phase/task aggregate; 201 of 513 checks accepted across 171 atomic tasks. The overall percentage is not the simple ratio of passed checks. This is project completion accounting, **not a claim of passing CI or Smart TV operation**. Every task has evidence-gated checks. See [machine-readable ledger](docs/progress.json), [full roadmap](docs/ROADMAP.md), [source baseline](docs/SOURCE_BASELINE.md), [port matrix](docs/PORT_MATRIX.md) and [TV compatibility contract](docs/COMPATIBILITY.md).
 
 **Latest verified CI checkpoint:** [run 41479339944](https://github.com/sguzman/pelagos/actions/runs/41479339944) — formatting, Clippy, the full Rust/HTTP and real-FFmpeg suite, and source/API/roadmap checks. Synthetic tests cover explicit external and embedded PGS burn-in with authenticated, cue-aligned adaptive HLS renditions; real Smart TV acceptance is still pending. See [CI runs](https://github.com/sguzman/pelagos/actions/workflows/ci.yml) for newer changes and their independently verified status.
 
