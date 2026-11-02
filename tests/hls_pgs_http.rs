@@ -272,8 +272,8 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
     // encoder through axum's automatic GET-to-HEAD fallback.
     let head = Request::builder()
         .method("HEAD")
-        .uri(&forbidden_next)
-        .header("X-Emby-Token", &token)
+        .uri(forbidden_next.as_str())
+        .header("X-Emby-Token", token.as_str())
         .body(Body::empty())
         .unwrap();
     assert_eq!(
