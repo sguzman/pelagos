@@ -559,7 +559,9 @@ async fn adaptive_embedded_matroska_pgs_renders_every_variant_without_source_cha
             assert_eq!(
                 visible_center(
                     &bytes,
-                    &temp.path().join(format!("embedded-adaptive-{position}-{index}.ts"))
+                    &temp
+                        .path()
+                        .join(format!("embedded-adaptive-{position}-{index}.ts"))
                 ),
                 expected
             );
