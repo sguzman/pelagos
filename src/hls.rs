@@ -1230,6 +1230,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_hls_skips_redundant_clear_compositions() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("many-identical-cues.mkv");
+        stdfs::write(&source, b"immutable media").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "same-cue-encoder",
+            "if [ -f input.tga ]; then printf '\\107I'; else printf '\\107C'; fi; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "same-cue-prober",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"85.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let mut sup = synthetic_pgs_clear_show_clear();
+        for second in 3..=82_u32 {
+            let pts = second * 90_000;
+            let mut pcs = b"PG".to_vec();
+            pcs.extend_from_slice(&pts.to_be_bytes());
+            pcs.extend_from_slice(&[0; 4]);
+            pcs.push(0x16);
+            pcs.extend_from_slice(&11_u16.to_be_bytes());
+            pcs.extend_from_slice(&[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]);
+            sup.extend(pcs);
+            let mut end = b"PG".to_vec();
+            end.extend_from_slice(&pts.to_be_bytes());
+            end.extend_from_slice(&[0; 4]);
+            end.push(0x80);
+            end.extend_from_slice(&0_u16.to_be_bytes());
+            sup.extend(end);
+        }
+        let output = temp.path().join("coalesced");
+        let artifact = generate_segmented_vod_with_pgs_from(
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            10,
+            0.0,
+            &sup,
+        )
+        .await
+        .unwrap();
+        // The many identical clear PCS updates must not create dozens of
+        // additional short MPEG-TS segments or consume 64 RGBA snapshots.
+        assert_eq!(artifact.segment_paths.len(), 11);
+        for (index, path) in artifact.segment_paths.iter().enumerate() {
+            let bytes = stdfs::read(path).unwrap();
+            assert_eq!(bytes.len(), 376);
+            let marker = if index == 1 { b'I' } else { b'C' };
+            assert_eq!(&bytes[..2], &[0x47, marker]);
+        }
+        let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(playlist.matches("#EXTINF:").count(), 11);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 10);
+        assert_eq!(stdfs::read(&source).unwrap(), b"immutable media");
+        artifact.remove().unwrap();
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_supports_more_than_sixteen_cue_changes() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("many-cues.mkv");
