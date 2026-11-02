@@ -701,3 +701,199 @@ async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
         StatusCode::NOT_FOUND
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separates_cache_keys() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let source = library.join("LongFeature.mkv");
+    let sidecar = library.join("LongFeature.es.sup");
+    let fixture = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=32x32:r=2:d=610",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=500:duration=610",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        fixture.status.success(),
+        "{}",
+        String::from_utf8_lossy(&fixture.stderr)
+    );
+    let original = fs::read(&source).unwrap();
+    let mut sup = synthetic_sup();
+    let mut pos = 0;
+    while pos < sup.len() {
+        let length = usize::from(u16::from_be_bytes([sup[pos + 11], sup[pos + 12]]));
+        let pts = u32::from_be_bytes(sup[pos + 2..pos + 6].try_into().unwrap());
+        sup[pos + 2..pos + 6].copy_from_slice(&(pts + 605 * 90_000).to_be_bytes());
+        pos += 13 + length;
+    }
+    fs::write(&sidecar, &sup).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "private-excerpt-admin-password").unwrap();
+    let token = auth::authenticate(
+        &state_dir,
+        "admin",
+        "private-excerpt-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let other = auth::authenticate(
+        &state_dir,
+        "admin",
+        "private-excerpt-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    assert_eq!(items.status(), StatusCode::OK);
+    let items: Value = serde_json::from_str(&body(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let info = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    assert_eq!(info.status(), StatusCode::OK);
+    let info: Value = serde_json::from_str(&body(info).await).unwrap();
+    let index = info["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "pgssub")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+
+    let base = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6050000000"
+    );
+    let selected = format!(
+        "{base}&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    let excerpt = format!("{selected}&pelagosExcerptDurationTicks=40000000");
+    assert_eq!(call(&app, &excerpt, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(call(&app, &selected, Some(&token)).await.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        call(
+            &app,
+            &format!("{base}&pelagosExcerptDurationTicks=40000000"),
+            Some(&token),
+        )
+        .await
+        .status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
+    for bad in ["0", "-1", "6000000001", "9223372036854775807"] {
+        let uri = format!("{selected}&pelagosExcerptDurationTicks={bad}");
+        assert_eq!(
+            call(&app, &uri, Some(&token)).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        call(
+            &app,
+            &format!(
+                "{selected}&pelagosExcerptDurationTicks=60000000"
+            ),
+            Some(&token),
+        )
+        .await
+        .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let response = call(&app, &excerpt, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("x-pelagos-excerpt")
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        "true"
+    );
+    let playlist = body(response).await;
+    let urls = playlist
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .collect::<Vec<_>>();
+    assert_eq!(urls.len(), 3);
+    assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 2);
+    let cached = call(&app, &excerpt, Some(&token)).await;
+    assert_eq!(cached.status(), StatusCode::OK);
+    assert_eq!(cached.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(body(cached).await, playlist);
+
+    for (position, expected_visible) in [false, true, false].into_iter().enumerate() {
+        let uri = format!("/Videos/{id}/{}", urls[position]);
+        assert_eq!(
+            call(&app, &uri, Some(&other)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let response = call(&app, &uri, Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        assert!(bytes.chunks_exact(188).all(|chunk| chunk[0] == 0x47));
+        assert_eq!(
+            visible_center(&bytes, &temp.path().join(format!("excerpt-{position}.ts"))),
+            expected_visible
+        );
+    }
+
+    // Different explicit intervals cannot alias a cached 4-second excerpt.
+    let shorter = format!("{selected}&pelagosExcerptDurationTicks=30000000");
+    let response = call(&app, &shorter, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let shorter_playlist = body(response).await;
+    assert_ne!(shorter_playlist, playlist);
+
+    let first_uri = format!("/Videos/{id}/{}", urls[0]);
+    let mut modified = sup;
+    let index = modified
+        .windows(7)
+        .position(|bytes| bytes == [0, 0, 1, 235, 128, 128, 255])
+        .unwrap();
+    modified[index + 6] = 0;
+    fs::write(&sidecar, modified).unwrap();
+    assert_eq!(
+        call(&app, &first_uri, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(fs::read(&source).unwrap(), original);
+}
