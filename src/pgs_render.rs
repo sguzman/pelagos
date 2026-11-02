@@ -1,0 +1,379 @@
+//! Experimental bounded rasterization of one complete PGS display set.
+//!
+//! This is an isolated preparation step for subtitle composition. It does
+//! not schedule PGS presentation timestamps, retain palettes across epochs,
+//! burn graphics into HLS, or claim unchanged Jellyfin-client compatibility.
+//! Raw SUP transport remains owned by `pgs` and is not rewritten here.
+use crate::pgs::{MAX_BITMAP_PIXELS, decode_rle_bitmap, packets_valid};
+use std::collections::BTreeMap;
+
+/// A straight-alpha RGBA8888 subtitle graphics plane, not a video frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RgbaDisplaySet {
+    pub width: u16,
+    pub height: u16,
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Clone, Copy)]
+struct ObjectRef {
+    id: u16,
+    window: u8,
+    x: usize,
+    y: usize,
+    crop: Option<(usize, usize, usize, usize)>,
+}
+
+struct Presentation {
+    width: u16,
+    height: u16,
+    palette_id: u8,
+    objects: Vec<ObjectRef>,
+}
+
+struct ObjectPixels {
+    width: usize,
+    height: usize,
+    indices: Vec<u8>,
+}
+
+struct PendingPixels {
+    width: u16,
+    height: u16,
+    compressed: Vec<u8>,
+}
+
+#[derive(Clone, Copy)]
+struct Window {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+}
+
+fn be16(bytes: &[u8]) -> u16 {
+    u16::from_be_bytes([bytes[0], bytes[1]])
+}
+
+/// Limited-range YCrCb palette values to RGBA, using BT.601 for SD
+/// compositions (up to 576 lines) and BT.709 above that height.
+/// Undefined palette indices stay fully transparent.
+fn palette_rgba(y: u8, cr: u8, cb: u8, alpha: u8, height: u16) -> [u8; 4] {
+    let luma = (f64::from(y) - 16.0) * (255.0 / 219.0);
+    let cr = f64::from(cr) - 128.0;
+    let cb = f64::from(cb) - 128.0;
+    let (r, g, b) = if height <= 576 {
+        (luma + 1.402 * cr, luma - 0.344_136 * cb - 0.714_136 * cr, luma + 1.772 * cb)
+    } else {
+        (luma + 1.574_8 * cr, luma - 0.187_324 * cb - 0.468_124 * cr, luma + 1.855_6 * cb)
+    };
+    [
+        r.round().clamp(0.0, 255.0) as u8,
+        g.round().clamp(0.0, 255.0) as u8,
+        b.round().clamp(0.0, 255.0) as u8,
+        alpha,
+    ]
+}
+
+/// Overlay straight-alpha source pixels, keeping the output straight-alpha
+/// for eventual blending onto a video frame.
+fn over(dst: &mut [u8], src: [u8; 4]) {
+    let src_alpha = u32::from(src[3]);
+    if src_alpha == 0 {
+        return;
+    }
+    let dst_alpha = u32::from(dst[3]);
+    let inverse = 255 - src_alpha;
+    let output_alpha = src_alpha + (dst_alpha * inverse + 127) / 255;
+    if output_alpha == 0 {
+        return;
+    }
+    let denominator = output_alpha * 255;
+    for channel in 0..3 {
+        let numerator = u32::from(src[channel]) * src_alpha * 255
+            + u32::from(dst[channel]) * dst_alpha * inverse;
+        dst[channel] = ((numerator + denominator / 2) / denominator).min(255) as u8;
+    }
+    dst[3] = output_alpha as u8;
+}
+
+/// Decode and compose one validated, self-contained display set into a
+/// transparent plane. It deliberately refuses display sets whose referenced
+/// objects or palette require previous sets. That is an unsupported caller
+/// mode, not a reason to reject their ordinary raw SUP delivery.
+pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
+    let mut validation = bytes;
+    if !packets_valid(&mut validation, bytes.len() as u64) {
+        return None;
+    }
+    let mut position = 0;
+    let mut presentation: Option<Presentation> = None;
+    let mut windows = BTreeMap::<u8, Window>::new();
+    let mut colors = [[0_u8; 4]; 256];
+    let mut palette_seen = false;
+    let mut objects = BTreeMap::<u16, ObjectPixels>::new();
+    let mut pending = BTreeMap::<u16, PendingPixels>::new();
+    let mut ended = false;
+
+    while position < bytes.len() {
+        let header = &bytes[position..position + 13];
+        let length = usize::from(be16(&header[11..13]));
+        let segment = &bytes[position + 13..position + 13 + length];
+        position += 13 + length;
+        if ended {
+            // One display set per call, not an implicit timeline decoder.
+            return None;
+        }
+        match header[10] {
+            0x16 => {
+                if presentation.is_some() {
+                    return None;
+                }
+                let width = be16(&segment[0..2]);
+                let height = be16(&segment[2..4]);
+                if usize::from(width).checked_mul(usize::from(height))? > MAX_BITMAP_PIXELS {
+                    return None;
+                }
+                let mut refs = Vec::with_capacity(usize::from(segment[10]));
+                let mut offset = 11;
+                for _ in 0..segment[10] {
+                    let crop = if segment[offset + 3] & 0x80 != 0 {
+                        Some((
+                            usize::from(be16(&segment[offset + 8..offset + 10])),
+                            usize::from(be16(&segment[offset + 10..offset + 12])),
+                            usize::from(be16(&segment[offset + 12..offset + 14])),
+                            usize::from(be16(&segment[offset + 14..offset + 16])),
+                        ))
+                    } else {
+                        None
+                    };
+                    refs.push(ObjectRef {
+                        id: be16(&segment[offset..offset + 2]),
+                        window: segment[offset + 2],
+                        x: usize::from(be16(&segment[offset + 4..offset + 6])),
+                        y: usize::from(be16(&segment[offset + 6..offset + 8])),
+                        crop,
+                    });
+                    offset += if crop.is_some() { 16 } else { 8 };
+                }
+                presentation = Some(Presentation {
+                    width,
+                    height,
+                    palette_id: segment[9],
+                    objects: refs,
+                });
+            }
+            0x17 => {
+                for record in segment[1..].chunks_exact(9) {
+                    windows.insert(
+                        record[0],
+                        Window {
+                            x: usize::from(be16(&record[1..3])),
+                            y: usize::from(be16(&record[3..5])),
+                            width: usize::from(be16(&record[5..7])),
+                            height: usize::from(be16(&record[7..9])),
+                        },
+                    );
+                }
+            }
+            0x14 => {
+                if let Some(pcs) = &presentation {
+                    if segment[0] == pcs.palette_id {
+                        palette_seen = true;
+                        for entry in segment[2..].chunks_exact(5) {
+                            colors[usize::from(entry[0])] =
+                                palette_rgba(entry[1], entry[2], entry[3], entry[4], pcs.height);
+                        }
+                    }
+                }
+            }
+            0x15 => {
+                let id = be16(&segment[0..2]);
+                let referenced = presentation
+                    .as_ref()
+                    .is_some_and(|pcs| pcs.objects.iter().any(|reference| reference.id == id));
+                if !referenced {
+                    continue;
+                }
+                let flags = segment[3];
+                if flags & 0x80 != 0 {
+                    let width = be16(&segment[7..9]);
+                    let height = be16(&segment[9..11]);
+                    if flags & 0x40 != 0 {
+                        objects.insert(
+                            id,
+                            ObjectPixels {
+                                width: usize::from(width),
+                                height: usize::from(height),
+                                indices: decode_rle_bitmap(&segment[11..], width, height)?,
+                            },
+                        );
+                    } else {
+                        pending.insert(
+                            id,
+                            PendingPixels {
+                                width,
+                                height,
+                                compressed: segment[11..].to_vec(),
+                            },
+                        );
+                    }
+                } else {
+                    let entry = pending.get_mut(&id)?;
+                    entry.compressed.extend_from_slice(&segment[4..]);
+                    if flags & 0x40 != 0 {
+                        let complete = pending.remove(&id)?;
+                        objects.insert(
+                            id,
+                            ObjectPixels {
+                                width: usize::from(complete.width),
+                                height: usize::from(complete.height),
+                                indices: decode_rle_bitmap(
+                                    &complete.compressed,
+                                    complete.width,
+                                    complete.height,
+                                )?,
+                            },
+                        );
+                    }
+                }
+            }
+            0x80 => ended = true,
+            _ => return None,
+        }
+    }
+
+    let pcs = presentation?;
+    let width = usize::from(pcs.width);
+    let height = usize::from(pcs.height);
+    let mut rgba = vec![0_u8; width.checked_mul(height)?.checked_mul(4)?];
+    if !pcs.objects.is_empty() && !palette_seen {
+        return None;
+    }
+    for reference in pcs.objects {
+        let object = objects.get(&reference.id)?;
+        let window = windows.get(&reference.window)?;
+        let (crop_x, crop_y, crop_w, crop_h) =
+            reference.crop.unwrap_or((0, 0, object.width, object.height));
+        if crop_x.checked_add(crop_w)? > object.width
+            || crop_y.checked_add(crop_h)? > object.height
+        {
+            return None;
+        }
+        let window_right = window.x.saturating_add(window.width).min(width);
+        let window_bottom = window.y.saturating_add(window.height).min(height);
+        for row in 0..crop_h {
+            let dest_y = reference.y + row;
+            if dest_y >= height || dest_y < window.y || dest_y >= window_bottom {
+                continue;
+            }
+            for col in 0..crop_w {
+                let dest_x = reference.x + col;
+                if dest_x >= width || dest_x < window.x || dest_x >= window_right {
+                    continue;
+                }
+                let index = usize::from(object.indices[(crop_y + row) * object.width + crop_x + col]);
+                let offset = (dest_y * width + dest_x) * 4;
+                over(&mut rgba[offset..offset + 4], colors[index]);
+            }
+        }
+    }
+    Some(RgbaDisplaySet {
+        width: pcs.width,
+        height: pcs.height,
+        rgba,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn packet(kind: u8, body: &[u8]) -> Vec<u8> {
+        let mut bytes = b"PG".to_vec();
+        bytes.extend_from_slice(&[0; 8]);
+        bytes.push(kind);
+        bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    fn sample(cropped: bool) -> Vec<u8> {
+        let mut pcs = vec![0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 1];
+        pcs.extend_from_slice(&[
+            0, 1, 0, if cropped { 0x80 } else { 0 },
+            0, if cropped { 3 } else { 1 }, 0, if cropped { 0 } else { 1 },
+        ]);
+        if cropped {
+            pcs.extend_from_slice(&[0, 1, 0, 0, 0, 1, 0, 1]);
+        }
+        let mut bytes = packet(0x16, &pcs);
+        bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 4, 0, 2]));
+        bytes.extend(packet(0x14, &[
+            0, 0,
+            0, 235, 128, 128, 255,
+            1, 16, 128, 128, 255,
+        ]));
+        // First pixel uses palette index zero; second is literal index one.
+        bytes.extend(packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 8, 0, 2, 0, 1, 0, 0x81, 0, 1]));
+        bytes.extend(packet(0x80, &[]));
+        bytes
+    }
+
+    #[test]
+    fn palette_conversion_and_alpha_are_bounded() {
+        assert_eq!(palette_rgba(16, 128, 128, 255, 480), [0, 0, 0, 255]);
+        assert_eq!(palette_rgba(235, 128, 128, 128, 1080), [255, 255, 255, 128]);
+        assert_eq!(palette_rgba(235, 128, 128, 0, 1080), [255, 255, 255, 0]);
+        assert_eq!(palette_rgba(16, 128, 255, 255, 1080)[2], 255);
+        assert_eq!(palette_rgba(16, 255, 128, 255, 1080)[0], 200);
+    }
+
+    #[test]
+    fn places_rle_pixels_into_rgba_plane_and_crops_at_source() {
+        let full = render_single_display_set(&sample(false)).unwrap();
+        assert_eq!((full.width, full.height), (4, 2));
+        assert_eq!(full.rgba.len(), 32);
+        assert_eq!(&full.rgba[0..4], &[0, 0, 0, 0]);
+        assert_eq!(&full.rgba[20..24], &[255, 255, 255, 255]);
+        assert_eq!(&full.rgba[24..28], &[0, 0, 0, 255]);
+
+        let cropped = render_single_display_set(&sample(true)).unwrap();
+        assert_eq!(&cropped.rgba[12..16], &[0, 0, 0, 255]);
+        assert!(cropped.rgba[..12].iter().all(|value| *value == 0));
+    }
+
+    #[test]
+    fn rejects_incomplete_references_and_multiple_display_sets() {
+        let valid = sample(false);
+        let mut missing_palette = valid.clone();
+        // Named palette ID 7 is absent, even though a different PDS exists.
+        missing_palette[13 + 9] = 7;
+        assert!(render_single_display_set(&missing_palette).is_none());
+
+        let mut missing_window = valid.clone();
+        missing_window[13 + 11 + 2] = 1;
+        assert!(render_single_display_set(&missing_window).is_none());
+
+        let mut missing_object = valid.clone();
+        missing_object[13 + 11 + 1] = 2;
+        assert!(render_single_display_set(&missing_object).is_none());
+
+        let mut two = valid.clone();
+        two.extend(valid);
+        assert!(render_single_display_set(&two).is_none());
+    }
+
+    #[test]
+    fn transparent_and_translucent_overlay_preserves_color() {
+        let mut pixel = [20, 30, 40, 255];
+        over(&mut pixel, [255, 0, 0, 0]);
+        assert_eq!(pixel, [20, 30, 40, 255]);
+        over(&mut pixel, [255, 0, 0, 255]);
+        assert_eq!(pixel, [255, 0, 0, 255]);
+        over(&mut pixel, [0, 0, 255, 128]);
+        assert!(pixel[0] >= 126 && pixel[0] <= 128);
+        assert!(pixel[2] >= 127 && pixel[2] <= 129);
+        assert_eq!(pixel[3], 255);
+    }
+}
