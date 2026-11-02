@@ -242,7 +242,10 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
             .unwrap()
             .to_vec();
         assert_eq!(
-            visible_center(&bytes, &temp.path().join(format!("seeked-pgs-{position}.ts"))),
+            visible_center(
+                &bytes,
+                &temp.path().join(format!("seeked-pgs-{position}.ts"))
+            ),
             expected
         );
     }
