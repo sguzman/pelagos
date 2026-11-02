@@ -246,3 +246,109 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
     );
     assert_eq!(fs::read(&source).unwrap(), original);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let raw_sup = temp.path().join("raw-embedded.sup");
+    fs::write(&raw_sup, synthetic_sup()).unwrap();
+    let source = library.join("Embedded.mkv");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=32x32:r=5:d=3",
+            "-i",
+        ])
+        .arg(&raw_sup)
+        .args([
+            "-map", "0:v:0", "-map", "1:s:0", "-c:v", "mpeg4", "-c:s", "copy", "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let original = fs::read(&source).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "embedded-hls-admin-password").unwrap();
+    auth::create_user(&state_dir, "viewer", "embedded-hls-viewer-password").unwrap();
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    let token = auth::authenticate(
+        &state_dir,
+        "viewer",
+        "embedded-hls-viewer-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let response = call(&app, "/Items", Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let items: Value = serde_json::from_str(&body(response).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let response = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let metadata: Value = serde_json::from_str(&body(response).await).unwrap();
+    let stream = metadata["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| {
+            stream["IsExternal"] == false && stream["Codec"] == "hdmv_pgs_subtitle"
+        })
+        .expect("embedded graphical subtitle index");
+    let index = stream["Index"].as_i64().unwrap();
+    let url = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    assert_eq!(
+        call(&app, &url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = call(&app, &url, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let playlist = body(response).await;
+    let segments = playlist
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .collect::<Vec<_>>();
+    assert_eq!(segments.len(), 4);
+    for (position, expected_visible) in [false, true, true, false].into_iter().enumerate() {
+        let response = call(
+            &app,
+            &format!("/Videos/{id}/{}", segments[position]),
+            Some(&token),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        assert_eq!(
+            visible_center(&bytes, &temp.path().join(format!("embedded-{position}.ts"))),
+            expected_visible
+        );
+    }
+    assert_eq!(fs::read(&source).unwrap(), original);
+}
