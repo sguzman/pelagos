@@ -1708,6 +1708,100 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_adaptive_pgs_window_aligns_renditions_from_long_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("full-feature.mkv");
+        stdfs::write(&source, b"immutable long movie").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "adaptive-long-encoder",
+            r#"low=0; for arg in "$@"; do if [ "$arg" = "64k" ]; then low=1; fi; done; if [ -f input.tga ]; then cue=I; else cue=C; fi; if [ "$low" -eq 1 ]; then count=2; else count=4; fi; i=0; while [ "$i" -lt "$count" ]; do printf '\107%s' "$cue"; head -c 186 /dev/zero; i=$((i+1)); done"#,
+        );
+        let inspector = executable(
+            temp.path(),
+            "adaptive-long-prober",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3600.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let runner = TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let qualities = [
+            MpegTsQuality {
+                video_kbps: 1600,
+                audio_kbps: 128,
+            },
+            MpegTsQuality {
+                video_kbps: 400,
+                audio_kbps: 64,
+            },
+        ];
+        let mut sup = synthetic_pgs_clear_show_clear();
+        let mut position = 0;
+        while position < sup.len() {
+            let size = usize::from(u16::from_be_bytes([
+                sup[position + 11],
+                sup[position + 12],
+            ]));
+            let pts = u32::from_be_bytes(sup[position + 2..position + 6].try_into().unwrap());
+            sup[position + 2..position + 6].copy_from_slice(&(pts + 3591 * 90_000).to_be_bytes());
+            position += 13 + size;
+        }
+        let root = temp.path().join("adaptive-excerpt");
+        let result = generate_adaptive_segmented_pgs_window(
+            &runner,
+            &inspector,
+            &source,
+            &root,
+            10,
+            AdaptivePgsPlaybackWindow {
+                start_seconds: 3591.0,
+                duration_seconds: 6.0,
+                qualities: &qualities,
+                sup_bytes: &sup,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.variants.len(), 2);
+        assert!(result.variants[0].bandwidth < result.variants[1].bandwidth);
+        assert_eq!(result.renditions.len(), 2);
+        for (rendition, packet_count) in result.renditions.iter().zip([2, 4]) {
+            assert_eq!(rendition.segment_paths.len(), 3);
+            assert_eq!(rendition.transport_bytes, 3 * packet_count * 188);
+            for (segment, marker) in rendition.segment_paths.iter().zip(b"CIC") {
+                let bytes = stdfs::read(segment).unwrap();
+                assert_eq!(bytes.len(), packet_count as usize * 188);
+                assert_eq!(&bytes[..2], &[0x47, *marker]);
+            }
+            let playlist = stdfs::read_to_string(&rendition.playlist_path).unwrap();
+            assert_eq!(playlist.matches("#EXTINF:").count(), 3);
+            assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 2);
+        }
+        let master = stdfs::read_to_string(&result.master_path).unwrap();
+        assert_eq!(master.matches("#EXT-X-STREAM-INF").count(), 2);
+        result.remove().unwrap();
+        assert!(!root.exists());
+        assert_eq!(stdfs::read(&source).unwrap(), b"immutable long movie");
+
+        let rejected = temp.path().join("invalid-excerpt");
+        let err = generate_adaptive_segmented_pgs_window(
+            &runner,
+            &inspector,
+            &source,
+            &rejected,
+            10,
+            AdaptivePgsPlaybackWindow {
+                start_seconds: 3599.0,
+                duration_seconds: 4.0,
+                qualities: &qualities,
+                sup_bytes: &sup,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(!rejected.exists());
+    }
+
+    #[tokio::test]
     async fn private_seeked_pgs_hls_real_ffmpeg_renders_cues_after_long_history() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
