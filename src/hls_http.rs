@@ -1061,6 +1061,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn selected_track_probe_limit_returns_429_before_invoking_ffprobe() {
+        use crate::{auth, catalog, catalog_api};
+        use axum::{body::Body, http::Request};
+        use tower::ServiceExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let library = temp.path().join("Movies");
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&library).unwrap();
+        std::fs::write(library.join("Clip.mkv"), b"synthetic and not probeable").unwrap();
+        catalog::index(&state_dir, &library).unwrap();
+        auth::create_user(&state_dir, "admin", "hls-probe-limit-admin-password").unwrap();
+        let token = auth::authenticate(
+            &state_dir,
+            "admin",
+            "hls-probe-limit-admin-password",
+            "server",
+        )
+        .unwrap()
+        .unwrap()
+        .access_token;
+        let id = catalog_api::stable_id(library.to_str().unwrap(), "Clip.mkv");
+        let state = Arc::new(AppState::with_auth_dir(
+            "server".to_owned(),
+            state_dir,
+        ));
+        let permits = (0..4)
+            .map(|_| state.hls_registry().acquire_track_probe().unwrap())
+            .collect::<Vec<_>>();
+        let app = crate::app::router(state.clone());
+        let uri = format!(
+            "/Videos/{id}/main.m3u8?subtitleStreamIndex=0&subtitleMethod=Encode"
+        );
+        let request = Request::builder()
+            .uri(uri)
+            .header("X-Emby-Token", token.as_str())
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        drop(permits);
+    }
+
+    #[tokio::test]
     async fn bounded_hls_generation_queue_coalesces_and_recovers_after_cancellation() {
         let registry = Arc::new(HlsRegistry::new(PathBuf::from("ffmpeg")));
         let active = registry.jobs.try_acquire().unwrap();
