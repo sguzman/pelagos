@@ -1490,7 +1490,11 @@ mod tests {
         let mut sup = Vec::new();
         for second in 0..70_u32 {
             let pts = second * 90_000;
-            sup.extend(packet(0x16, pts, &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]));
+            sup.extend(packet(
+                0x16,
+                pts,
+                &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0],
+            ));
             sup.extend(packet(0x80, pts, &[]));
         }
         // Shift the existing validated clear/show/clear fixture to 70s.
