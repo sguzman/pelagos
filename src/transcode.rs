@@ -1,7 +1,7 @@
 //! Bounded, CPU-first FFmpeg MPEG-TS transcode job runner.
 //! This is not yet an HLS/DASH scheduler, Jellyfin PlaybackInfo transcode
 //! response, GPU accelerator, or complete Smart TV playback implementation.
-use crate::pgs_render::RgbaDisplaySet;
+use crate::pgs_render::{RgbaDisplaySet, WindowGraphic, constant_window_graphic, render_epoch_timeline};
 use std::{
     io,
     path::{Path, PathBuf},
@@ -497,6 +497,75 @@ impl TranscodeController {
             },
         )
         .await
+    }
+
+    /// Opt-in, bounded PGS burn-in for one media window whose bitmap is
+    /// constant for the entire window. A clear PCS uses ordinary transcoding.
+    /// Cue changes inside a window, final cues of unknown duration, and
+    /// unsupported PGS epochs fail closed rather than extending a bitmap.
+    ///
+    /// The caller supplies approved media and SUP bytes; this is not an
+    /// HTTP route, HLS scheduler, or a substitute for source authorization.
+    pub async fn try_run_window_pgs_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        sup: &[u8],
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        if remaining_bytes == 0 || remaining_bytes > MAX_TRANSCODE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid PGS output byte budget",
+            ));
+        }
+        // Floor start and ceil end: conversion to a 90 kHz tick interval
+        // must never exclude a real composition boundary by rounding.
+        let first = (window.start_seconds * 90_000.0).floor();
+        let last = ((window.start_seconds + window.duration_seconds) * 90_000.0).ceil();
+        if last > f64::from(u32::MAX) || first < 0.0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "PGS timestamp exceeds supported 32-bit epoch",
+            ));
+        }
+        let frames = render_epoch_timeline(sup).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "PGS track cannot be composed within bounded epoch limits",
+            )
+        })?;
+        match constant_window_graphic(&frames, first as u32, last as u32) {
+            Some(WindowGraphic::Clear) => {
+                self.try_run_window_capped(
+                    source,
+                    output,
+                    start_seconds,
+                    duration_seconds,
+                    remaining_bytes,
+                    None,
+                )
+                .await
+            }
+            Some(WindowGraphic::Image(image)) => {
+                self.try_run_window_graphic_capped(
+                    source,
+                    output,
+                    start_seconds,
+                    duration_seconds,
+                    remaining_bytes,
+                    image,
+                )
+                .await
+            }
+            None => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "PGS graphic changes inside window or last cue has unknown end",
+            )),
+        }
     }
 
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
