@@ -105,6 +105,22 @@ fn adaptive_caption_bottom_pixels(media: &[u8], path: &std::path::Path) -> usize
         String::from_utf8_lossy(&decoded.stderr)
     );
     assert_eq!(decoded.stdout.len(), 640 * 90);
+    let audio = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ])
+        .arg(path)
+        .output()
+        .unwrap();
+    assert!(audio.status.success());
+    assert!(String::from_utf8_lossy(&audio.stdout).contains("aac"));
     decoded.stdout.iter().filter(|pixel| **pixel > 100).count()
 }
 
@@ -781,16 +797,24 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         ])
         .arg(&embedded)
         .args([
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:sample_rate=44100:duration=4",
             "-map",
             "0:v:0",
             "-map",
             "1:s:0",
+            "-map",
+            "2:a:0",
             "-vf",
             "drawbox=x=0:y=270:w=640:h=90:color=black:t=fill",
             "-c:v",
             "mpeg4",
             "-c:s",
             "srt",
+            "-c:a",
+            "aac",
             "-y",
         ])
         .arg(&source)
