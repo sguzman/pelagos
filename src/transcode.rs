@@ -1400,6 +1400,7 @@ mod tests {
             ("before", 0.0, 0.5, &b"CLEAR"[..]),
             ("shown", 1.25, 0.5, &b"IMAGE"[..]),
             ("cleared", 2.25, 0.5, &b"CLEAR"[..]),
+            ("after-last-clear", 3.0, 0.5, &b"CLEAR"[..]),
         ] {
             let output = temp.path().join(format!("{label}.ts"));
             controller
@@ -1408,7 +1409,7 @@ mod tests {
                 .unwrap();
             assert_eq!(stdfs::read(&output).unwrap(), expected, "{label}");
         }
-        for (start, duration) in [(0.75, 0.5), (1.5, 1.0), (2.75, 0.5), (3.0, 0.5)] {
+        for (start, duration) in [(0.75, 0.5), (1.5, 1.0)] {
             let output = temp.path().join("unsupported.ts");
             let error = controller
                 .try_run_window_pgs_capped(&source, &output, start, duration, 64, &sup)
