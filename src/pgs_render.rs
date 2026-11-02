@@ -55,6 +55,7 @@ struct Window {
 /// bounded in addition to the compressed SUP input and returned RGBA planes.
 #[derive(Default)]
 struct EpochState {
+    geometry: Option<(u16, u16)>,
     windows: BTreeMap<u8, Window>,
     palettes: BTreeMap<u8, [[u8; 4]; 256]>,
     objects: BTreeMap<u16, ObjectPixels>,
@@ -62,6 +63,7 @@ struct EpochState {
 
 impl EpochState {
     fn reset(&mut self) {
+        self.geometry = None;
         self.windows.clear();
         self.palettes.clear();
         self.objects.clear();
@@ -176,9 +178,12 @@ fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplay
                 }
                 let width = be16(&segment[0..2]);
                 let height = be16(&segment[2..4]);
-                if usize::from(width).checked_mul(usize::from(height))? > MAX_BITMAP_PIXELS {
+                if usize::from(width).checked_mul(usize::from(height))? > MAX_BITMAP_PIXELS
+                    || state.geometry.is_some_and(|previous| previous != (width, height))
+                {
                     return None;
                 }
+                state.geometry = Some((width, height));
                 let mut refs = Vec::with_capacity(usize::from(segment[10]));
                 let mut offset = 11;
                 for _ in 0..segment[10] {
