@@ -994,7 +994,10 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     let four_response = call(&app, &four_route, Some(&token)).await;
     assert_eq!(four_response.status(), StatusCode::OK);
     let four_master = body_string(four_response).await;
-    assert_eq!(four_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 4);
+    assert_eq!(
+        four_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(),
+        4
+    );
     for (index, variant) in four_master
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
