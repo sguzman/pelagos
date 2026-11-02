@@ -628,6 +628,20 @@ pub(crate) fn hls_text_sidecar_filename(
         .map(|entry| entry.filename)
 }
 
+/// Resolve a selected external raw graphical SUP index using exactly the
+/// same bounded deterministic sidecar inventory advertised by PlaybackInfo.
+/// The HTTP caller must separately authorize and confine descriptor access.
+pub(crate) fn hls_pgs_sidecar_filename(
+    source: &Path,
+    report: &probe::ProbeReport,
+    index: i64,
+) -> Option<String> {
+    external_subtitles(source, report)
+        .into_iter()
+        .find(|entry| entry.index == index && entry.format == "sup")
+        .map(|entry| entry.filename)
+}
+
 /// Normalize only the already-supported bounded SubRip cue grammar to UTF-8.
 /// Existing UTF-16 BOM support is useful for an FFmpeg text-overlay input,
 /// but malformed cue timing must not be passed to the renderer.
