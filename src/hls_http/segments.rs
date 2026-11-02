@@ -78,11 +78,11 @@ pub(super) async fn serve_segment(
             Body::from(text.clone())
         });
         set_private_headers(&mut response, "application/vnd.apple.mpegurl", text.len());
-        if publication.excerpt_duration_ticks.is_some() {
-            response
-                .headers_mut()
-                .insert("x-pelagos-excerpt", HeaderValue::from_static("true"));
-        }
+        set_excerpt_headers(
+            &mut response,
+            publication.start_time_ticks,
+            publication.excerpt_duration_ticks,
+        );
         return Ok(response);
     }
     let segment_number = name.strip_suffix(".ts").ok_or(StatusCode::NOT_FOUND)?;

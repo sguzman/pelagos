@@ -856,6 +856,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             .unwrap(),
         "true"
     );
+    assert_eq!(response.headers()["x-pelagos-excerpt-start-ticks"], "6050000000");
+    assert_eq!(response.headers()["x-pelagos-excerpt-duration-ticks"], "40000000");
     let playlist = body(response).await;
     let urls = playlist
         .lines()
@@ -866,6 +868,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let cached = call(&app, &excerpt, Some(&token)).await;
     assert_eq!(cached.status(), StatusCode::OK);
     assert_eq!(cached.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(cached.headers()["x-pelagos-excerpt-start-ticks"], "6050000000");
+    assert_eq!(cached.headers()["x-pelagos-excerpt-duration-ticks"], "40000000");
     assert_eq!(body(cached).await, playlist);
 
     for (position, expected_visible) in [false, true, false].into_iter().enumerate() {
@@ -906,6 +910,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let result = call(&app, &master_url, Some(&token)).await;
     assert_eq!(result.status(), StatusCode::OK);
     assert_eq!(result.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(result.headers()["x-pelagos-excerpt-start-ticks"], "6050000000");
+    assert_eq!(result.headers()["x-pelagos-excerpt-duration-ticks"], "40000000");
     let master = body(result).await;
     let variants = master
         .lines()
@@ -916,11 +922,15 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let reused = call(&app, &master_url, Some(&token)).await;
     assert_eq!(reused.status(), StatusCode::OK);
     assert_eq!(reused.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(reused.headers()["x-pelagos-excerpt-start-ticks"], "6050000000");
+    assert_eq!(reused.headers()["x-pelagos-excerpt-duration-ticks"], "40000000");
     assert_eq!(body(reused).await, master);
     for (variant_index, path) in variants.iter().enumerate() {
         let response = call(&app, &format!("/Videos/{id}/{path}"), Some(&token)).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()["x-pelagos-excerpt"], "true");
+        assert_eq!(response.headers()["x-pelagos-excerpt-start-ticks"], "6050000000");
+        assert_eq!(response.headers()["x-pelagos-excerpt-duration-ticks"], "40000000");
         let manifest = body(response).await;
         assert_eq!(manifest.matches("#EXTINF:").count(), 3);
         assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY").count(), 2);

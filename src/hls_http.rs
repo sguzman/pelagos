@@ -73,13 +73,32 @@ fn playlist_response(playlist: &str) -> Response {
 
 /// An explicit Pelagos excerpt is not the source's complete VOD timeline.
 /// Mark every playlist response, including cache hits and variant playlists.
-fn excerpt_playlist_response(playlist: &str, excerpt_duration_ticks: Option<u64>) -> Response {
-    let mut response = playlist_response(playlist);
-    if excerpt_duration_ticks.is_some() {
-        response
-            .headers_mut()
-            .insert("x-pelagos-excerpt", HeaderValue::from_static("true"));
+fn set_excerpt_headers(
+    response: &mut Response,
+    start_time_ticks: u64,
+    excerpt_duration_ticks: Option<u64>,
+) {
+    if let Some(duration_ticks) = excerpt_duration_ticks {
+        let headers = response.headers_mut();
+        headers.insert("x-pelagos-excerpt", HeaderValue::from_static("true"));
+        headers.insert(
+            "x-pelagos-excerpt-start-ticks",
+            HeaderValue::from_str(&start_time_ticks.to_string()).expect("numeric tick header"),
+        );
+        headers.insert(
+            "x-pelagos-excerpt-duration-ticks",
+            HeaderValue::from_str(&duration_ticks.to_string()).expect("numeric tick header"),
+        );
     }
+}
+
+fn excerpt_playlist_response(
+    playlist: &str,
+    start_time_ticks: u64,
+    excerpt_duration_ticks: Option<u64>,
+) -> Response {
+    let mut response = playlist_response(playlist);
+    set_excerpt_headers(&mut response, start_time_ticks, excerpt_duration_ticks);
     response
 }
 
@@ -323,6 +342,7 @@ async fn generate_hls_playlist(
             } else {
                 &existing.main_playlist
             },
+            existing.start_time_ticks,
             existing.excerpt_duration_ticks,
         ));
     }
@@ -338,6 +358,7 @@ async fn generate_hls_playlist(
             } else {
                 &existing.main_playlist
             },
+            existing.start_time_ticks,
             existing.excerpt_duration_ticks,
         ));
     }
@@ -511,7 +532,7 @@ async fn generate_hls_playlist(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
         reauthorize_publication(&state, &headers, &cache_key).await?;
-        let response = excerpt_playlist_response(&master_playlist, excerpt_duration_ticks);
+        let response = excerpt_playlist_response(&master_playlist, start_time_ticks, excerpt_duration_ticks);
         let publication = Arc::new(Published {
             id,
             item,
@@ -649,6 +670,7 @@ async fn generate_hls_playlist(
     );
     let response = excerpt_playlist_response(
         if master { &master_playlist } else { &playlist },
+        start_time_ticks,
         excerpt_duration_ticks,
     );
     let publication = Arc::new(Published {
