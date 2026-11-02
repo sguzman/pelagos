@@ -989,7 +989,7 @@ pub fn router() -> Router<Arc<AppState>> {
 
 #[cfg(test)]
 mod tests {
-    use super::tracks::{read_confined_srt, read_confined_sup};
+    use super::tracks::read_confined_sup;
     use super::*;
 
     #[cfg(unix)]
