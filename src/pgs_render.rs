@@ -1096,14 +1096,21 @@ mod tests {
             stream.extend(reused);
         }
         assert!(render_epoch_timeline(&stream).is_none());
-        let frames = render_epoch_timeline_for_window(&stream, 90 * 90_000, 93 * 90_000)
-            .unwrap();
+        let frames = render_epoch_timeline_for_window(&stream, 90 * 90_000, 93 * 90_000).unwrap();
         assert_eq!(frames.first().unwrap().pts_90khz, 89 * 90_000);
         assert_eq!(frames.last().unwrap().pts_90khz, 93 * 90_000);
-        assert!(frames.iter().all(|frame| frame.image.rgba[20..24] == [255; 4]));
+        assert!(
+            frames
+                .iter()
+                .all(|frame| frame.image.rgba[20..24] == [255; 4])
+        );
         let chunks = plan_graphic_window_chunks(&frames, 90 * 90_000, 93 * 90_000).unwrap();
         assert_eq!(chunks.len(), 3);
-        assert!(chunks.iter().all(|chunk| matches!(chunk.graphic, WindowGraphic::Image(_))));
+        assert!(
+            chunks
+                .iter()
+                .all(|chunk| matches!(chunk.graphic, WindowGraphic::Image(_)))
+        );
     }
 
     #[test]
