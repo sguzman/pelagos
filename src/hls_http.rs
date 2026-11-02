@@ -1003,6 +1003,26 @@ mod tests {
     }
 
     #[test]
+    fn hls_sequence_rewrite_is_exact_and_fails_closed() {
+        let original = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXT-X-ENDLIST\n";
+        let playlist = set_media_sequence(original.to_owned(), 64).unwrap();
+        assert!(playlist.contains("#EXT-X-MEDIA-SEQUENCE:64\n"));
+        assert!(playlist.contains("segment00000.ts\n"));
+        assert!(!playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
+        assert_eq!(
+            set_media_sequence("not HLS".to_owned(), 0),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+        assert_eq!(
+            set_media_sequence(
+                format!("{original}{original}"),
+                64,
+            ),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+    }
+
+    #[test]
     fn private_continuation_revision_guard_rejects_source_and_sidecar_changes() {
         let sidecar = SidecarRevision {
             filename: "feature.es.sup".to_owned(),

@@ -895,6 +895,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap()
         .to_owned();
     let playlist = body(response).await;
+    assert!(playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
     let urls = playlist
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
@@ -938,6 +939,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let response = call(&app, &shorter, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let shorter_playlist = body(response).await;
+    assert!(shorter_playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
     assert_ne!(shorter_playlist, playlist);
 
     // Explicit adaptive excerpts share a cue timeline but publish separate,
@@ -996,6 +998,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             "40000000"
         );
         let manifest = body(response).await;
+        assert!(manifest.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
         assert_eq!(manifest.matches("#EXTINF:").count(), 3);
         assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY").count(), 2);
         let prefix = path.strip_suffix("index.m3u8").unwrap();
@@ -1052,6 +1055,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap();
     assert!((10_000_000..=11_000_000).contains(&final_duration));
     let final_manifest = body(response).await;
+    assert!(final_manifest.contains("#EXT-X-MEDIA-SEQUENCE:3\n"));
     let final_segments = final_manifest
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
@@ -1137,6 +1141,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             "6090000000"
         );
         let media_playlist = body(response).await;
+        assert!(media_playlist.contains("#EXT-X-MEDIA-SEQUENCE:3\n"));
         assert_eq!(media_playlist.matches("#EXTINF:").count(), 1);
         let prefix = path.strip_suffix("index.m3u8").unwrap();
         let segment_url = format!("/Videos/{id}/{prefix}0.ts");
