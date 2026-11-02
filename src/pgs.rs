@@ -511,6 +511,37 @@ mod tests {
         windows[10] = 1;
         windows[16] = 0; // second window width is now zero
         assert!(!segment_shape_valid(0x17, &windows));
+
+        // Exercise the same semantic boundary through the complete SUP
+        // preflight used by authenticated raw subtitle HTTP delivery.
+        windows[16] = 32;
+        composition[8] = 0;
+        let mut full = packet(0x16, &composition);
+        let window_packet_offset = full.len();
+        full.extend(packet(0x17, &windows));
+        full.extend(packet(
+            0x14,
+            &[0, 0, 0xaa, 16, 128, 128, 255, 0xbb, 235, 128, 128, 255],
+        ));
+        full.extend(packet(
+            0x15,
+            &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 0xaa, 0xbb],
+        ));
+        full.extend(packet(0x80, &[]));
+        assert!(packets_valid(&mut full.as_slice(), full.len() as u64));
+
+        let mut bad_pcs = full.clone();
+        bad_pcs[13 + 14] = 1; // reserved composition-object flag
+        assert!(!packets_valid(
+            &mut bad_pcs.as_slice(),
+            bad_pcs.len() as u64
+        ));
+        let mut bad_wds = full.clone();
+        bad_wds[window_packet_offset + 13 + 10] = 0; // duplicate window ID
+        assert!(!packets_valid(
+            &mut bad_wds.as_slice(),
+            bad_wds.len() as u64
+        ));
     }
 
     #[test]
