@@ -83,9 +83,7 @@ fn set_media_sequence(playlist: String, sequence: u64) -> Result<String, StatusC
         if segments == 0 || discontinuities != segments - 1 {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
-        format!(
-            "#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n"
-        )
+        format!("#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")
     };
     let rewritten = playlist.replacen(ORIGINAL, &replacement, 1);
     if rewritten.len() > MAX_MANIFEST {
