@@ -1524,9 +1524,14 @@ mod tests {
         let plane = crate::pgs_render::render_single_display_set(&sup)
             .expect("self-contained synthetic PGS graphical display set");
         assert_eq!((plane.width, plane.height), (32, 32));
+        // The next PCS explicitly clears the graphic at 2.5 seconds.
+        let mut clear = packet(0x16, &[0, 32, 0, 32, 0x10, 0, 1, 0, 0, 0, 0]);
+        clear[2..6].copy_from_slice(&225_000_u32.to_be_bytes());
+        sup.extend(clear);
+        sup.extend(packet(0x80, &[]));
         assert!(
             controller
-                .try_run_window_graphic_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &plane)
+                .try_run_window_pgs_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &sup)
                 .await
                 .unwrap()
                 > 188
@@ -1573,7 +1578,7 @@ mod tests {
         let prior_transport = stdfs::read(&output).unwrap();
         assert_eq!(
             controller
-                .try_run_window_graphic_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &plane)
+                .try_run_window_pgs_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &sup)
                 .await
                 .unwrap_err()
                 .kind(),
@@ -1586,13 +1591,13 @@ mod tests {
         let seek_output = temp.path().join("graphic-seeked.ts");
         assert!(
             controller
-                .try_run_window_graphic_capped(
+                .try_run_window_pgs_capped(
                     &source,
                     &seek_output,
                     1.0,
                     1.0,
                     8 * 1024 * 1024,
-                    &plane,
+                    &sup,
                 )
                 .await
                 .unwrap()
@@ -1616,6 +1621,23 @@ mod tests {
             center.iter().all(|component| *component > 180),
             "{center:?}"
         );
+        let crossed = temp.path().join("graphic-crossed.ts");
+        assert_eq!(
+            controller
+                .try_run_window_pgs_capped(
+                    &source,
+                    &crossed,
+                    2.0,
+                    0.75,
+                    8 * 1024 * 1024,
+                    &sup,
+                )
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::Unsupported
+        );
+        assert!(!crossed.exists());
         assert_eq!(stdfs::read(&source).unwrap(), original);
     }
 
