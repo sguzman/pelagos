@@ -63,9 +63,17 @@ fn palette_rgba(y: u8, cr: u8, cb: u8, alpha: u8, height: u16) -> [u8; 4] {
     let cr = f64::from(cr) - 128.0;
     let cb = f64::from(cb) - 128.0;
     let (r, g, b) = if height <= 576 {
-        (luma + 1.402 * cr, luma - 0.344_136 * cb - 0.714_136 * cr, luma + 1.772 * cb)
+        (
+            luma + 1.402 * cr,
+            luma - 0.344_136 * cb - 0.714_136 * cr,
+            luma + 1.772 * cb,
+        )
     } else {
-        (luma + 1.574_8 * cr, luma - 0.187_324 * cb - 0.468_124 * cr, luma + 1.855_6 * cb)
+        (
+            luma + 1.574_8 * cr,
+            luma - 0.187_324 * cb - 0.468_124 * cr,
+            luma + 1.855_6 * cb,
+        )
     };
     [
         r.round().clamp(0.0, 255.0) as u8,
@@ -254,9 +262,10 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
         let object = objects.get(&reference.id)?;
         let window = windows.get(&reference.window)?;
         let (crop_x, crop_y, crop_w, crop_h) =
-            reference.crop.unwrap_or((0, 0, object.width, object.height));
-        if crop_x.checked_add(crop_w)? > object.width
-            || crop_y.checked_add(crop_h)? > object.height
+            reference
+                .crop
+                .unwrap_or((0, 0, object.width, object.height));
+        if crop_x.checked_add(crop_w)? > object.width || crop_y.checked_add(crop_h)? > object.height
         {
             return None;
         }
@@ -272,7 +281,8 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
                 if dest_x >= width || dest_x < window.x || dest_x >= window_right {
                     continue;
                 }
-                let index = usize::from(object.indices[(crop_y + row) * object.width + crop_x + col]);
+                let index =
+                    usize::from(object.indices[(crop_y + row) * object.width + crop_x + col]);
                 let offset = (dest_y * width + dest_x) * 4;
                 over(&mut rgba[offset..offset + 4], colors[index]);
             }
@@ -301,21 +311,29 @@ mod tests {
     fn sample(cropped: bool) -> Vec<u8> {
         let mut pcs = vec![0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 1];
         pcs.extend_from_slice(&[
-            0, 1, 0, if cropped { 0x80 } else { 0 },
-            0, if cropped { 3 } else { 1 }, 0, if cropped { 0 } else { 1 },
+            0,
+            1,
+            0,
+            if cropped { 0x80 } else { 0 },
+            0,
+            if cropped { 3 } else { 1 },
+            0,
+            if cropped { 0 } else { 1 },
         ]);
         if cropped {
             pcs.extend_from_slice(&[0, 1, 0, 0, 0, 1, 0, 1]);
         }
         let mut bytes = packet(0x16, &pcs);
         bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 4, 0, 2]));
-        bytes.extend(packet(0x14, &[
-            0, 0,
-            0, 235, 128, 128, 255,
-            1, 16, 128, 128, 255,
-        ]));
+        bytes.extend(packet(
+            0x14,
+            &[0, 0, 0, 235, 128, 128, 255, 1, 16, 128, 128, 255],
+        ));
         // First pixel uses palette index zero; second is literal index one.
-        bytes.extend(packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 8, 0, 2, 0, 1, 0, 0x81, 0, 1]));
+        bytes.extend(packet(
+            0x15,
+            &[0, 1, 0, 0xc0, 0, 0, 8, 0, 2, 0, 1, 0, 0x81, 0, 1],
+        ));
         bytes.extend(packet(0x80, &[]));
         bytes
     }
