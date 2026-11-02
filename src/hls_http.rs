@@ -1083,17 +1083,12 @@ mod tests {
         .unwrap()
         .access_token;
         let id = catalog_api::stable_id(library.to_str().unwrap(), "Clip.mkv");
-        let state = Arc::new(AppState::with_auth_dir(
-            "server".to_owned(),
-            state_dir,
-        ));
+        let state = Arc::new(AppState::with_auth_dir("server".to_owned(), state_dir));
         let permits = (0..4)
             .map(|_| state.hls_registry().acquire_track_probe().unwrap())
             .collect::<Vec<_>>();
         let app = crate::app::router(state.clone());
-        let uri = format!(
-            "/Videos/{id}/main.m3u8?subtitleStreamIndex=0&subtitleMethod=Encode"
-        );
+        let uri = format!("/Videos/{id}/main.m3u8?subtitleStreamIndex=0&subtitleMethod=Encode");
         let request = Request::builder()
             .uri(uri)
             .header("X-Emby-Token", token.as_str())
