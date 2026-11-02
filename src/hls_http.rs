@@ -609,17 +609,6 @@ async fn generate_hls_playlist(
         | Some(HlsSubtitle::ExternalPgs { revision, .. }) => Some(revision.clone()),
         _ => None,
     };
-    if rendition_count > 1
-        && matches!(
-            burn_in_subtitle,
-            Some(HlsSubtitle::ExternalPgs { .. } | HlsSubtitle::EmbeddedPgs(_))
-        )
-    {
-        // A graphical adaptive ladder must share precisely aligned cue
-        // windows between every rendition; this single-rendition subset
-        // cannot safely claim that compatibility yet.
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
     let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -725,7 +714,9 @@ async fn generate_hls_playlist(
                     format,
                 }))
             }
-            HlsSubtitle::ExternalPgs { .. } | HlsSubtitle::EmbeddedPgs(_) => None,
+            HlsSubtitle::ExternalPgs { bytes, .. } | HlsSubtitle::EmbeddedPgs(bytes) => {
+                Some(hls::AdaptiveSubtitle::Pgs(bytes))
+            }
         });
         let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
             &registry.controller,
