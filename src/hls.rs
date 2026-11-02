@@ -15,7 +15,7 @@ use tokio::{
 };
 
 use crate::{
-    pgs_render::{WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline},
+    pgs_render::{WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline_for_window},
     probe,
     transcode::{
         ExternalTextFormat, ExternalTextTrack, GraphicOverlayWindow, MpegTsQuality,
@@ -511,7 +511,9 @@ async fn generate_segmented_vod_configured(
     let pgs_frames = options
         .pgs_track
         .map(|track| {
-            render_epoch_timeline(track).ok_or_else(|| {
+            let first = (start_seconds * 90_000.0).round() as u32;
+            let last = (source_seconds * 90_000.0).round() as u32;
+            render_epoch_timeline_for_window(track, first, last).ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     "unsupported PGS composition timeline",
@@ -1263,6 +1265,67 @@ mod tests {
         assert_eq!(stdfs::read(&source).unwrap(), b"unchanged synthetic source");
         artifact.remove().unwrap();
         assert!(!output_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn private_pgs_hls_seek_uses_late_compositions_from_longer_sup() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("readonly.mkv");
+        stdfs::write(&source, b"unchanged media").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "clear-encoder",
+            "printf '\\107C'; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"85.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let mut sup = Vec::new();
+        for second in 0..95_u32 {
+            let pts = second * 90_000;
+            let mut pcs = b"PG".to_vec();
+            pcs.extend_from_slice(&pts.to_be_bytes());
+            pcs.extend_from_slice(&[0; 4]);
+            pcs.push(0x16);
+            pcs.extend_from_slice(&11_u16.to_be_bytes());
+            pcs.extend_from_slice(&[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]);
+            sup.extend(pcs);
+            let mut end = b"PG".to_vec();
+            end.extend_from_slice(&pts.to_be_bytes());
+            end.extend_from_slice(&[0; 4]);
+            end.push(0x80);
+            end.extend_from_slice(&0_u16.to_be_bytes());
+            sup.extend(end);
+        }
+        let output = temp.path().join("seeked");
+        let artifact = generate_segmented_vod_with_pgs_from(
+            &controller, &inspector, &source, &output, 10, 75.0, &sup,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 10);
+        assert_eq!(artifact.transport_bytes, 10 * 376);
+        let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(playlist.matches("#EXTINF:").count(), 10);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 9);
+        assert_eq!(stdfs::read(&source).unwrap(), b"unchanged media");
+        artifact.remove().unwrap();
+        assert!(!output.exists());
+
+        // The same track remains too dense to encode from the beginning
+        // under the existing 64-plane and 64-segment publication caps.
+        let invalid = temp.path().join("too-many-windows");
+        let err = generate_segmented_vod_with_pgs_from(
+            &controller, &inspector, &source, &invalid, 10, 0.0, &sup,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(!invalid.exists());
     }
 
     #[tokio::test]
