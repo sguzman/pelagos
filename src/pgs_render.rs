@@ -700,6 +700,43 @@ mod tests {
     }
 
     #[test]
+    fn tga_export_preserves_rgba_alpha_and_rejects_mismatched_buffers() {
+        let frame = render_single_display_set(&sample(false)).unwrap();
+        let tga = frame.to_uncompressed_tga().unwrap();
+        assert_eq!(tga.len(), 18 + frame.rgba.len());
+        assert_eq!((tga[2], tga[16], tga[17]), (2, 32, 0x28));
+        assert_eq!(&tga[12..16], &[4, 0, 2, 0]);
+        assert_eq!(&tga[18..22], &[0, 0, 0, 0]);
+        assert_eq!(&tga[38..42], &[255, 255, 255, 255]);
+        assert_eq!(&tga[42..46], &[0, 0, 0, 255]);
+
+        let malformed = RgbaDisplaySet {
+            width: 4,
+            height: 2,
+            rgba: vec![0; 3],
+        };
+        assert!(malformed.to_uncompressed_tga().is_none());
+
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_some() {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("frame.tga");
+            std::fs::write(&path, &tga).unwrap();
+            let decoded = std::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(&path)
+                .args(["-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
+                .output()
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "{}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout, frame.rgba);
+        }
+    }
+
+    #[test]
     fn transparent_and_translucent_overlay_preserves_color() {
         let mut pixel = [20, 30, 40, 255];
         over(&mut pixel, [255, 0, 0, 0]);
