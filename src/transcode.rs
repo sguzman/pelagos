@@ -1591,14 +1591,7 @@ mod tests {
         let seek_output = temp.path().join("graphic-seeked.ts");
         assert!(
             controller
-                .try_run_window_pgs_capped(
-                    &source,
-                    &seek_output,
-                    1.0,
-                    1.0,
-                    8 * 1024 * 1024,
-                    &sup,
-                )
+                .try_run_window_pgs_capped(&source, &seek_output, 1.0, 1.0, 8 * 1024 * 1024, &sup,)
                 .await
                 .unwrap()
                 > 188
@@ -1624,14 +1617,7 @@ mod tests {
         let crossed = temp.path().join("graphic-crossed.ts");
         assert_eq!(
             controller
-                .try_run_window_pgs_capped(
-                    &source,
-                    &crossed,
-                    2.0,
-                    0.75,
-                    8 * 1024 * 1024,
-                    &sup,
-                )
+                .try_run_window_pgs_capped(&source, &crossed, 2.0, 0.75, 8 * 1024 * 1024, &sup,)
                 .await
                 .unwrap_err()
                 .kind(),
