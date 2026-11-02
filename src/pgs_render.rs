@@ -421,6 +421,38 @@ mod tests {
     }
 
     #[test]
+    fn layered_objects_apply_straight_alpha_in_composition_order() {
+        let mut pcs = vec![0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 2];
+        pcs.extend_from_slice(&[0, 1, 0, 0, 0, 0, 0, 0]);
+        pcs.extend_from_slice(&[0, 2, 0, 0, 0, 0, 0, 0]);
+        let mut bytes = packet(0x16, &pcs);
+        bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 0, 2, 0, 1]));
+        bytes.extend(packet(
+            0x14,
+            &[0, 0, 1, 235, 128, 128, 255, 2, 16, 128, 128, 128],
+        ));
+        bytes.extend(packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 1, 1]));
+        bytes.extend(packet(0x15, &[0, 2, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 2, 2]));
+        bytes.extend(packet(0x80, &[]));
+        let frame = render_single_display_set(&bytes).unwrap();
+        assert_eq!((frame.width, frame.height), (2, 1));
+        assert_eq!(frame.rgba, vec![127, 127, 127, 255, 127, 127, 127, 255]);
+    }
+
+    #[test]
+    fn clear_composition_renders_transparent_and_invalid_crop_fails_closed() {
+        let mut clear = packet(0x16, &[0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 0]);
+        clear.extend(packet(0x80, &[]));
+        assert_eq!(
+            render_single_display_set(&clear).unwrap().rgba,
+            vec![0; 8]
+        );
+        let mut bad_crop = sample(true);
+        bad_crop[13 + 11 + 8 + 1] = 2; // source crop x now beyond bitmap
+        assert!(render_single_display_set(&bad_crop).is_none());
+    }
+
+    #[test]
     fn transparent_and_translucent_overlay_preserves_color() {
         let mut pixel = [20, 30, 40, 255];
         over(&mut pixel, [255, 0, 0, 0]);
