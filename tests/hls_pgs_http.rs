@@ -313,9 +313,7 @@ async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|stream| {
-            stream["IsExternal"] == false && stream["Codec"] == "hdmv_pgs_subtitle"
-        })
+        .find(|stream| stream["IsExternal"] == false && stream["Codec"] == "hdmv_pgs_subtitle")
         .expect("embedded graphical subtitle index");
     let index = stream["Index"].as_i64().unwrap();
     let url = format!(
