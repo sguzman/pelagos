@@ -38,6 +38,8 @@ use uuid::Uuid;
 const MAX_PUBLISHED: usize = 3;
 const MAX_MANIFEST: usize = 32 * 1024;
 const MAX_SEGMENT_BYTES: u64 = 128 * 1024 * 1024;
+// Unwrapped 32-bit PGS timestamps use a 90 kHz clock. No rollover is supported.
+const MAX_PGS_START_END_TICKS: u64 = u32::MAX as u64 * 10_000_000 / 90_000;
 
 #[derive(Debug)]
 struct PublishedVariant {
@@ -57,6 +59,7 @@ struct Published {
     source_modified: Option<std::time::SystemTime>,
     target_seconds: u32,
     start_time_ticks: u64,
+    excerpt_duration_ticks: Option<u64>,
     rendition_count: u8,
     subtitle_stream_index: Option<i64>,
     sidecar: Option<SidecarRevision>,
@@ -182,6 +185,7 @@ struct CacheLookup<'a> {
     modified: Option<std::time::SystemTime>,
     target_seconds: u32,
     start_time_ticks: u64,
+    excerpt_duration_ticks: Option<u64>,
     rendition_count: u8,
     subtitle_stream_index: Option<i64>,
     sidecar: Option<&'a SidecarRevision>,
@@ -263,6 +267,7 @@ impl HlsRegistry {
                 && entry.source_modified == query.modified
                 && entry.target_seconds == query.target_seconds
                 && entry.start_time_ticks == query.start_time_ticks
+                && entry.excerpt_duration_ticks == query.excerpt_duration_ticks
                 && entry.rendition_count == query.rendition_count
                 && entry.subtitle_stream_index == query.subtitle_stream_index
                 && entry.sidecar.as_ref() == query.sidecar
@@ -318,6 +323,18 @@ fn playlist_response(playlist: &str) -> Response {
     response
 }
 
+/// An explicit Pelagos excerpt is not the source's complete VOD timeline.
+/// Mark every playlist response, including cache hits and variant playlists.
+fn excerpt_playlist_response(playlist: &str, excerpt_duration_ticks: Option<u64>) -> Response {
+    let mut response = playlist_response(playlist);
+    if excerpt_duration_ticks.is_some() {
+        response
+            .headers_mut()
+            .insert("x-pelagos-excerpt", HeaderValue::from_static("true"));
+    }
+    response
+}
+
 fn set_private_headers(response: &mut Response, mime: &'static str, size: usize) {
     response
         .headers_mut()
@@ -336,6 +353,9 @@ fn set_private_headers(response: &mut Response, mime: &'static str, size: usize)
 struct PlaylistQuery {
     segment_length: Option<u32>,
     start_time_ticks: Option<i64>,
+    // Experimental Pelagos-only explicit source-time excerpt, never a normal
+    // Jellyfin full-VOD request. Requires an explicitly encoded PGS track.
+    pelagos_excerpt_duration_ticks: Option<i64>,
     renditions: Option<u8>,
     media_source_id: Option<String>,
     enable_adaptive_bitrate_streaming: Option<bool>,
@@ -565,11 +585,28 @@ async fn generate_hls_playlist(
     if !(1..=10).contains(&target_seconds) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let excerpt_duration_ticks = query
+        .pelagos_excerpt_duration_ticks
+        .map(|duration| {
+            u64::try_from(duration)
+                .ok()
+                .filter(|duration| (1_000_000..=6_000_000_000).contains(duration))
+                .ok_or(StatusCode::BAD_REQUEST)
+        })
+        .transpose()?;
     let start_time_ticks = query.start_time_ticks.unwrap_or(0);
-    if !(0..=6_000_000_000).contains(&start_time_ticks) {
+    let start_time_ticks = u64::try_from(start_time_ticks).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if let Some(duration) = excerpt_duration_ticks {
+        let end = start_time_ticks
+            .checked_add(duration)
+            .ok_or(StatusCode::BAD_REQUEST)?;
+        if end > MAX_PGS_START_END_TICKS {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    } else if start_time_ticks > 6_000_000_000 {
+        // Normal Jellyfin-compatible full-VOD requests retain the old limit.
         return Err(StatusCode::BAD_REQUEST);
     }
-    let start_time_ticks = start_time_ticks as u64;
     // The pinned v12.3 master routes carry MediaSourceId and the opt-in
     // adaptive switch. Pelagos PlaybackInfo currently exposes one source
     // whose ID exactly equals the item ID; never silently transcode a
@@ -603,6 +640,15 @@ async fn generate_hls_playlist(
     }
     let burn_in_subtitle =
         validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
+    if excerpt_duration_ticks.is_some()
+        && (expected_kind != "video"
+            || !matches!(
+                burn_in_subtitle,
+                Some(HlsSubtitle::ExternalPgs { .. } | HlsSubtitle::EmbeddedPgs(_))
+            ))
+    {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let selected_index = query.subtitle_stream_index.filter(|index| *index >= 0);
     let sidecar_revision = match burn_in_subtitle.as_ref() {
         Some(HlsSubtitle::ExternalSrt { revision, .. })
@@ -624,16 +670,20 @@ async fn generate_hls_playlist(
         modified: source_modified,
         target_seconds,
         start_time_ticks,
+        excerpt_duration_ticks,
         rendition_count,
         subtitle_stream_index: selected_index,
         sidecar: sidecar_revision.as_ref(),
     };
     if let Some(existing) = registry.cached(&cache_key) {
-        return Ok(playlist_response(if master {
-            &existing.master_playlist
-        } else {
-            &existing.main_playlist
-        }));
+        return Ok(excerpt_playlist_response(
+            if master {
+                &existing.master_playlist
+            } else {
+                &existing.main_playlist
+            },
+            existing.excerpt_duration_ticks,
+        ));
     }
     // Admission is reserved before touching any private output path.
     let _permit = registry.acquire_generation().await?;
@@ -641,11 +691,14 @@ async fn generate_hls_playlist(
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
     if let Some(existing) = registry.cached(&cache_key) {
-        return Ok(playlist_response(if master {
-            &existing.master_playlist
-        } else {
-            &existing.main_playlist
-        }));
+        return Ok(excerpt_playlist_response(
+            if master {
+                &existing.master_playlist
+            } else {
+                &existing.main_playlist
+            },
+            existing.excerpt_duration_ticks,
+        ));
     }
     let id = Uuid::new_v4().simple().to_string();
     let private_root = std::env::temp_dir().join(format!("pelagos-hls-{id}"));
@@ -715,19 +768,38 @@ async fn generate_hls_playlist(
                 hls::AdaptiveSubtitle::Pgs(bytes)
             }
         });
-        let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
-            &registry.controller,
-            state.probe_executable(),
-            &source,
-            &private_root.join("bundle"),
-            target_seconds,
-            hls::AdaptiveWindow {
-                start_seconds: start_time_ticks as f64 / 10_000_000.0,
-                qualities: &profiles[..usize::from(rendition_count)],
-                subtitle,
-            },
-        )
-        .await
+        let adaptive = if let (Some(duration), Some(hls::AdaptiveSubtitle::Pgs(sup_bytes))) =
+            (excerpt_duration_ticks, subtitle)
+        {
+            hls::generate_adaptive_segmented_pgs_window(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                hls::AdaptivePgsPlaybackWindow {
+                    start_seconds: start_time_ticks as f64 / 10_000_000.0,
+                    duration_seconds: duration as f64 / 10_000_000.0,
+                    qualities: &profiles[..usize::from(rendition_count)],
+                    sup_bytes,
+                },
+            )
+            .await
+        } else {
+            hls::generate_adaptive_segmented_vod_with_subtitle_from(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                hls::AdaptiveWindow {
+                    start_seconds: start_time_ticks as f64 / 10_000_000.0,
+                    qualities: &profiles[..usize::from(rendition_count)],
+                    subtitle,
+                },
+            )
+            .await
+        }
         .map_err(|err| match err.kind() {
             io::ErrorKind::WouldBlock => StatusCode::TOO_MANY_REQUESTS,
             io::ErrorKind::InvalidInput => StatusCode::BAD_REQUEST,
@@ -798,7 +870,7 @@ async fn generate_hls_playlist(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
         reauthorize_publication(&state, &headers, &cache_key).await?;
-        let response = playlist_response(&master_playlist);
+        let response = excerpt_playlist_response(&master_playlist, excerpt_duration_ticks);
         let publication = Arc::new(Published {
             id,
             item,
@@ -809,6 +881,7 @@ async fn generate_hls_playlist(
             source_modified,
             target_seconds,
             start_time_ticks,
+            excerpt_duration_ticks,
             rendition_count,
             subtitle_stream_index: selected_index,
             sidecar: sidecar_revision.clone(),
@@ -856,16 +929,32 @@ async fn generate_hls_playlist(
             .await
         }
         Some(HlsSubtitle::EmbeddedPgs(bytes)) | Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
-            hls::generate_segmented_vod_with_pgs_from(
-                &registry.controller,
-                state.probe_executable(),
-                &source,
-                &private_root.join("bundle"),
-                target_seconds,
-                start_time_ticks as f64 / 10_000_000.0,
-                bytes,
-            )
-            .await
+            if let Some(duration) = excerpt_duration_ticks {
+                hls::generate_segmented_pgs_window(
+                    &registry.controller,
+                    state.probe_executable(),
+                    &source,
+                    &private_root.join("bundle"),
+                    target_seconds,
+                    hls::PgsPlaybackWindow {
+                        start_seconds: start_time_ticks as f64 / 10_000_000.0,
+                        duration_seconds: duration as f64 / 10_000_000.0,
+                        sup_bytes: bytes,
+                    },
+                )
+                .await
+            } else {
+                hls::generate_segmented_vod_with_pgs_from(
+                    &registry.controller,
+                    state.probe_executable(),
+                    &source,
+                    &private_root.join("bundle"),
+                    target_seconds,
+                    start_time_ticks as f64 / 10_000_000.0,
+                    bytes,
+                )
+                .await
+            }
         }
         None => {
             hls::generate_segmented_vod_from(
@@ -917,7 +1006,10 @@ async fn generate_hls_playlist(
     let master_playlist = format!(
         "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\nhls1/{id}/index.m3u8\n"
     );
-    let response = playlist_response(if master { &master_playlist } else { &playlist });
+    let response = excerpt_playlist_response(
+        if master { &master_playlist } else { &playlist },
+        excerpt_duration_ticks,
+    );
     let publication = Arc::new(Published {
         id,
         item,
@@ -928,6 +1020,7 @@ async fn generate_hls_playlist(
         source_modified,
         target_seconds,
         start_time_ticks,
+        excerpt_duration_ticks,
         rendition_count,
         subtitle_stream_index: selected_index,
         sidecar: sidecar_revision.clone(),
@@ -1015,6 +1108,11 @@ async fn serve_segment(
             Body::from(text.clone())
         });
         set_private_headers(&mut response, "application/vnd.apple.mpegurl", text.len());
+        if publication.excerpt_duration_ticks.is_some() {
+            response
+                .headers_mut()
+                .insert("x-pelagos-excerpt", HeaderValue::from_static("true"));
+        }
         return Ok(response);
     }
     let segment_number = name.strip_suffix(".ts").ok_or(StatusCode::NOT_FOUND)?;
