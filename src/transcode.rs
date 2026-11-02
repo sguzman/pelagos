@@ -1357,18 +1357,32 @@ mod tests {
             String::from_utf8_lossy(&fixture.stderr)
         );
         let original = stdfs::read(&source).unwrap();
-        let mut rgba = vec![0; 32 * 32 * 4];
-        for y in 8..24 {
-            for x in 8..24 {
-                let pixel = (y * 32 + x) * 4;
-                rgba[pixel..pixel + 4].copy_from_slice(&[255, 255, 255, 255]);
-            }
-        }
-        let plane = RgbaDisplaySet {
-            width: 32,
-            height: 32,
-            rgba,
+        // Exercise the whole clean-room graphical path, not just an
+        // arbitrary prebuilt RGBA plane: PGS PCS/PDS/WDS/ODS/END -> bounded
+        // palette-indexed raster -> private TGA -> real FFmpeg MPEG-TS.
+        let packet = |kind: u8, body: &[u8]| {
+            let mut raw = b"PG".to_vec();
+            raw.extend_from_slice(&[0; 8]);
+            raw.push(kind);
+            raw.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            raw.extend_from_slice(body);
+            raw
         };
+        let mut sup = packet(
+            0x16,
+            &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 1, 0, 1, 0, 0, 0, 8, 0, 8],
+        );
+        sup.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 0, 32, 0, 32]));
+        sup.extend(packet(0x14, &[0, 0, 1, 235, 128, 128, 255]));
+        let mut ods = vec![0, 1, 0, 0xc0, 0, 0, 84, 0, 16, 0, 16];
+        for _ in 0..16 {
+            ods.extend_from_slice(&[0, 0x90, 1, 0, 0]);
+        }
+        sup.extend(packet(0x15, &ods));
+        sup.extend(packet(0x80, &[]));
+        let plane = crate::pgs_render::render_single_display_set(&sup)
+            .expect("self-contained synthetic PGS graphical display set");
+        assert_eq!((plane.width, plane.height), (32, 32));
         assert!(
             controller
                 .try_run_window_graphic_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &plane)
