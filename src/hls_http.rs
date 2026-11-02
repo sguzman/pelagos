@@ -699,8 +699,8 @@ async fn generate_hls_playlist(
         } else {
             &VIDEO_PROFILES
         };
-        let subtitle = burn_in_subtitle.as_ref().and_then(|track| match track {
-            HlsSubtitle::Embedded(index) => Some(hls::AdaptiveSubtitle::Embedded(*index)),
+        let subtitle = burn_in_subtitle.as_ref().map(|track| match track {
+            HlsSubtitle::Embedded(index) => hls::AdaptiveSubtitle::Embedded(*index),
             HlsSubtitle::ExternalSrt { bytes, revision } => {
                 let format = if revision.filename.to_ascii_lowercase().ends_with(".ass") {
                     ExternalTextFormat::Ass
@@ -709,13 +709,10 @@ async fn generate_hls_playlist(
                 } else {
                     ExternalTextFormat::Srt
                 };
-                Some(hls::AdaptiveSubtitle::External(ExternalTextTrack {
-                    bytes,
-                    format,
-                }))
+                hls::AdaptiveSubtitle::External(ExternalTextTrack { bytes, format })
             }
             HlsSubtitle::ExternalPgs { bytes, .. } | HlsSubtitle::EmbeddedPgs(bytes) => {
-                Some(hls::AdaptiveSubtitle::Pgs(bytes))
+                hls::AdaptiveSubtitle::Pgs(bytes)
             }
         });
         let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
