@@ -1411,8 +1411,7 @@ mod tests {
         let (temp, executable, source, _) = fixture(
             "for arg in \"$@\"; do if [ \"$arg\" = \"1500k\" ]; then printf 'QUALITY'; exit 0; fi; done; printf 'NOQUALITY'",
         );
-        let runner =
-            TranscodeController::new(executable, 1, Duration::from_secs(3), 1024).unwrap();
+        let runner = TranscodeController::new(executable, 1, Duration::from_secs(3), 1024).unwrap();
         let rgba = RgbaDisplaySet {
             width: 16,
             height: 16,
