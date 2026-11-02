@@ -3,7 +3,7 @@
 use crate::{
     app::AppState,
     auth_api, hls, playback, streaming,
-    transcode::{ExternalTextFormat, ExternalTextTrack, MpegTsQuality, TranscodeController},
+    transcode::{ExternalTextFormat, ExternalTextTrack, MpegTsQuality},
 };
 use axum::{
     Router,
