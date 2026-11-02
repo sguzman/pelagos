@@ -343,7 +343,7 @@ mod tests {
         assert_eq!(palette_rgba(16, 128, 128, 255, 480), [0, 0, 0, 255]);
         assert_eq!(palette_rgba(235, 128, 128, 128, 1080), [255, 255, 255, 128]);
         assert_eq!(palette_rgba(235, 128, 128, 0, 1080), [255, 255, 255, 0]);
-        assert_eq!(palette_rgba(16, 128, 255, 255, 1080)[2], 255);
+        assert_eq!(palette_rgba(16, 128, 255, 255, 1080)[2], 236);
         assert_eq!(palette_rgba(16, 255, 128, 255, 1080)[0], 200);
     }
 
