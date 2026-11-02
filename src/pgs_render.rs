@@ -383,6 +383,47 @@ mod tests {
     }
 
     #[test]
+    fn fragmented_objects_and_incremental_palette_updates_render_identically() {
+        let original = sample(false);
+        let ods_start = original.len() - (13 + 15) - 13;
+        let mut fragmented = original[..ods_start].to_vec();
+        fragmented.extend(packet(
+            0x15,
+            &[0, 1, 0, 0x80, 0, 0, 8, 0, 2, 0, 1, 0],
+        ));
+        fragmented.extend(packet(0x15, &[0, 1, 0, 0x40, 0x81, 0, 1]));
+        fragmented.extend(packet(0x80, &[]));
+        assert_eq!(
+            render_single_display_set(&fragmented),
+            render_single_display_set(&original)
+        );
+
+        // A second PDS for the selected palette updates only one entry.
+        // The other color remains white and the updated color turns clear.
+        let mut changed = original.clone();
+        let end_offset = changed.len() - 13;
+        changed.splice(
+            end_offset..end_offset,
+            packet(0x14, &[0, 1, 1, 16, 128, 128, 0]),
+        );
+        let frame = render_single_display_set(&changed).unwrap();
+        assert_eq!(&frame.rgba[20..24], &[255, 255, 255, 255]);
+        assert_eq!(&frame.rgba[24..28], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn window_clips_graphics_without_relocating_the_presentation() {
+        let mut bytes = sample(false);
+        let pcs_len = usize::from(be16(&bytes[11..13]));
+        let wds_body = 13 + pcs_len + 13;
+        bytes[wds_body + 3] = 2; // window begins at x=2
+        bytes[wds_body + 7] = 1; // one-pixel window width
+        let frame = render_single_display_set(&bytes).unwrap();
+        assert_eq!(&frame.rgba[20..24], &[0, 0, 0, 0]);
+        assert_eq!(&frame.rgba[24..28], &[0, 0, 0, 255]);
+    }
+
+    #[test]
     fn transparent_and_translucent_overlay_preserves_color() {
         let mut pixel = [20, 30, 40, 255];
         over(&mut pixel, [255, 0, 0, 0]);
