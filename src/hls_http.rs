@@ -1101,9 +1101,8 @@ mod tests {
         let injected =
             serde_json::from_str::<PlaylistQuery>(r#"{"expectedRevision":{"size":1234}}"#);
         assert!(injected.is_err());
-        let injected_sequence = serde_json::from_str::<PlaylistQuery>(
-            r#"{"mediaSequence":18446744073709551615}"#,
-        );
+        let injected_sequence =
+            serde_json::from_str::<PlaylistQuery>(r#"{"mediaSequence":18446744073709551615}"#);
         assert!(injected_sequence.is_err());
     }
 

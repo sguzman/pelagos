@@ -1121,10 +1121,12 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         stitched.headers()["x-pelagos-excerpt-start-ticks"],
         "6050000000"
     );
-    assert_eq!(
-        stitched.headers()["x-pelagos-excerpt-duration-ticks"],
-        "50000000"
-    );
+    let stitched_duration = stitched.headers()["x-pelagos-excerpt-duration-ticks"]
+        .to_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    assert_eq!(stitched_duration, 40_000_000 + final_duration);
     let stitched_playlist = body(stitched).await;
     let head = Request::builder()
         .method("HEAD")
