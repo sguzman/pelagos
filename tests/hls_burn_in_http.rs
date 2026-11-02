@@ -894,7 +894,12 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     let embedded_response = call(&app, &embedded_route, Some(&token)).await;
     assert_eq!(embedded_response.status(), StatusCode::OK);
     let embedded_master = body_string(embedded_response).await;
-    assert_eq!(embedded_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    assert_eq!(
+        embedded_master
+            .matches("#EXT-X-STREAM-INF:BANDWIDTH=")
+            .count(),
+        2
+    );
     assert_ne!(embedded_master, master);
     for (index, variant) in embedded_master
         .lines()
