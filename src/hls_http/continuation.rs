@@ -85,7 +85,12 @@ pub(super) async fn video_next(
             .first()
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         let len = first.segments.len();
-        if len == 0 || publication.variants.iter().any(|variant| variant.segments.len() != len) {
+        if len == 0
+            || publication
+                .variants
+                .iter()
+                .any(|variant| variant.segments.len() != len)
+        {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
         len
