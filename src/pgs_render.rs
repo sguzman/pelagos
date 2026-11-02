@@ -491,10 +491,7 @@ pub fn constant_window_graphic(
     start_90khz: u32,
     end_90khz: u32,
 ) -> Option<WindowGraphic<'_>> {
-    if frames.is_empty()
-        || frames.len() > MAX_TIMELINE_FRAMES
-        || start_90khz >= end_90khz
-    {
+    if frames.is_empty() || frames.len() > MAX_TIMELINE_FRAMES || start_90khz >= end_90khz {
         return None;
     }
     for (index, frame) in frames.iter().enumerate() {
@@ -512,12 +509,20 @@ pub fn constant_window_graphic(
     if end_90khz <= frames[0].pts_90khz {
         return Some(WindowGraphic::Clear);
     }
-    let current = frames.iter().rev().find(|frame| frame.pts_90khz <= start_90khz)?;
+    let current = frames
+        .iter()
+        .rev()
+        .find(|frame| frame.pts_90khz <= start_90khz)?;
     let end = current.pts_90khz.checked_add(current.duration_90khz?)?;
     if end_90khz > end {
         return None;
     }
-    if current.image.rgba.chunks_exact(4).all(|pixel| pixel[3] == 0) {
+    if current
+        .image
+        .rgba
+        .chunks_exact(4)
+        .all(|pixel| pixel[3] == 0)
+    {
         Some(WindowGraphic::Clear)
     } else {
         Some(WindowGraphic::Image(&current.image))
