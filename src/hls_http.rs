@@ -1245,6 +1245,44 @@ pub fn router() -> Router<Arc<AppState>> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn graphical_sidecar_read_is_confined_bounded_and_rejects_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let library = temp.path().join("library");
+        std::fs::create_dir(&library).unwrap();
+        let source = library.join("Feature.mkv");
+        std::fs::write(&source, b"synthetic media").unwrap();
+        let sidecar = library.join("Feature.es.sup");
+        std::fs::write(&sidecar, b"PG synthetic bytes").unwrap();
+        assert_eq!(
+            read_confined_sup(&source, "Feature.es.sup").await,
+            Ok(b"PG synthetic bytes".to_vec())
+        );
+        assert_eq!(
+            read_confined_sup(&source, "Feature.es.srt").await,
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        assert!(read_confined_sup(&source, "../outside.sup").await.is_err());
+
+        let outside = temp.path().join("outside.sup");
+        std::fs::write(&outside, b"private file").unwrap();
+        symlink(&outside, library.join("Feature.fr.sup")).unwrap();
+        assert!(read_confined_sup(&source, "Feature.fr.sup").await.is_err());
+
+        std::fs::File::create(library.join("Feature.de.sup"))
+            .unwrap()
+            .set_len(crate::pgs::MAX_SUP_BYTES + 1)
+            .unwrap();
+        assert_eq!(
+            read_confined_sup(&source, "Feature.de.sup").await,
+            Err(StatusCode::NOT_IMPLEMENTED)
+        );
+        assert_eq!(std::fs::read(&source).unwrap(), b"synthetic media");
+    }
+
     #[test]
     fn pinned_hls_codec_and_container_constraints_are_fail_closed() {
         let mut query = PlaylistQuery::default();
