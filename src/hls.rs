@@ -1303,7 +1303,13 @@ mod tests {
         }
         let output = temp.path().join("seeked");
         let artifact = generate_segmented_vod_with_pgs_from(
-            &controller, &inspector, &source, &output, 10, 75.0, &sup,
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            10,
+            75.0,
+            &sup,
         )
         .await
         .unwrap();
@@ -1320,7 +1326,13 @@ mod tests {
         // under the existing 64-plane and 64-segment publication caps.
         let invalid = temp.path().join("too-many-windows");
         let err = generate_segmented_vod_with_pgs_from(
-            &controller, &inspector, &source, &invalid, 10, 0.0, &sup,
+            &controller,
+            &inspector,
+            &source,
+            &invalid,
+            10,
+            0.0,
+            &sup,
         )
         .await
         .unwrap_err();
