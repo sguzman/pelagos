@@ -1457,7 +1457,10 @@ mod tests {
         );
         assert_eq!(seeked.stdout.len(), 32 * 32 * 3);
         let center = &seeked.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
-        assert!(center.iter().all(|component| *component > 180), "{center:?}");
+        assert!(
+            center.iter().all(|component| *component > 180),
+            "{center:?}"
+        );
         assert_eq!(stdfs::read(&source).unwrap(), original);
     }
 
