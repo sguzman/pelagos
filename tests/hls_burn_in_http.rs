@@ -837,6 +837,11 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         .unwrap()
         .unwrap()
         .access_token;
+    let sibling = auth::authenticate(&state_dir, "admin", "adaptive-caption-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    assert_ne!(token, sibling);
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state_dir,
@@ -888,6 +893,10 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         if index == 0 {
             old_segment = Some(segment_route.clone());
         }
+        assert_eq!(
+            call(&app, &segment_route, Some(&sibling)).await.status(),
+            StatusCode::NOT_FOUND
+        );
         let segment = call(&app, &segment_route, Some(&token)).await;
         assert_eq!(segment.status(), StatusCode::OK);
         let bytes = to_bytes(segment.into_body(), 8 * 1024 * 1024)
@@ -946,6 +955,38 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         );
     }
     assert_eq!(fs::read(&source).unwrap(), unchanged);
+    // A nonzero seek must retain the absolute caption timeline in every
+    // independently encoded variant; the publication is cache-distinct.
+    let seek_route = format!("{route}&startTimeTicks=10000000");
+    let seek_response = call(&app, &seek_route, Some(&token)).await;
+    assert_eq!(seek_response.status(), StatusCode::OK);
+    let seek_master = body_string(seek_response).await;
+    assert_ne!(seek_master, master);
+    let seek_variants = seek_master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(seek_variants.len(), 2);
+    for (index, variant) in seek_variants.iter().enumerate() {
+        let segment_name = format!("{}0.ts", variant.strip_suffix("index.m3u8").unwrap());
+        let segment_url = format!("/Videos/{id}/{segment_name}");
+        assert_eq!(
+            call(&app, &segment_url, Some(&sibling)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let segment = call(&app, &segment_url, Some(&token)).await;
+        assert_eq!(segment.status(), StatusCode::OK);
+        let bytes = to_bytes(segment.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(
+            adaptive_caption_bottom_pixels(
+                &bytes,
+                &temp.path().join(format!("seeked-variant{index}.ts"))
+            ) > 40,
+            "seeked variant {index} lost timed subtitle or AAC"
+        );
+    }
     fs::write(
         &sidecar,
         b"1\n00:00:00,200 --> 00:00:01,800\nCHANGED ADAPTIVE TEXT\n\n",
