@@ -790,13 +790,19 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     let route = format!(
         "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={subtitle_index}&subtitleMethod=Encode"
     );
-    assert_eq!(call(&app, &route, None).await.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        call(&app, &route, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     let master_response = call(&app, &route, Some(&token)).await;
     assert_eq!(master_response.status(), StatusCode::OK);
     let master = body_string(master_response).await;
     assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
     assert_eq!(master.matches(",RESOLUTION=640x360").count(), 2);
-    assert_eq!(body_string(call(&app, &route, Some(&token)).await).await, master);
+    assert_eq!(
+        body_string(call(&app, &route, Some(&token)).await).await,
+        master
+    );
     let variants = master
         .lines()
         .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
@@ -855,7 +861,9 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     )
     .unwrap();
     assert_eq!(
-        call(&app, &old_segment.unwrap(), Some(&token)).await.status(),
+        call(&app, &old_segment.unwrap(), Some(&token))
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
     let updated = call(&app, &route, Some(&token)).await;
