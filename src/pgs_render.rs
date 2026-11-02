@@ -30,7 +30,11 @@ impl RgbaDisplaySet {
         output[14..16].copy_from_slice(&self.height.to_le_bytes());
         output[16] = 32; // 32-bit BGRA
         output[17] = 0x28; // top-left origin with eight alpha bits
-        for (rgba, bgra) in self.rgba.chunks_exact(4).zip(output[18..].chunks_exact_mut(4)) {
+        for (rgba, bgra) in self
+            .rgba
+            .chunks_exact(4)
+            .zip(output[18..].chunks_exact_mut(4))
+        {
             bgra.copy_from_slice(&[rgba[2], rgba[1], rgba[0], rgba[3]]);
         }
         Some(output)
