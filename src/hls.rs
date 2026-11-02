@@ -18,8 +18,8 @@ use crate::{
     pgs_render::{WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline},
     probe,
     transcode::{
-        ExternalTextFormat, ExternalTextTrack, MpegTsQuality, SubtitleBurnInWindow,
-        SubtitleTextWindow, TranscodeController,
+        ExternalTextFormat, ExternalTextTrack, GraphicOverlayWindow, MpegTsQuality,
+        SubtitleBurnInWindow, SubtitleTextWindow, TranscodeController,
     },
 };
 
@@ -614,11 +614,13 @@ async fn generate_segmented_vod_configured(
                         .try_run_window_graphic_quality_capped(
                             source,
                             &path,
-                            start,
-                            duration,
-                            budget,
-                            image,
-                            options.quality,
+                            GraphicOverlayWindow {
+                                start_seconds: start,
+                                duration_seconds: duration,
+                                remaining_bytes: budget,
+                                graphic: image,
+                                quality: options.quality,
+                            },
                         )
                         .await?
                 }
