@@ -75,7 +75,10 @@ fn visible_center(media: &[u8], path: &std::path::Path) -> bool {
     let decoded = Command::new("ffmpeg")
         .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(path)
-        .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+        .args([
+            "-frames:v", "1", "-vf", "crop=32:32:0:0", "-pix_fmt", "rgb24", "-f",
+            "rawvideo", "-",
+        ])
         .output()
         .unwrap();
     assert!(
@@ -185,13 +188,13 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         call(
             &app,
             &format!(
-                "/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode&enableAdaptiveBitrateStreaming=true"
+                "/Videos/{id}/master.m3u8?segmentLength=2&renditions=5&subtitleStreamIndex={index}&subtitleMethod=Encode"
             ),
             Some(&token)
         )
         .await
         .status(),
-        StatusCode::NOT_IMPLEMENTED
+        StatusCode::BAD_REQUEST
     );
     let result = call(&app, &selected, Some(&token)).await;
     assert_eq!(result.status(), StatusCode::OK);
@@ -278,6 +281,152 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(&source).unwrap(), original);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let source = library.join("Adaptive.mkv");
+    let sidecar = library.join("Adaptive.es.sup");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=15:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=600:duration=3",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-vf",
+            "drawbox=x=0:y=0:w=32:h=32:color=black:t=fill",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let original = fs::read(&source).unwrap();
+    let sup = synthetic_sup();
+    fs::write(&sidecar, &sup).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "pgs-adaptive-admin-password").unwrap();
+    let token = auth::authenticate(&state_dir, "admin", "pgs-adaptive-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let other = auth::authenticate(&state_dir, "admin", "pgs-adaptive-admin-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    let items: Value = serde_json::from_str(&body(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let details = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    let details: Value = serde_json::from_str(&body(details).await).unwrap();
+    let index = details["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == true && stream["Codec"] == "pgssub")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    let master_url = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    assert_eq!(
+        call(&app, &master_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let response = call(&app, &master_url, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let master = body(response).await;
+    assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    assert_eq!(master.matches(",RESOLUTION=640x360").count(), 2);
+    assert_eq!(
+        body(call(&app, &master_url, Some(&token)).await).await,
+        master
+    );
+    let variants = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(variants.len(), 2);
+    let mut stale_uri = String::new();
+    for (variant_index, variant) in variants.iter().enumerate() {
+        let response = call(&app, &format!("/Videos/{id}/{variant}"), Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist = body(response).await;
+        assert_eq!(playlist.matches("#EXTINF:").count(), 4);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 3);
+        assert!(playlist.ends_with("#EXT-X-ENDLIST\n"));
+        for (position, expected) in [false, true, true, false].into_iter().enumerate() {
+            let segment = format!("{}{}.ts", variant.strip_suffix("index.m3u8").unwrap(), position);
+            let uri = format!("/Videos/{id}/{segment}");
+            if variant_index == 0 && position == 1 {
+                stale_uri = uri.clone();
+            }
+            assert_eq!(
+                call(&app, &uri, Some(&other)).await.status(),
+                StatusCode::NOT_FOUND
+            );
+            let response = call(&app, &uri, Some(&token)).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+                .await
+                .unwrap()
+                .to_vec();
+            assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
+            assert_eq!(
+                visible_center(
+                    &bytes,
+                    &temp.path().join(format!("adaptive-{variant_index}-{position}.ts"))
+                ),
+                expected
+            );
+        }
+    }
+    assert!(!stale_uri.is_empty());
+    assert_eq!(fs::read(&source).unwrap(), original);
+    let mut changed = sup;
+    let palette = changed
+        .windows(7)
+        .position(|bytes| bytes == [0, 0, 1, 235, 128, 128, 255])
+        .unwrap();
+    changed[palette + 6] = 0;
+    fs::write(&sidecar, changed).unwrap();
+    assert_eq!(
+        call(&app, &stale_uri, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
 }
 
 #[cfg(unix)]
