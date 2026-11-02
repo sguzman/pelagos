@@ -1309,7 +1309,14 @@ mod tests {
         };
         assert_eq!(
             controller
-                .try_run_window_graphic_capped(&source, &output, 0.0, 1.0, 8 * 1024 * 1024, &invalid)
+                .try_run_window_graphic_capped(
+                    &source,
+                    &output,
+                    0.0,
+                    1.0,
+                    8 * 1024 * 1024,
+                    &invalid,
+                )
                 .await
                 .unwrap_err()
                 .kind(),
