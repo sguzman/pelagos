@@ -881,7 +881,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Audio/{item_id}/master.m3u8", get(audio_master))
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/next.m3u8",
-            get(video_next),
+            get(video_next).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
         )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",

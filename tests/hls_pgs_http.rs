@@ -268,6 +268,18 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         call(&app, &forbidden_next, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
+    // HEAD requests must not accidentally invoke an expensive continuation
+    // encoder through axum's automatic GET-to-HEAD fallback.
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(&forbidden_next)
+        .header("X-Emby-Token", &token)
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(head).await.unwrap().status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
     assert_eq!(
         call(&app, &forbidden_next, None).await.status(),
         StatusCode::UNAUTHORIZED
