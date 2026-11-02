@@ -51,6 +51,40 @@ struct Window {
     height: usize,
 }
 
+/// Decoder state kept within one PGS epoch. Object pixels are separately
+/// bounded in addition to the compressed SUP input and returned RGBA planes.
+#[derive(Default)]
+struct EpochState {
+    windows: BTreeMap<u8, Window>,
+    palettes: BTreeMap<u8, [[u8; 4]; 256]>,
+    objects: BTreeMap<u16, ObjectPixels>,
+}
+
+impl EpochState {
+    fn reset(&mut self) {
+        self.windows.clear();
+        self.palettes.clear();
+        self.objects.clear();
+    }
+
+    fn insert_object(&mut self, id: u16, object: ObjectPixels) -> Option<()> {
+        const MAX_EPOCH_OBJECT_PIXELS: usize = 8 * 1024 * 1024;
+        let current = self.objects.get(&id).map_or(0, |item| item.indices.len());
+        let used = self
+            .objects
+            .values()
+            .try_fold(0_usize, |sum, item| sum.checked_add(item.indices.len()))?;
+        let next = used.checked_sub(current)?.checked_add(object.indices.len())?;
+        if next > MAX_EPOCH_OBJECT_PIXELS
+            || (current == 0 && self.objects.len() >= 64)
+        {
+            return None;
+        }
+        self.objects.insert(id, object);
+        Some(())
+    }
+}
+
 fn be16(bytes: &[u8]) -> u16 {
     u16::from_be_bytes([bytes[0], bytes[1]])
 }
@@ -110,16 +144,16 @@ fn over(dst: &mut [u8], src: [u8; 4]) {
 /// objects or palette require previous sets. That is an unsupported caller
 /// mode, not a reason to reject their ordinary raw SUP delivery.
 pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
+    render_with_state(bytes, &mut EpochState::default())
+}
+
+fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplaySet> {
     let mut validation = bytes;
     if !packets_valid(&mut validation, bytes.len() as u64) {
         return None;
     }
     let mut position = 0;
     let mut presentation: Option<Presentation> = None;
-    let mut windows = BTreeMap::<u8, Window>::new();
-    let mut colors = [[0_u8; 4]; 256];
-    let mut palette_seen = false;
-    let mut objects = BTreeMap::<u16, ObjectPixels>::new();
     let mut pending = BTreeMap::<u16, PendingPixels>::new();
     let mut ended = false;
 
@@ -136,6 +170,9 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
             0x16 => {
                 if presentation.is_some() {
                     return None;
+                }
+                if segment[7] & 0xc0 != 0 {
+                    state.reset();
                 }
                 let width = be16(&segment[0..2]);
                 let height = be16(&segment[2..4]);
@@ -173,7 +210,7 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
             }
             0x17 => {
                 for record in segment[1..].chunks_exact(9) {
-                    windows.insert(
+                    state.windows.insert(
                         record[0],
                         Window {
                             x: usize::from(be16(&record[1..3])),
@@ -185,37 +222,32 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
                 }
             }
             0x14 => {
-                if let Some(pcs) = &presentation {
-                    if segment[0] == pcs.palette_id {
-                        palette_seen = true;
-                        for entry in segment[2..].chunks_exact(5) {
-                            colors[usize::from(entry[0])] =
-                                palette_rgba(entry[1], entry[2], entry[3], entry[4], pcs.height);
-                        }
-                    }
+                let pcs = presentation.as_ref()?;
+                let id = segment[0];
+                if !state.palettes.contains_key(&id) && state.palettes.len() >= 8 {
+                    return None;
+                }
+                let colors = state.palettes.entry(id).or_insert([[0_u8; 4]; 256]);
+                for entry in segment[2..].chunks_exact(5) {
+                    colors[usize::from(entry[0])] =
+                        palette_rgba(entry[1], entry[2], entry[3], entry[4], pcs.height);
                 }
             }
             0x15 => {
                 let id = be16(&segment[0..2]);
-                let referenced = presentation
-                    .as_ref()
-                    .is_some_and(|pcs| pcs.objects.iter().any(|reference| reference.id == id));
-                if !referenced {
-                    continue;
-                }
                 let flags = segment[3];
                 if flags & 0x80 != 0 {
                     let width = be16(&segment[7..9]);
                     let height = be16(&segment[9..11]);
                     if flags & 0x40 != 0 {
-                        objects.insert(
+                        state.insert_object(
                             id,
                             ObjectPixels {
                                 width: usize::from(width),
                                 height: usize::from(height),
                                 indices: decode_rle_bitmap(&segment[11..], width, height)?,
                             },
-                        );
+                        )?;
                     } else {
                         pending.insert(
                             id,
@@ -231,7 +263,7 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
                     entry.compressed.extend_from_slice(&segment[4..]);
                     if flags & 0x40 != 0 {
                         let complete = pending.remove(&id)?;
-                        objects.insert(
+                        state.insert_object(
                             id,
                             ObjectPixels {
                                 width: usize::from(complete.width),
@@ -242,7 +274,7 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
                                     complete.height,
                                 )?,
                             },
-                        );
+                        )?;
                     }
                 }
             }
@@ -255,12 +287,14 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
     let width = usize::from(pcs.width);
     let height = usize::from(pcs.height);
     let mut rgba = vec![0_u8; width.checked_mul(height)?.checked_mul(4)?];
-    if !pcs.objects.is_empty() && !palette_seen {
-        return None;
-    }
+    let colors = if pcs.objects.is_empty() {
+        None
+    } else {
+        Some(state.palettes.get(&pcs.palette_id)?)
+    };
     for reference in pcs.objects {
-        let object = objects.get(&reference.id)?;
-        let window = windows.get(&reference.window)?;
+        let object = state.objects.get(&reference.id)?;
+        let window = state.windows.get(&reference.window)?;
         let (crop_x, crop_y, crop_w, crop_h) =
             reference
                 .crop
@@ -284,7 +318,7 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
                 let index =
                     usize::from(object.indices[(crop_y + row) * object.width + crop_x + col]);
                 let offset = (dest_y * width + dest_x) * 4;
-                over(&mut rgba[offset..offset + 4], colors[index]);
+                over(&mut rgba[offset..offset + 4], colors?[index]);
             }
         }
     }
