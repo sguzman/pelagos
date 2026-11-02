@@ -69,6 +69,7 @@ pub struct HlsRegistry {
     pub(super) jobs: Semaphore,
     pub(super) waiters: Semaphore,
     continuations: Semaphore,
+    track_probes: Semaphore,
     pub(super) controller: TranscodeController,
     pub(super) entries: Mutex<VecDeque<Arc<Published>>>,
 }
@@ -78,6 +79,7 @@ impl HlsRegistry {
             jobs: Semaphore::new(1),
             waiters: Semaphore::new(4),
             continuations: Semaphore::new(4),
+            track_probes: Semaphore::new(4),
             controller: TranscodeController::new(
                 executable,
                 1,
@@ -95,6 +97,16 @@ impl HlsRegistry {
         &self,
     ) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
         self.continuations
+            .try_acquire()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)
+    }
+
+    /// Limit simultaneous probe or embedded subtitle extraction work
+    /// before a request enters the stricter FFmpeg publication worker.
+    pub(super) fn acquire_track_probe(
+        &self,
+    ) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
+        self.track_probes
             .try_acquire()
             .map_err(|_| StatusCode::TOO_MANY_REQUESTS)
     }

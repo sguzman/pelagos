@@ -345,8 +345,10 @@ async fn generate_hls_playlist(
     if kind != expected_kind {
         return Err(StatusCode::NOT_FOUND);
     }
+    let track_selection = state.hls_registry().acquire_track_probe()?;
     let burn_in_subtitle =
         validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
+    drop(track_selection);
     if excerpt_duration_ticks.is_some()
         && (expected_kind != "video"
             || !matches!(
@@ -1040,6 +1042,22 @@ mod tests {
         );
         drop(permits);
         assert!(registry.acquire_continuation().is_ok());
+    }
+
+    #[test]
+    fn selected_subtitle_probe_admission_is_separate_and_bounded() {
+        let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
+        let permits = (0..4)
+            .map(|_| registry.acquire_track_probe().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            registry.acquire_track_probe().err().unwrap(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        // Probe admission must not consume the distinct FFmpeg worker slot.
+        assert!(registry.jobs.try_acquire().is_ok());
+        drop(permits);
+        assert!(registry.acquire_track_probe().is_ok());
     }
 
     #[tokio::test]
