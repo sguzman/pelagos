@@ -69,6 +69,8 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
             if bytes.len() < 11
                 || !(1..=8192).contains(&be16(&bytes[0..2]))
                 || !(1..=8192).contains(&be16(&bytes[2..4]))
+                || !matches!(bytes[7], 0x00 | 0x40 | 0x80)
+                || !matches!(bytes[8], 0x00 | 0x80)
             {
                 return false;
             }
@@ -81,11 +83,22 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
                 if bytes.len().saturating_sub(offset) < 8 {
                     return false;
                 }
-                let cropped = bytes[offset + 3] & 0x80 != 0;
-                offset += if cropped { 16 } else { 8 };
-                if offset > bytes.len() {
+                let flags = bytes[offset + 3];
+                if flags & 0x3f != 0 {
                     return false;
                 }
+                let cropped = flags & 0x80 != 0;
+                let record_len = if cropped { 16 } else { 8 };
+                if bytes.len() - offset < record_len {
+                    return false;
+                }
+                if cropped
+                    && (be16(&bytes[offset + 12..offset + 14]) == 0
+                        || be16(&bytes[offset + 14..offset + 16]) == 0)
+                {
+                    return false;
+                }
+                offset += record_len;
             }
             offset == bytes.len()
         }
@@ -94,10 +107,18 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
             if bytes.is_empty() || !(1..=2).contains(&bytes[0]) {
                 return false;
             }
-            bytes.len() == 1 + usize::from(bytes[0]) * 9
-                && bytes[1..]
-                    .chunks_exact(9)
-                    .all(|window| be16(&window[5..7]) > 0 && be16(&window[7..9]) > 0)
+            if bytes.len() != 1 + usize::from(bytes[0]) * 9 {
+                return false;
+            }
+            let mut seen = [false; 256];
+            for window in bytes[1..].chunks_exact(9) {
+                let id = usize::from(window[0]);
+                if seen[id] || be16(&window[5..7]) == 0 || be16(&window[7..9]) == 0 {
+                    return false;
+                }
+                seen[id] = true;
+            }
+            true
         }
         // Display set terminator is strictly empty.
         0x80 => bytes.is_empty(),
@@ -453,6 +474,44 @@ mod tests {
         assert!(decode_rle_bitmap(&[0xaa, 0, 0x02, 0xbb], 2, 2).is_none());
         assert!(decode_rle_bitmap(&[1], 4096, 4096).is_none());
         assert!(decode_rle_bitmap(&[1], 0, 1).is_none());
+    }
+
+    #[test]
+    fn composition_flags_crops_and_window_ids_are_well_formed() {
+        // These are segment-shape checks only. Valid crop placement against a
+        // decoded object and palette composition require a later renderer.
+        let mut composition = vec![
+            0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 1, // PCS header
+            0, 1, 0, 0x80, 0, 0, 0, 0, // cropped object
+            0, 0, 0, 0, 0, 1, 0, 1, // source crop (1x1)
+        ];
+        assert!(segment_shape_valid(0x16, &composition));
+        composition[14] = 0xc0; // forced and cropped
+        assert!(segment_shape_valid(0x16, &composition));
+        composition[14] = 0x01; // reserved flags
+        assert!(!segment_shape_valid(0x16, &composition));
+        composition[14] = 0x80;
+        composition[23] = 0; // zero crop width
+        composition[24] = 0;
+        assert!(!segment_shape_valid(0x16, &composition));
+        composition[24] = 1;
+        composition[7] = 0x20; // unknown composition state
+        assert!(!segment_shape_valid(0x16, &composition));
+        composition[7] = 0x80;
+        composition[8] = 0x40; // unknown palette-update flag
+        assert!(!segment_shape_valid(0x16, &composition));
+
+        let mut windows = vec![
+            2, // two window records
+            0, 0, 0, 0, 0, 0, 32, 0, 32,
+            1, 0, 0, 0, 0, 0, 32, 0, 32,
+        ];
+        assert!(segment_shape_valid(0x17, &windows));
+        windows[10] = 0; // duplicate window ID
+        assert!(!segment_shape_valid(0x17, &windows));
+        windows[10] = 1;
+        windows[16] = 0; // second window width is now zero
+        assert!(!segment_shape_valid(0x17, &windows));
     }
 
     #[test]
