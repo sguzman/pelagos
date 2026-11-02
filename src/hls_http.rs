@@ -85,6 +85,10 @@ enum HlsSubtitle {
         bytes: Vec<u8>,
         revision: SidecarRevision,
     },
+    ExternalPgs {
+        bytes: Vec<u8>,
+        revision: SidecarRevision,
+    },
 }
 
 /// Read through the same confined descriptor path used by direct subtitle
@@ -130,6 +134,42 @@ async fn read_confined_srt(source: &Path, filename: &str) -> Result<Vec<u8>, Sta
     })
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+}
+
+/// Read a selected graphical sidecar without changing the media or
+/// admitting arbitrary filesystem paths. Packet/render compatibility is
+/// verified by the bounded private PGS HLS builder before publication.
+async fn read_confined_sup(source: &Path, filename: &str) -> Result<Vec<u8>, StatusCode> {
+    if !filename.to_ascii_lowercase().ends_with(".sup") {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let parent = source.parent().ok_or(StatusCode::NOT_FOUND)?.to_path_buf();
+    let filename = filename.to_owned();
+    tokio::task::spawn_blocking(move || {
+        use std::io::Read;
+        let (file, _, size) = streaming::open_confined(&parent, Path::new(&filename))?;
+        if size == 0 || size > crate::pgs::MAX_SUP_BYTES {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+        let mut bytes = Vec::with_capacity(size as usize);
+        file.take(crate::pgs::MAX_SUP_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        if bytes.len() as u64 != size {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        Ok(bytes)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+}
+
+async fn read_selected_sidecar(source: &Path, filename: &str) -> Result<Vec<u8>, StatusCode> {
+    if filename.to_ascii_lowercase().ends_with(".sup") {
+        read_confined_sup(source, filename).await
+    } else {
+        read_confined_srt(source, filename).await
+    }
 }
 
 struct CacheLookup<'a> {
