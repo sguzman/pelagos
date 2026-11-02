@@ -91,7 +91,9 @@ impl HlsRegistry {
     /// worker publishes, a waiter rechecks its exact cache key before
     /// considering any additional FFmpeg work. Cancellation releases both
     /// admission permits without a background worker or unbounded queue.
-    pub(super) async fn acquire_generation(&self) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
+    pub(super) async fn acquire_generation(
+        &self,
+    ) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
         if let Ok(permit) = self.jobs.try_acquire() {
             return Ok(permit);
         }
@@ -107,7 +109,13 @@ impl HlsRegistry {
         Ok(permit)
     }
 
-    pub(super) fn lookup(&self, id: &str, item: &str, kind: &str, token: &str) -> Option<Arc<Published>> {
+    pub(super) fn lookup(
+        &self,
+        id: &str,
+        item: &str,
+        kind: &str,
+        token: &str,
+    ) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         let mut entries = self
             .entries
