@@ -32,11 +32,11 @@ mod registry;
 mod segments;
 mod stitch;
 mod tracks;
-use stitch::video_stitch;
 use continuation::video_next;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
 use segments::serve_segment;
+use stitch::video_stitch;
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
 
 const MAX_MANIFEST: usize = 32 * 1024;

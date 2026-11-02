@@ -72,7 +72,12 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
     let expected_sequence = format!("#EXT-X-MEDIA-SEQUENCE:{}", entry.media_sequence);
-    if body.lines().filter(|line| *line == expected_sequence).count() != 1 {
+    if body
+        .lines()
+        .filter(|line| *line == expected_sequence)
+        .count()
+        != 1
+    {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
     let target = body
@@ -108,7 +113,11 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
     Ok((target, pieces))
 }
 
-fn make_preview(item: &str, first: &Published, next: &Published) -> Result<(String, u64), StatusCode> {
+fn make_preview(
+    item: &str,
+    first: &Published,
+    next: &Published,
+) -> Result<(String, u64), StatusCode> {
     validate_pair(first, next)?;
     let (target_a, cues_a) = verified_fragment(first)?;
     let (target_b, cues_b) = verified_fragment(next)?;
@@ -163,7 +172,11 @@ pub(super) async fn video_stitch(
     reauthorize_publication(&state, &headers, &lookup(&next, &token)).await?;
     let (playlist, duration) = make_preview(&item, &first, &next)?;
     let mut response = Response::new(Body::from(playlist.clone()));
-    set_private_headers(&mut response, "application/vnd.apple.mpegurl", playlist.len());
+    set_private_headers(
+        &mut response,
+        "application/vnd.apple.mpegurl",
+        playlist.len(),
+    );
     set_excerpt_headers(&mut response, first.start_time_ticks, Some(duration));
     response
         .headers_mut()
