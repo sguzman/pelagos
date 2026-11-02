@@ -21,6 +21,21 @@ fn be16(bytes: &[u8]) -> u16 {
     u16::from_be_bytes([bytes[0], bytes[1]])
 }
 
+/// A single PDS version may update several entries, but declaring the same
+/// palette index twice in that packet leaves its rendered meaning ambiguous.
+/// Reject ambiguous packets before reporting an image as validated.
+fn palette_entries_unique(bytes: &[u8]) -> bool {
+    let mut defined = [false; 256];
+    for entry in bytes[2..].chunks_exact(5) {
+        let index = usize::from(entry[0]);
+        if defined[index] {
+            return false;
+        }
+        defined[index] = true;
+    }
+    true
+}
+
 /// Validate the layout of each recognized segment without interpreting the
 /// subtitle image. Narrow limits on complex compositions are deliberate:
 /// unsupported data must not be advertised as known-compatible graphical
@@ -28,7 +43,12 @@ fn be16(bytes: &[u8]) -> u16 {
 fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
     match kind {
         // Palette ID + version, then zero or more five-byte color entries.
-        0x14 => bytes.len() >= 2 && (bytes.len() - 2) % 5 == 0 && (bytes.len() - 2) / 5 <= 256,
+        0x14 => {
+            bytes.len() >= 2
+                && (bytes.len() - 2) % 5 == 0
+                && (bytes.len() - 2) / 5 <= 256
+                && palette_entries_unique(bytes)
+        },
         // Object ID, version, sequence flags, and optionally image metadata.
         0x15 => {
             if bytes.len() < 4 || bytes[3] & 0x3f != 0 {
@@ -440,6 +460,7 @@ mod tests {
         let cases: &[(u8, &[u8])] = &[
             (0x14, &[0]),
             (0x14, &[0, 0, 1]),
+            (0x14, &[0, 0, 5, 76, 255, 85, 255, 5, 80, 255, 85, 255]),
             (0x15, &[0, 0, 0, 0x80]),
             (0x15, &[0, 0, 0, 0x80, 0, 0, 4, 0, 0, 0, 16]),
             (0x16, &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0]),
@@ -456,6 +477,10 @@ mod tests {
                 "segment kind: {kind:#04x}"
             );
         }
+        assert!(segment_shape_valid(
+            0x14,
+            &[0, 0, 5, 76, 255, 85, 255, 6, 80, 255, 85, 255]
+        ));
         let valid_first_object = [0, 1, 0, 0xc0, 0, 0, 8, 0, 8, 0, 8, 0xaa, 0xbb, 0xcc, 0xdd];
         assert!(segment_shape_valid(0x15, &valid_first_object));
         assert!(segment_shape_valid(
