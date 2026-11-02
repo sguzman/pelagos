@@ -1068,6 +1068,32 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         &bytes,
         &temp.path().join("continuation-clear.ts")
     ));
+
+    // A continued private excerpt uses the same authenticated range/HEAD
+    // delivery path as the original publication, not an unguarded file URL.
+    let ranged = Request::builder()
+        .uri(final_segment_uri.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("Range", "bytes=0-187")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(ranged).await.unwrap();
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    assert_eq!(response.headers()["Content-Length"], "188");
+    assert!(response.headers()["Content-Range"].to_str().unwrap().starts_with("bytes 0-187/"));
+    let first_packet = to_bytes(response.into_body(), 188).await.unwrap();
+    assert_eq!(first_packet.len(), 188);
+    assert_eq!(first_packet[0], 0x47);
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(final_segment_uri.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let response = app.clone().oneshot(head).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(to_bytes(response.into_body(), 16).await.unwrap().len(), 0);
+
     let final_id = final_segments[0].split('/').nth(1).unwrap();
     let exhausted = format!("/Videos/{id}/hls1/{final_id}/next.m3u8");
     assert_eq!(
