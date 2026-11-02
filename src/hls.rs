@@ -1736,10 +1736,7 @@ mod tests {
         let mut sup = synthetic_pgs_clear_show_clear();
         let mut position = 0;
         while position < sup.len() {
-            let size = usize::from(u16::from_be_bytes([
-                sup[position + 11],
-                sup[position + 12],
-            ]));
+            let size = usize::from(u16::from_be_bytes([sup[position + 11], sup[position + 12]]));
             let pts = u32::from_be_bytes(sup[position + 2..position + 6].try_into().unwrap());
             sup[position + 2..position + 6].copy_from_slice(&(pts + 3591 * 90_000).to_be_bytes());
             position += 13 + size;
