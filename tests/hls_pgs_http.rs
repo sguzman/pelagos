@@ -1149,6 +1149,16 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(stitched_playlist.ends_with("#EXT-X-ENDLIST\n"));
     assert!(stitched_playlist.contains(&format!("/Videos/{id}/hls1/{publication_id}/0.ts")));
     assert!(stitched_playlist.contains(&format!("/Videos/{id}/hls1/{final_id}/0.ts")));
+    // Both excerpts are still live here. Revoke the viewer grant while
+    // both segment roots exist, so a 404 proves reauthorization rather than
+    // cache eviction or missing media.
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &stitch_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+
     let reversed = format!("/Videos/{id}/hls1/{final_id}/stitch.m3u8?next={publication_id}");
     assert_eq!(
         call(&app, &reversed, Some(&token)).await.status(),
