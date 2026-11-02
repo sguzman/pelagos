@@ -1017,21 +1017,16 @@ mod tests {
                 digest: [99; 32],
             }),
         ));
-        assert!(!original.matches(
-            source,
-            1234,
-            Some(std::time::SystemTime::UNIX_EPOCH),
-            None,
-        ));
-        let query: PlaylistQuery = serde_json::from_str(r#"{"pelagosExcerptDurationTicks":10000000}"#).unwrap();
+        let unchanged_mtime = Some(std::time::SystemTime::UNIX_EPOCH);
+        assert!(!original.matches(source, 1234, unchanged_mtime, None));
+        let query: PlaylistQuery =
+            serde_json::from_str(r#"{"pelagosExcerptDurationTicks":10000000}"#).unwrap();
         assert!(query.expected_revision.is_none());
         // The caller cannot inject or override the internal chain guard.
-        assert!(
-            serde_json::from_str::<PlaylistQuery>(
-                r#"{"expectedRevision":{"size":1234}}"#,
-            )
-            .is_err()
+        let injected = serde_json::from_str::<PlaylistQuery>(
+            r#"{"expectedRevision":{"size":1234}}"#,
         );
+        assert!(injected.is_err());
     }
 
     #[tokio::test]
