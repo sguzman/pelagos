@@ -85,7 +85,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     bad_windows[13 + 11 + 13] = 2;
     fs::write(root.join("Feature.de.sup"), &bad_windows).unwrap();
     let mut bad_composition = PGS.to_vec();
-    // Reserved PCS state bits must not reach the advertised graphical inventory.
+    // Reserved PCS state bits must be rejected on authenticated transport.
     bad_composition[13 + 7] = 0x20;
     fs::write(root.join("Feature.pl.sup"), &bad_composition).unwrap();
     let mut unfinished_object = PGS[..24].to_vec();
@@ -158,13 +158,12 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         .iter()
         .filter(|stream| stream["Codec"] == "pgssub")
         .collect::<Vec<_>>();
-    assert_eq!(pgs.len(), 7);
+    assert_eq!(pgs.len(), 8);
     assert!(
         pgs.iter()
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
     );
     assert!(streams.iter().all(|stream| stream["Language"] != "it"));
-    assert!(streams.iter().all(|stream| stream["Language"] != "pl"));
     let track = pgs.iter().find(|track| track["Language"] == "es").unwrap();
     let index = track["Index"].as_i64().unwrap();
     let url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.pgssub");
@@ -330,7 +329,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
         to_bytes(complete.into_body(), 1024).await.unwrap().as_ref(),
         completed_object.as_slice()
     );
-    for language in ["fr", "de", "pt", "ja", "ko"] {
+    for language in ["fr", "de", "pt", "ja", "ko", "pl"] {
         let invalid_index = pgs
             .iter()
             .find(|track| track["Language"] == language)
@@ -370,6 +369,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     );
     assert_eq!(fs::read(root.join("Feature.ja.sup")).unwrap(), invalid_rle);
     assert_eq!(fs::read(root.join("Feature.ko.sup")).unwrap(), crossing_row);
+    assert_eq!(fs::read(root.join("Feature.pl.sup")).unwrap(), bad_composition);
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
