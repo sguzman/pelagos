@@ -1099,6 +1099,120 @@ mod tests {
         path
     }
 
+    fn synthetic_pgs_clear_show_clear() -> Vec<u8> {
+        let packet = |kind: u8, pts: u32, body: &[u8]| {
+            let mut bytes = b"PG".to_vec();
+            bytes.extend_from_slice(&pts.to_be_bytes());
+            bytes.extend_from_slice(&[0; 4]);
+            bytes.push(kind);
+            bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(body);
+            bytes
+        };
+        let mut stream = packet(0x16, 0, &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]);
+        stream.extend(packet(0x80, 0, &[]));
+        stream.extend(packet(
+            0x16,
+            90_000,
+            &[0, 32, 0, 32, 0x10, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 8, 0, 8],
+        ));
+        stream.extend(packet(0x17, 90_000, &[1, 0, 0, 0, 0, 0, 0, 32, 0, 32]));
+        stream.extend(packet(0x14, 90_000, &[0, 0, 1, 235, 128, 128, 255]));
+        let mut object = vec![0, 1, 0, 0xc0, 0, 0, 84, 0, 16, 0, 16];
+        for _ in 0..16 {
+            object.extend_from_slice(&[0, 0x90, 1, 0, 0]);
+        }
+        stream.extend(packet(0x15, 90_000, &object));
+        stream.extend(packet(0x80, 90_000, &[]));
+        stream.extend(packet(
+            0x16,
+            225_000,
+            &[0, 32, 0, 32, 0x10, 0, 2, 0, 0, 0, 0],
+        ));
+        stream.extend(packet(0x80, 225_000, &[]));
+        stream
+    }
+
+    #[tokio::test]
+    async fn private_pgs_hls_splits_cues_and_probes_all_transport_windows() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("media sample.mkv");
+        stdfs::write(&source, b"readonly synthetic media").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "graphic-ffmpeg",
+            "if [ -f input.tga ]; then printf '\\107I'; else printf '\\107C'; fi; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "graphic-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let sup = synthetic_pgs_clear_show_clear();
+        let output = temp.path().join("pgs-private-hls");
+        let artifact = generate_segmented_vod_with_pgs_from(
+            &controller, &inspector, &source, &output, 2, 0.0, &sup,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 4);
+        assert_eq!(artifact.transport_bytes, 4 * 376);
+        for (index, expected) in [b'C', b'I', b'I', b'C'].into_iter().enumerate() {
+            let bytes = stdfs::read(&artifact.segment_paths[index]).unwrap();
+            assert_eq!(bytes.len(), 376);
+            assert_eq!(bytes[0], 0x47);
+            assert_eq!(bytes[1], expected);
+            assert_eq!(bytes[188], 0x47);
+        }
+        let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 3);
+        assert_eq!(playlist.matches("#EXTINF:1.000").count(), 4);
+        assert_eq!(playlist.matches("segment000").count(), 4);
+        assert!(playlist.ends_with("#EXT-X-ENDLIST\n"));
+        assert_eq!(stdfs::read(&source).unwrap(), b"readonly synthetic media");
+        artifact.remove().unwrap();
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
+    async fn private_pgs_hls_rejects_unknown_last_cue_and_bad_packets_before_creation() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("media.mkv");
+        stdfs::write(&source, b"untouched").unwrap();
+        let encoder = executable(temp.path(), "fake-ffmpeg", "exit 99");
+        let inspector = executable(
+            temp.path(),
+            "fake-ffprobe",
+            r#"printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","width":32,"height":32}]}'"#,
+        );
+        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024).unwrap();
+        let sup = synthetic_pgs_clear_show_clear();
+        let mut invalid_packets = sup.clone();
+        invalid_packets.pop();
+        let unknown_last_cue = &sup[..sup.len() - 24];
+        for (name, bytes) in [("invalid", invalid_packets.as_slice()), ("last", unknown_last_cue)] {
+            let output = temp.path().join(name);
+            let err = generate_segmented_vod_with_pgs_from(
+                &controller, &inspector, &source, &output, 2, 0.0, bytes,
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+            assert!(!output.exists());
+        }
+        let output = temp.path().join("unsupported");
+        stdfs::create_dir(&output).unwrap();
+        let err = generate_segmented_vod_with_pgs_from(
+            &controller, &inspector, &source, &output, 2, 0.0, &sup,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert!(output.is_dir());
+        assert_eq!(stdfs::read(&source).unwrap(), b"untouched");
+    }
+
     #[test]
     fn adaptive_alignment_bounds_cumulative_drift_at_every_switch_boundary() {
         let window = |duration_seconds| HlsSegment {
