@@ -941,6 +941,22 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let shorter_playlist = body(response).await;
     assert!(shorter_playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
     assert_ne!(shorter_playlist, playlist);
+    // Both sessions are still live: a same-source, same-token excerpt with
+    // the wrong start position must not be accepted as a continuation.
+    let original_id = urls[0].split('/').nth(1).unwrap();
+    let shorter_id = shorter_playlist
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .split('/')
+        .nth(1)
+        .unwrap();
+    let invalid_pair =
+        format!("/Videos/{id}/hls1/{original_id}/stitch.m3u8?next={shorter_id}");
+    assert_eq!(
+        call(&app, &invalid_pair, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
 
     // Explicit adaptive excerpts share a cue timeline but publish separate,
     // token-scoped quality variants. The old full-source path remains closed.
