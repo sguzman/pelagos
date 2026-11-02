@@ -599,6 +599,50 @@ mod tests {
     }
 
     #[test]
+    fn epoch_cache_reuses_palettes_windows_and_objects_until_reset() {
+        let mut first = sample(false);
+        first[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        let mut reused = packet(
+            0x16,
+            &[0, 4, 0, 2, 0x10, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+        );
+        reused[2..6].copy_from_slice(&135_000_u32.to_be_bytes());
+        reused.extend(packet(0x80, &[]));
+        let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 2, 0, 0, 0, 0]);
+        clear[2..6].copy_from_slice(&180_000_u32.to_be_bytes());
+        clear.extend(packet(0x80, &[]));
+
+        let mut stream = first.clone();
+        stream.extend(&reused);
+        stream.extend(&clear);
+        assert!(render_self_contained_timeline(&stream).is_none());
+        let frames = render_epoch_timeline(&stream).unwrap();
+        assert_eq!(frames.len(), 3);
+        assert_eq!(frames[0].image, frames[1].image);
+        assert_eq!(frames[0].duration_90khz, Some(45_000));
+        assert_eq!(frames[1].duration_90khz, Some(45_000));
+        assert!(frames[2].image.rgba.iter().all(|component| *component == 0));
+
+        // An epoch-start PCS must not reuse the previous epoch's definitions.
+        let mut reset = reused.clone();
+        reset[13 + 7] = 0x80;
+        let mut missing_after_reset = first.clone();
+        missing_after_reset.extend(reset);
+        assert!(render_epoch_timeline(&missing_after_reset).is_none());
+
+        // An incremental PDS may change one cached palette index, while
+        // the previous object pixels and window remain untouched.
+        let mut changed = reused[..reused.len() - 13].to_vec();
+        changed.extend(packet(0x14, &[0, 1, 1, 235, 128, 128, 255]));
+        changed.extend(packet(0x80, &[]));
+        let mut updated = first;
+        updated.extend(changed);
+        let images = render_epoch_timeline(&updated).unwrap();
+        assert_eq!(&images[1].image.rgba[20..24], &[255, 255, 255, 255]);
+        assert_eq!(&images[1].image.rgba[24..28], &[255, 255, 255, 255]);
+    }
+
+    #[test]
     fn timeline_rejects_unbounded_number_of_clear_frames() {
         let mut stream = Vec::new();
         for tick in 1..=17_u32 {
