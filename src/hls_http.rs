@@ -30,7 +30,9 @@ use uuid::Uuid;
 mod continuation;
 mod registry;
 mod segments;
+mod stitch;
 mod tracks;
+use stitch::video_stitch;
 use continuation::video_next;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
@@ -922,6 +924,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/next.m3u8",
             get(video_next).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
+        )
+        .route(
+            "/Videos/{item_id}/hls1/{playlist_id}/stitch.m3u8",
+            get(video_stitch).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
         )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
