@@ -1129,7 +1129,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     );
 
     let first_uri = final_segment_uri;
-    let mut modified = sup;
+    let mut modified = sup.clone();
     let index = modified
         .windows(7)
         .position(|bytes| bytes == [0, 0, 1, 235, 128, 128, 255])
