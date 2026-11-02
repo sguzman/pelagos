@@ -501,7 +501,8 @@ fn render_timeline(
             // snapshot or force an extra short HLS segment. Preserve the
             // first composition at/after the requested end as a duration
             // sentinel, even if it has identical pixels.
-            if coalesce_identical && window.is_some_and(|(_, end)| stamp < end)
+            if coalesce_identical
+                && window.is_some_and(|(_, end)| stamp < end)
                 && frames
                     .last()
                     .is_some_and(|previous| previous.image == image)
@@ -1123,8 +1124,7 @@ mod tests {
         // Whole-track rendering still has the strict 64-frame limit.
         assert!(render_epoch_timeline(&stream).is_none());
         assert!(render_epoch_timeline_for_window(&stream, 0, 82 * 90_000).is_none());
-        let frames = render_epoch_timeline_for_window_coalesced(&stream, 0, 82 * 90_000)
-            .unwrap();
+        let frames = render_epoch_timeline_for_window_coalesced(&stream, 0, 82 * 90_000).unwrap();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].pts_90khz, 0);
         assert_eq!(frames[0].duration_90khz, Some(81 * 90_000));
