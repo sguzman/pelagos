@@ -1918,6 +1918,105 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn real_ffmpeg_pgs_excerpt_renders_cues_near_end_of_long_source() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("long-readonly-source.mkv");
+        let fixture = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=32x32:r=2:d=610",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=500:duration=610",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "aac",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+        let mut sup = synthetic_pgs_clear_show_clear();
+        let mut position = 0;
+        while position < sup.len() {
+            let size = usize::from(u16::from_be_bytes([sup[position + 11], sup[position + 12]]));
+            let pts = u32::from_be_bytes(sup[position + 2..position + 6].try_into().unwrap());
+            sup[position + 2..position + 6].copy_from_slice(&(pts + 605 * 90_000).to_be_bytes());
+            position += 13 + size;
+        }
+        let runner = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(40),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        let output = temp.path().join("real-long-excerpt");
+        let artifact = generate_segmented_pgs_window(
+            &runner,
+            Path::new("ffprobe"),
+            &source,
+            &output,
+            10,
+            PgsPlaybackWindow {
+                start_seconds: 605.0,
+                duration_seconds: 4.0,
+                sup_bytes: &sup,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 3);
+        for (index, expected_visible) in [false, true, false].into_iter().enumerate() {
+            let decoded = tokio::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(&artifact.segment_paths[index])
+                .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "segment {index}: {}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 32 * 32 * 3);
+            let center = &decoded.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
+            assert!(
+                center.iter().all(|channel| {
+                    if expected_visible {
+                        *channel > 170
+                    } else {
+                        *channel < 65
+                    }
+                }),
+                "segment {index}: expected visible={expected_visible}, pixel={center:?}"
+            );
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+        artifact.remove().unwrap();
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_real_ffmpeg_preserves_show_clear_video_transitions() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
