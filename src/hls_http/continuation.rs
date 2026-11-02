@@ -64,11 +64,9 @@ pub(super) async fn video_next(
         .filter(|value| value.is_finite() && (0.1..=86_400.0).contains(value))
         .ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let source_end_ticks = (source_seconds * 10_000_000.0).floor() as u64;
-    let Some((next_start, next_duration)) = next_interval(
-        publication.start_time_ticks,
-        duration,
-        source_end_ticks,
-    )? else {
+    let Some((next_start, next_duration)) =
+        next_interval(publication.start_time_ticks, duration, source_end_ticks)?
+    else {
         let mut response = Response::new(Body::empty());
         *response.status_mut() = StatusCode::NO_CONTENT;
         response
@@ -123,11 +121,7 @@ mod tests {
         );
         let pts_limit = MAX_PGS_START_END_TICKS;
         assert_eq!(
-            next_interval(
-                pts_limit - 2_000_000,
-                1_000_000,
-                pts_limit + 10_000_000,
-            ),
+            next_interval(pts_limit - 2_000_000, 1_000_000, pts_limit + 10_000_000),
             Ok(Some((pts_limit - 1_000_000, 1_000_000)))
         );
         assert_eq!(
