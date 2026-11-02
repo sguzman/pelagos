@@ -63,6 +63,21 @@ fn create_private_directory(path: &Path) -> io::Result<()> {
     fs::create_dir(path)
 }
 
+/// Rewrite exactly one locally generated media-sequence tag. This does not
+/// change segment paths or timestamps, and rejects unexpected playlist text.
+fn set_media_sequence(playlist: String, sequence: u64) -> Result<String, StatusCode> {
+    const ORIGINAL: &str = "#EXT-X-MEDIA-SEQUENCE:0\n";
+    if playlist.matches(ORIGINAL).count() != 1 {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let replacement = format!("#EXT-X-MEDIA-SEQUENCE:{sequence}\n");
+    let rewritten = playlist.replacen(ORIGINAL, &replacement, 1);
+    if rewritten.len() > MAX_MANIFEST {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    Ok(rewritten)
+}
+
 fn playlist_response(playlist: &str) -> Response {
     let mut response = Response::new(Body::from(playlist.to_owned()));
     set_private_headers(
@@ -158,6 +173,9 @@ struct PlaylistQuery {
     // from an HTTP query, even if the caller guesses the field name.
     #[serde(skip)]
     expected_revision: Option<ExpectedRevision>,
+    // Internal next-window sequence. Never accepted from the HTTP query.
+    #[serde(skip)]
+    media_sequence: Option<u64>,
 }
 
 /// An internal-only chain guard: continuation must not silently move from
@@ -301,6 +319,7 @@ async fn generate_hls_playlist(
                 .ok_or(StatusCode::BAD_REQUEST)
         })
         .transpose()?;
+    let media_sequence = query.media_sequence.unwrap_or(0);
     let start_time_ticks = query.start_time_ticks.unwrap_or(0);
     let start_time_ticks = u64::try_from(start_time_ticks).map_err(|_| StatusCode::BAD_REQUEST)?;
     if let Some(duration) = excerpt_duration_ticks {
@@ -390,6 +409,7 @@ async fn generate_hls_playlist(
         target_seconds,
         start_time_ticks,
         excerpt_duration_ticks,
+        media_sequence,
         rendition_count,
         subtitle_stream_index: selected_index,
         sidecar: sidecar_revision.as_ref(),
@@ -576,9 +596,10 @@ async fn generate_hls_playlist(
                 master_playlist.push_str(&format!(",RESOLUTION={width}x{height}"));
             }
             master_playlist.push_str(&format!("\nhls1/{id}/{name}/index.m3u8\n"));
-            let mut media_playlist = tokio::fs::read_to_string(&rendition.playlist_path)
+            let media_playlist = tokio::fs::read_to_string(&rendition.playlist_path)
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut media_playlist = set_media_sequence(media_playlist, media_sequence)?;
             let mut segments = Vec::new();
             for (index, path) in rendition.segment_paths.iter().enumerate() {
                 media_playlist = media_playlist
@@ -619,6 +640,7 @@ async fn generate_hls_playlist(
             target_seconds,
             start_time_ticks,
             excerpt_duration_ticks,
+            media_sequence,
             rendition_count,
             subtitle_stream_index: selected_index,
             sidecar: sidecar_revision.clone(),
@@ -715,9 +737,10 @@ async fn generate_hls_playlist(
     // Recheck all session, library, and original media revision constraints
     // before publishing even a successfully verified transcode.
     reauthorize_publication(&state, &headers, &cache_key).await?;
-    let mut playlist = tokio::fs::read_to_string(&artifact.playlist_path)
+    let playlist = tokio::fs::read_to_string(&artifact.playlist_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut playlist = set_media_sequence(playlist, media_sequence)?;
     if playlist.len() > MAX_MANIFEST || artifact.segments.len() > 64 {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
@@ -760,6 +783,7 @@ async fn generate_hls_playlist(
         target_seconds,
         start_time_ticks,
         excerpt_duration_ticks,
+        media_sequence,
         rendition_count,
         subtitle_stream_index: selected_index,
         sidecar: sidecar_revision.clone(),
@@ -1197,6 +1221,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     excerpt_duration_ticks: None,
+                    media_sequence: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1226,6 +1251,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     excerpt_duration_ticks: None,
+                    media_sequence: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1277,6 +1303,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     excerpt_duration_ticks: None,
+                    media_sequence: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1300,6 +1327,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     excerpt_duration_ticks: None,
+                    media_sequence: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1323,6 +1351,7 @@ mod tests {
                     target_seconds: 2,
                     start_time_ticks: 0,
                     excerpt_duration_ticks: None,
+                    media_sequence: 0,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1360,6 +1389,7 @@ mod tests {
                 target_seconds: 2,
                 start_time_ticks: 0,
                 excerpt_duration_ticks: None,
+                media_sequence: 0,
                 rendition_count: 1,
                 subtitle_stream_index: None,
                 sidecar: None,
@@ -1397,6 +1427,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             excerpt_duration_ticks: None,
+            media_sequence: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
             sidecar: None,
@@ -1492,6 +1523,7 @@ mod tests {
             target_seconds: 2,
             start_time_ticks: 0,
             excerpt_duration_ticks: None,
+            media_sequence: 0,
             rendition_count: 1,
             subtitle_stream_index: None,
             sidecar: None,

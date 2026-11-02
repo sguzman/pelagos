@@ -25,6 +25,7 @@ pub(super) struct Published {
     pub(super) target_seconds: u32,
     pub(super) start_time_ticks: u64,
     pub(super) excerpt_duration_ticks: Option<u64>,
+    pub(super) media_sequence: u64,
     pub(super) rendition_count: u8,
     pub(super) subtitle_stream_index: Option<i64>,
     pub(super) sidecar: Option<SidecarRevision>,
@@ -57,6 +58,7 @@ pub(super) struct CacheLookup<'a> {
     pub(super) target_seconds: u32,
     pub(super) start_time_ticks: u64,
     pub(super) excerpt_duration_ticks: Option<u64>,
+    pub(super) media_sequence: u64,
     pub(super) rendition_count: u8,
     pub(super) subtitle_stream_index: Option<i64>,
     pub(super) sidecar: Option<&'a SidecarRevision>,
@@ -171,6 +173,7 @@ impl HlsRegistry {
                 && entry.target_seconds == query.target_seconds
                 && entry.start_time_ticks == query.start_time_ticks
                 && entry.excerpt_duration_ticks == query.excerpt_duration_ticks
+                && entry.media_sequence == query.media_sequence
                 && entry.rendition_count == query.rendition_count
                 && entry.subtitle_stream_index == query.subtitle_stream_index
                 && entry.sidecar.as_ref() == query.sidecar

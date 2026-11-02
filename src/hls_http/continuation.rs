@@ -42,6 +42,7 @@ pub(super) async fn video_next(
         target_seconds: publication.target_seconds,
         start_time_ticks: publication.start_time_ticks,
         excerpt_duration_ticks: publication.excerpt_duration_ticks,
+        media_sequence: publication.media_sequence,
         rendition_count: publication.rendition_count,
         subtitle_stream_index: publication.subtitle_stream_index,
         sidecar: publication.sidecar.as_ref(),
@@ -78,6 +79,23 @@ pub(super) async fn video_next(
     // Re-enter the normal authenticated publication path. It independently
     // revalidates the token/grant/media revision, explicit PGS selection,
     // sidecar digest and FFmpeg outputs before issuing the new UUID.
+    let segment_count = if publication.rendition_count > 1 {
+        let first = publication
+            .variants
+            .first()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let len = first.segments.len();
+        if len == 0 || publication.variants.iter().any(|variant| variant.segments.len() != len) {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        len
+    } else {
+        publication.segments.len()
+    };
+    let next_sequence = publication
+        .media_sequence
+        .checked_add(segment_count as u64)
+        .ok_or(StatusCode::BAD_REQUEST)?;
     let request = PlaylistQuery {
         segment_length: Some(publication.target_seconds),
         start_time_ticks: Some(next_start as i64),
@@ -86,6 +104,7 @@ pub(super) async fn video_next(
         media_source_id: Some(item.clone()),
         subtitle_stream_index: publication.subtitle_stream_index,
         subtitle_method: Some("Encode".to_owned()),
+        media_sequence: Some(next_sequence),
         expected_revision: Some(ExpectedRevision {
             source: publication.source.clone(),
             size: publication.source_size,
