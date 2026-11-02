@@ -1,6 +1,7 @@
 //! Bounded, CPU-first FFmpeg MPEG-TS transcode job runner.
 //! This is not yet an HLS/DASH scheduler, Jellyfin PlaybackInfo transcode
 //! response, GPU accelerator, or complete Smart TV playback implementation.
+use crate::pgs_render::RgbaDisplaySet;
 use std::{
     io,
     path::{Path, PathBuf},
@@ -453,6 +454,50 @@ impl TranscodeController {
         .await
     }
 
+    /// Stage a bounded RGBA graphic in a fixed private TGA filename and
+    /// overlay it over a selected short video window. The caller must
+    /// independently authorize the source and choose the intended cue window.
+    /// This is a primitive, not automatic PGS timing or HLS negotiation.
+    pub async fn try_run_window_graphic_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        graphic: &RgbaDisplaySet,
+    ) -> io::Result<u64> {
+        let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
+        let tga = graphic.to_uncompressed_tga().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "invalid bounded RGBA graphic")
+        })?;
+        if remaining_bytes == 0 || remaining_bytes > MAX_TRANSCODE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid graphic FFmpeg output budget",
+            ));
+        }
+        let _permit = self.permits.try_acquire().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "FFmpeg worker capacity exhausted",
+            )
+        })?;
+        transcode_mpegts_inner(
+            &self.executable,
+            source,
+            output,
+            self.deadline,
+            self.max_bytes.min(remaining_bytes),
+            EncoderOptions {
+                window: Some(window),
+                external_graphic: Some(&tga),
+                ..EncoderOptions::default()
+            },
+        )
+        .await
+    }
+
     async fn transcode(&self, source: &Path, output: &Path) -> io::Result<u64> {
         transcode_mpegts(
             &self.executable,
@@ -473,6 +518,7 @@ struct EncoderOptions<'a> {
     window: Option<TranscodeWindow>,
     burn_in_subtitle: Option<u8>,
     external_text: Option<ExternalTextTrack<'a>>,
+    external_graphic: Option<&'a [u8]>,
 }
 
 /// A bounded seeking window, never constructed from untrusted FFmpeg strings.
@@ -570,6 +616,7 @@ async fn transcode_mpegts_inner(
         window,
         burn_in_subtitle,
         external_text,
+        external_graphic,
     } = options;
     if deadline.is_zero() || !(1..=MAX_TRANSCODE_BYTES).contains(&max_bytes) {
         return Err(io::Error::new(
@@ -594,7 +641,10 @@ async fn transcode_mpegts_inner(
     // interpolate the user's media pathname into libavfilter's syntax.
     // Instead, use a private directory and an invariant relative filename
     // pointing read-only at the already approved source.
-    let burn_in_dir = if burn_in_subtitle.is_some() || external_text.is_some() {
+    let burn_in_dir = if burn_in_subtitle.is_some()
+        || external_text.is_some()
+        || external_graphic.is_some()
+    {
         #[cfg(unix)]
         {
             let resolved = fs::canonicalize(source).await?;
@@ -602,6 +652,9 @@ async fn transcode_mpegts_inner(
             std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
             if let Some(subtitle) = external_text {
                 std::fs::write(dir.path().join(subtitle.format.filename()), subtitle.bytes)?;
+            }
+            if let Some(graphic) = external_graphic {
+                std::fs::write(dir.path().join("input.tga"), graphic)?;
             }
             Some(dir)
         }
@@ -638,11 +691,21 @@ async fn transcode_mpegts_inner(
                 .arg("-ss")
                 .arg(format!("{:.3}", window.start_seconds));
         }
+        command.arg("-i").arg(source);
+        if external_graphic.is_some() {
+            command
+                .arg("-loop")
+                .arg("1")
+                .arg("-i")
+                .arg("input.tga")
+                .arg("-filter_complex")
+                .arg("[0:v:0][1:v:0]overlay=shortest=1:format=auto[v]")
+                .arg("-map")
+                .arg("[v]");
+        } else {
+            command.arg("-map").arg("0:v:0?");
+        }
         command
-            .arg("-i")
-            .arg(source)
-            .arg("-map")
-            .arg("0:v:0?")
             .arg("-map")
             .arg("0:a:0?")
             .arg("-c:v")
@@ -664,9 +727,11 @@ async fn transcode_mpegts_inner(
                 .arg("-b:a")
                 .arg(format!("{}k", quality.audio_kbps));
         }
-        if burn_in_subtitle.is_some() || external_text.is_some() {
+        if burn_in_subtitle.is_some() || external_text.is_some() || external_graphic.is_some() {
             let dir = burn_in_dir.as_ref().expect("subtitle directory exists");
             command.current_dir(dir.path());
+        }
+        if burn_in_subtitle.is_some() || external_text.is_some() {
             // -ss seeks the input before decoding. Restore original media
             // time before libass evaluates the subtitle cue timeline.
             let subtitle_filter = match (burn_in_subtitle, external_text) {
