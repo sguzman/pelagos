@@ -1026,10 +1026,9 @@ mod tests {
             8 * 1024 * 1024,
         )
         .unwrap();
-        for (label, primary, expect_red) in [
-            ("red", "&H000000FF", true),
-            ("blue", "&H00FF0000", false),
-        ] {
+        for (label, primary, expect_red) in
+            [("red", "&H000000FF", true), ("blue", "&H00FF0000", false)]
+        {
             let script = format!(
                 "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 128\n\
                  [V4+ Styles]\n\
@@ -1081,16 +1080,25 @@ mod tests {
                 (0_usize, 0_usize),
                 |(red_count, blue_count), pixel| {
                     let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
+                    let (r, g, b) = (u16::from(r), u16::from(g), u16::from(b));
+                    let red_pixel = r > 75 && 2 * r > 3 * g && 2 * r > 3 * b;
+                    let blue_pixel = b > 75 && 2 * b > 3 * g && 2 * b > 3 * r;
                     (
-                        red_count + usize::from(r > 75 && r > g.saturating_mul(3) / 2 && r > b.saturating_mul(3) / 2),
-                        blue_count + usize::from(b > 75 && b > g.saturating_mul(3) / 2 && b > r.saturating_mul(3) / 2),
+                        red_count + usize::from(red_pixel),
+                        blue_count + usize::from(blue_pixel),
                     )
                 },
             );
             if expect_red {
-                assert!(red > 100 && red > blue * 5, "{label}: red={red}, blue={blue}");
+                assert!(
+                    red > 100 && red > blue * 5,
+                    "{label}: red={red}, blue={blue}"
+                );
             } else {
-                assert!(blue > 100 && blue > red * 5, "{label}: red={red}, blue={blue}");
+                assert!(
+                    blue > 100 && blue > red * 5,
+                    "{label}: red={red}, blue={blue}"
+                );
             }
         }
         assert_eq!(stdfs::read(&source).unwrap(), source_bytes);
