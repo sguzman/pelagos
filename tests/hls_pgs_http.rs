@@ -1080,7 +1080,12 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let response = app.clone().oneshot(ranged).await.unwrap();
     assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
     assert_eq!(response.headers()["Content-Length"], "188");
-    assert!(response.headers()["Content-Range"].to_str().unwrap().starts_with("bytes 0-187/"));
+    assert!(
+        response.headers()["Content-Range"]
+            .to_str()
+            .unwrap()
+            .starts_with("bytes 0-187/")
+    );
     let first_packet = to_bytes(response.into_body(), 188).await.unwrap();
     assert_eq!(first_packet.len(), 188);
     assert_eq!(first_packet[0], 0x47);
