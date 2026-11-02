@@ -75,7 +75,7 @@ pub(super) async fn video_next(
             .headers_mut()
             .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
         return Ok(response);
-    }
+    };
 
     // Re-enter the normal authenticated publication path. It independently
     // revalidates the token/grant/media revision, explicit PGS selection,
