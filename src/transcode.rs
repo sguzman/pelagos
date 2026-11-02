@@ -989,6 +989,114 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn native_external_ass_preserves_distinct_style_colors_in_decoded_video() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("ass-test,colon:[brackets].avi");
+        let fixture = Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=320x128:r=5:d=4",
+                "-c:v",
+                "mpeg4",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "FFmpeg fixture: {}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let source_bytes = stdfs::read(&source).unwrap();
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(25),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        for (label, primary, expect_red) in [
+            ("red", "&H000000FF", true),
+            ("blue", "&H00FF0000", false),
+        ] {
+            let script = format!(
+                "[Script Info]\nScriptType: v4.00+\nPlayResX: 320\nPlayResY: 128\n\
+                 [V4+ Styles]\n\
+                 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
+                 Style: Default,DejaVu Sans,32,{primary},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1\n\
+                 [Events]\n\
+                 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n\
+                 Dialogue: 0,0:00:00.20,0:00:01.80,Default,,0,0,0,,COLORED CAPTION\n"
+            );
+            assert!(crate::probe::is_native_ass_script(script.as_bytes()));
+            let transport = temp.path().join(format!("{label}.ts"));
+            let size = controller
+                .try_run_window_external_text_capped(
+                    &source,
+                    &transport,
+                    0.5,
+                    1.5,
+                    8 * 1024 * 1024,
+                    ExternalTextTrack {
+                        bytes: script.as_bytes(),
+                        format: ExternalTextFormat::Ass,
+                    },
+                )
+                .await
+                .unwrap();
+            assert!(size > 188);
+            let decoded = Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(&transport)
+                .args([
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "select=eq(n\\,3),format=rgb24",
+                    "-f",
+                    "rawvideo",
+                    "pipe:1",
+                ])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "FFmpeg decode: {}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 320 * 128 * 3);
+            let (red, blue) = decoded.stdout.chunks_exact(3).fold(
+                (0_usize, 0_usize),
+                |(red_count, blue_count), pixel| {
+                    let (r, g, b) = (pixel[0], pixel[1], pixel[2]);
+                    (
+                        red_count + usize::from(r > 75 && r > g.saturating_mul(3) / 2 && r > b.saturating_mul(3) / 2),
+                        blue_count + usize::from(b > 75 && b > g.saturating_mul(3) / 2 && b > r.saturating_mul(3) / 2),
+                    )
+                },
+            );
+            if expect_red {
+                assert!(red > 100 && red > blue * 5, "{label}: red={red}, blue={blue}");
+            } else {
+                assert!(blue > 100 && blue > red * 5, "{label}: red={red}, blue={blue}");
+            }
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), source_bytes);
+    }
+
+    #[tokio::test]
     async fn embedded_text_subtitle_burn_in_modifies_video_pixels_when_ci_requires_ffmpeg() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
