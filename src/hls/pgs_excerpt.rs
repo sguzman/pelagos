@@ -1,6 +1,12 @@
 //! PGS-specific bounded HLS adapters and their explicit playback-window contracts.
 //! Encoding, timing validation and rollback remain in the generic HLS builder.
-use super::*;
+use std::{io, path::Path};
+
+use super::{
+    AdaptiveSubtitle, AdaptiveWindow, HlsAdaptiveSegmentedArtifact, HlsSegmentedArtifact,
+    MpegTsQuality, SegmentedOptions, TranscodeController,
+    generate_adaptive_segmented_vod_configured, generate_segmented_vod_configured,
+};
 
 /// Encode a private bounded VOD with one caller-authorized PGS SUP track.
 /// Windows are split at explicit PCS composition timestamps *before* output
