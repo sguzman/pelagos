@@ -1117,9 +1117,13 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        call(&app, &format!("/Videos/{id}/{}", final_variants[0]), Some(&token))
-            .await
-            .status(),
+        call(
+            &app,
+            &format!("/Videos/{id}/{}", final_variants[0]),
+            Some(&token)
+        )
+        .await
+        .status(),
         StatusCode::NOT_FOUND
     );
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
