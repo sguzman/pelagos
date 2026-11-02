@@ -512,7 +512,10 @@ async fn generate_segmented_vod_configured(
         .pgs_track
         .map(|track| {
             render_epoch_timeline(track).ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "unsupported PGS composition timeline")
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unsupported PGS composition timeline",
+                )
             })
         })
         .transpose()?;
@@ -1148,11 +1151,18 @@ mod tests {
             "graphic-ffprobe",
             r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
         );
-        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
         let sup = synthetic_pgs_clear_show_clear();
         let output = temp.path().join("pgs-private-hls");
         let artifact = generate_segmented_vod_with_pgs_from(
-            &controller, &inspector, &source, &output, 2, 0.0, &sup,
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            2,
+            0.0,
+            &sup,
         )
         .await
         .unwrap();
@@ -1186,15 +1196,25 @@ mod tests {
             "fake-ffprobe",
             r#"printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","width":32,"height":32}]}'"#,
         );
-        let controller = TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024).unwrap();
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 1024).unwrap();
         let sup = synthetic_pgs_clear_show_clear();
         let mut invalid_packets = sup.clone();
         invalid_packets.pop();
-        let unknown_last_cue = &sup[..sup.len() - 24];
-        for (name, bytes) in [("invalid", invalid_packets.as_slice()), ("last", unknown_last_cue)] {
+        let unknown_last_cue = &sup[..sup.len() - 37];
+        for (name, bytes) in [
+            ("invalid", invalid_packets.as_slice()),
+            ("last", unknown_last_cue),
+        ] {
             let output = temp.path().join(name);
             let err = generate_segmented_vod_with_pgs_from(
-                &controller, &inspector, &source, &output, 2, 0.0, bytes,
+                &controller,
+                &inspector,
+                &source,
+                &output,
+                2,
+                0.0,
+                bytes,
             )
             .await
             .unwrap_err();
@@ -1204,7 +1224,13 @@ mod tests {
         let output = temp.path().join("unsupported");
         stdfs::create_dir(&output).unwrap();
         let err = generate_segmented_vod_with_pgs_from(
-            &controller, &inspector, &source, &output, 2, 0.0, &sup,
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            2,
+            0.0,
+            &sup,
         )
         .await
         .unwrap_err();
