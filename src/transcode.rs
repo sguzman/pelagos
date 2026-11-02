@@ -1361,6 +1361,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn pgs_window_dispatches_clear_bitmap_and_rejects_cue_transitions() {
+        let (temp, executable, source, _) = fixture(
+            "if [ -f input.tga ]; then printf 'IMAGE'; else printf 'CLEAR'; fi",
+        );
+        let controller =
+            TranscodeController::new(executable, 1, Duration::from_secs(3), 64).unwrap();
+        let packet = |kind: u8, body: &[u8]| {
+            let mut bytes = b"PG".to_vec();
+            bytes.extend_from_slice(&[0; 8]);
+            bytes.push(kind);
+            bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(body);
+            bytes
+        };
+        let mut pcs = vec![
+            0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 1,
+            0, 1, 0, 0, 0, 0, 0, 0,
+        ];
+        let mut sup = packet(0x16, &pcs);
+        sup[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        sup.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 0, 2, 0, 1]));
+        sup.extend(packet(0x14, &[0, 0, 1, 235, 128, 128, 255]));
+        sup.extend(packet(0x15, &[0, 1, 0, 0xc0, 0, 0, 6, 0, 2, 0, 1, 1, 1]));
+        sup.extend(packet(0x80, &[]));
+        for (number, stamp) in [(1_u8, 180_000_u32), (2_u8, 270_000_u32)] {
+            pcs.truncate(11);
+            pcs[5] = 0;
+            pcs[6] = number;
+            pcs[7] = 0;
+            pcs[10] = 0;
+            let mut clear = packet(0x16, &pcs);
+            clear[2..6].copy_from_slice(&stamp.to_be_bytes());
+            clear.extend(packet(0x80, &[]));
+            sup.extend(clear);
+        }
+        for (label, start, duration, expected) in [
+            ("before", 0.0, 0.5, &b"CLEAR"[..]),
+            ("shown", 1.25, 0.5, &b"IMAGE"[..]),
+            ("cleared", 2.25, 0.5, &b"CLEAR"[..]),
+        ] {
+            let output = temp.path().join(format!("{label}.ts"));
+            controller
+                .try_run_window_pgs_capped(&source, &output, start, duration, 64, &sup)
+                .await
+                .unwrap();
+            assert_eq!(stdfs::read(&output).unwrap(), expected, "{label}");
+        }
+        for (start, duration) in [(0.75, 0.5), (1.5, 1.0), (2.75, 0.5), (3.0, 0.5)] {
+            let output = temp.path().join("unsupported.ts");
+            let error = controller
+                .try_run_window_pgs_capped(&source, &output, start, duration, 64, &sup)
+                .await
+                .unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::Unsupported);
+            assert!(!output.exists());
+        }
+        let bad = &sup[..sup.len() - 1];
+        let output = temp.path().join("malformed.ts");
+        assert_eq!(
+            controller
+                .try_run_window_pgs_capped(&source, &output, 1.25, 0.5, 64, bad)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert!(!output.exists());
+    }
+
+    #[tokio::test]
     async fn rgba_graphic_overlay_is_bounded_and_decodes_with_aac() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("media:odd,quote' name.mkv");
