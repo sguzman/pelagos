@@ -1187,6 +1187,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_hls_real_ffmpeg_preserves_show_clear_video_transitions() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("name:comma' synthetic.mkv");
+        let fixture = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=32x32:r=5:d=3",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=600:duration=3",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "aac",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(30),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        let directory = temp.path().join("pgs-ffmpeg-hls");
+        let output = generate_segmented_vod_with_pgs_from(
+            &controller,
+            Path::new("ffprobe"),
+            &source,
+            &directory,
+            2,
+            0.0,
+            &synthetic_pgs_clear_show_clear(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(output.segment_paths.len(), 4);
+        for (index, expected_visible) in [false, true, true, false].into_iter().enumerate() {
+            let decoded = tokio::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(&output.segment_paths[index])
+                .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "segment {index}: {}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 32 * 32 * 3);
+            let center = &decoded.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
+            assert!(
+                center.iter().all(|channel| {
+                    if expected_visible {
+                        *channel > 170
+                    } else {
+                        *channel < 65
+                    }
+                }),
+                "segment {index}: expected visible={expected_visible}, pixel={center:?}"
+            );
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+        output.remove().unwrap();
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_rejects_unknown_last_cue_and_bad_packets_before_creation() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("media.mkv");
