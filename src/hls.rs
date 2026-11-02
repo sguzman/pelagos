@@ -918,6 +918,7 @@ pub async fn generate_adaptive_segmented_vod_with_subtitle_from(
                     Some(AdaptiveSubtitle::External(track)) => Some(track),
                     _ => None,
                 },
+                pgs_track: None,
             },
         )
         .await?;
