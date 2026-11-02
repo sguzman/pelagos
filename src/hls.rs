@@ -1708,6 +1708,97 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn adjacent_private_pgs_excerpts_preserve_a_caption_across_boundary() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("feature.mkv");
+        stdfs::write(&source, b"immutable long feature").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "excerpt-encoder",
+            "if [ -f input.tga ]; then printf '\\107I'; else printf '\\107C'; fi; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "excerpt-prober",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3600.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let mut sup = synthetic_pgs_clear_show_clear();
+        let mut position = 0;
+        while position < sup.len() {
+            let size = usize::from(u16::from_be_bytes([sup[position + 11], sup[position + 12]]));
+            let pts = u32::from_be_bytes(sup[position + 2..position + 6].try_into().unwrap());
+            sup[position + 2..position + 6].copy_from_slice(&(pts + 3590 * 90_000).to_be_bytes());
+            position += 13 + size;
+        }
+        for (name, start, duration, expected) in [
+            ("first-excerpt", 3590.0, 2.0, b"CI".as_slice()),
+            ("next-excerpt", 3592.0, 3.0, b"IC".as_slice()),
+        ] {
+            let output = temp.path().join(name);
+            let artifact = generate_segmented_pgs_window(
+                &controller,
+                &inspector,
+                &source,
+                &output,
+                5,
+                PgsPlaybackWindow {
+                    start_seconds: start,
+                    duration_seconds: duration,
+                    sup_bytes: &sup,
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(artifact.segment_paths.len(), expected.len());
+            for (path, marker) in artifact.segment_paths.iter().zip(expected) {
+                let bytes = stdfs::read(path).unwrap();
+                assert_eq!(&bytes[..2], &[0x47, *marker]);
+            }
+            let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+            assert_eq!(playlist.matches("#EXTINF:").count(), expected.len());
+            artifact.remove().unwrap();
+            assert!(!output.exists());
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), b"immutable long feature");
+    }
+
+    #[tokio::test]
+    async fn bounded_pgs_excerpt_rejects_32bit_timestamp_overflow() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("day.mkv");
+        stdfs::write(&source, b"unchanged day source").unwrap();
+        let encoder = executable(temp.path(), "unused-encoder", "exit 99");
+        let inspector = executable(
+            temp.path(),
+            "day-prober",
+            r#"printf '%s' '{"format":{"duration":"86400.0"},"streams":[{"codec_type":"video","width":32,"height":32}]}'"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let sup = synthetic_pgs_clear_show_clear();
+        let output = temp.path().join("pts-wrap-rejected");
+        let err = generate_segmented_pgs_window(
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            10,
+            PgsPlaybackWindow {
+                start_seconds: 47_720.0,
+                duration_seconds: 5.0,
+                sup_bytes: &sup,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(!output.exists());
+        assert_eq!(stdfs::read(&source).unwrap(), b"unchanged day source");
+    }
+
+    #[tokio::test]
     async fn private_adaptive_pgs_window_aligns_renditions_from_long_source() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("full-feature.mkv");
