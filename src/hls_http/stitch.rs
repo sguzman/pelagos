@@ -105,7 +105,7 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
             || number.parse::<f64>().ok().is_none_or(|duration| {
                 !duration.is_finite() || !(0.001..=600.0).contains(&duration)
             })
-            || !body.lines().any(|entry| entry == format!("{index}.ts"))
+            || !body.contains(&format!("{line}\n{index}.ts\n"))
         {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
