@@ -532,7 +532,11 @@ async fn generate_hls_playlist(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
         reauthorize_publication(&state, &headers, &cache_key).await?;
-        let response = excerpt_playlist_response(&master_playlist, start_time_ticks, excerpt_duration_ticks);
+        let response = excerpt_playlist_response(
+            &master_playlist,
+            start_time_ticks,
+            excerpt_duration_ticks,
+        );
         let publication = Arc::new(Published {
             id,
             item,
