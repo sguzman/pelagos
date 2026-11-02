@@ -453,6 +453,14 @@ async fn validate_hls_track_selection(
             };
             return Ok(Some(HlsSubtitle::ExternalSrt { bytes, revision }));
         }
+        if let Some(filename) = playback::hls_pgs_sidecar_filename(source, &report, global_index) {
+            let bytes = read_confined_sup(source, &filename).await?;
+            let revision = SidecarRevision {
+                filename,
+                digest: Sha256::digest(&bytes).into(),
+            };
+            return Ok(Some(HlsSubtitle::ExternalPgs { bytes, revision }));
+        }
         return Err(StatusCode::NOT_IMPLEMENTED);
     }
     if query.subtitle_stream_index.is_some_and(|index| index != -1) {
@@ -522,7 +530,7 @@ async fn reauthorize_publication(
         return Err(StatusCode::NOT_FOUND);
     }
     if let Some(sidecar) = query.sidecar {
-        let bytes = read_confined_srt(&source, &sidecar.filename)
+        let bytes = read_selected_sidecar(&source, &sidecar.filename)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
@@ -586,9 +594,18 @@ async fn generate_hls_playlist(
         validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
     let selected_index = query.subtitle_stream_index.filter(|index| *index >= 0);
     let sidecar_revision = match burn_in_subtitle.as_ref() {
-        Some(HlsSubtitle::ExternalSrt { revision, .. }) => Some(revision.clone()),
+        Some(HlsSubtitle::ExternalSrt { revision, .. })
+        | Some(HlsSubtitle::ExternalPgs { revision, .. }) => Some(revision.clone()),
         _ => None,
     };
+    if rendition_count > 1
+        && matches!(burn_in_subtitle, Some(HlsSubtitle::ExternalPgs { .. }))
+    {
+        // A graphical adaptive ladder must share precisely aligned cue
+        // windows between every rendition; this single-rendition subset
+        // cannot safely claim that compatibility yet.
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
     let metadata = tokio::fs::metadata(&source)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
@@ -679,8 +696,8 @@ async fn generate_hls_playlist(
         } else {
             &VIDEO_PROFILES
         };
-        let subtitle = burn_in_subtitle.as_ref().map(|track| match track {
-            HlsSubtitle::Embedded(index) => hls::AdaptiveSubtitle::Embedded(*index),
+        let subtitle = burn_in_subtitle.as_ref().and_then(|track| match track {
+            HlsSubtitle::Embedded(index) => Some(hls::AdaptiveSubtitle::Embedded(*index)),
             HlsSubtitle::ExternalSrt { bytes, revision } => {
                 let format = if revision.filename.to_ascii_lowercase().ends_with(".ass") {
                     ExternalTextFormat::Ass
@@ -689,8 +706,9 @@ async fn generate_hls_playlist(
                 } else {
                     ExternalTextFormat::Srt
                 };
-                hls::AdaptiveSubtitle::External(ExternalTextTrack { bytes, format })
+                Some(hls::AdaptiveSubtitle::External(ExternalTextTrack { bytes, format }))
             }
+            HlsSubtitle::ExternalPgs { .. } => None,
         });
         let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
             &registry.controller,
@@ -832,6 +850,18 @@ async fn generate_hls_playlist(
             )
             .await
         }
+        Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
+            hls::generate_segmented_vod_with_pgs_from(
+                &registry.controller,
+                state.probe_executable(),
+                &source,
+                &private_root.join("bundle"),
+                target_seconds,
+                start_time_ticks as f64 / 10_000_000.0,
+                bytes,
+            )
+            .await
+        }
         None => {
             hls::generate_segmented_vod_from(
                 &registry.controller,
@@ -939,7 +969,7 @@ async fn serve_segment(
         return Err(StatusCode::NOT_FOUND);
     }
     if let Some(sidecar) = publication.sidecar.as_ref() {
-        let bytes = read_confined_srt(&source, &sidecar.filename)
+        let bytes = read_selected_sidecar(&source, &sidecar.filename)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
         let digest: [u8; 32] = Sha256::digest(&bytes).into();
