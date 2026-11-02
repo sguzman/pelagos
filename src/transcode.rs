@@ -1,7 +1,9 @@
 //! Bounded, CPU-first FFmpeg MPEG-TS transcode job runner.
 //! This is not yet an HLS/DASH scheduler, Jellyfin PlaybackInfo transcode
 //! response, GPU accelerator, or complete Smart TV playback implementation.
-use crate::pgs_render::{RgbaDisplaySet, WindowGraphic, constant_window_graphic, render_epoch_timeline};
+use crate::pgs_render::{
+    RgbaDisplaySet, WindowGraphic, constant_window_graphic, render_epoch_timeline,
+};
 use std::{
     io,
     path::{Path, PathBuf},
