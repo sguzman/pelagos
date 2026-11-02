@@ -599,13 +599,26 @@ async fn generate_segmented_vod_configured(
             match graphic {
                 WindowGraphic::Clear => {
                     controller
-                        .try_run_window_capped(source, &path, start, duration, budget, None)
+                        .try_run_window_capped(
+                            source,
+                            &path,
+                            start,
+                            duration,
+                            budget,
+                            options.quality,
+                        )
                         .await?
                 }
                 WindowGraphic::Image(image) => {
                     controller
-                        .try_run_window_graphic_capped(
-                            source, &path, start, duration, budget, image,
+                        .try_run_window_graphic_quality_capped(
+                            source,
+                            &path,
+                            start,
+                            duration,
+                            budget,
+                            image,
+                            options.quality,
                         )
                         .await?
                 }
@@ -811,6 +824,7 @@ fn adaptive_segments_aligned(reference: &[HlsSegment], next: &[HlsSegment]) -> b
 pub enum AdaptiveSubtitle<'a> {
     Embedded(u8),
     External(ExternalTextTrack<'a>),
+    Pgs(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -918,7 +932,10 @@ pub async fn generate_adaptive_segmented_vod_with_subtitle_from(
                     Some(AdaptiveSubtitle::External(track)) => Some(track),
                     _ => None,
                 },
-                pgs_track: None,
+                pgs_track: match subtitle {
+                    Some(AdaptiveSubtitle::Pgs(track)) => Some(track),
+                    _ => None,
+                },
             },
         )
         .await?;
