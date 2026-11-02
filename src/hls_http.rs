@@ -30,9 +30,9 @@ use uuid::Uuid;
 mod registry;
 mod segments;
 mod tracks;
-use segments::serve_segment;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
+use segments::serve_segment;
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
 
 const MAX_MANIFEST: usize = 32 * 1024;
