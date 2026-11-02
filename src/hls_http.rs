@@ -1028,6 +1028,20 @@ mod tests {
         assert!(injected.is_err());
     }
 
+    #[test]
+    fn continuation_preflight_admission_is_bounded_and_released_on_drop() {
+        let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
+        let permits = (0..4)
+            .map(|_| registry.acquire_continuation().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            registry.acquire_continuation().err().unwrap(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        drop(permits);
+        assert!(registry.acquire_continuation().is_ok());
+    }
+
     #[tokio::test]
     async fn bounded_hls_generation_queue_coalesces_and_recovers_after_cancellation() {
         let registry = Arc::new(HlsRegistry::new(PathBuf::from("ffmpeg")));

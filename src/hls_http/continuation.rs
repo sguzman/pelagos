@@ -15,6 +15,7 @@ pub(super) async fn video_next(
     let duration = publication
         .excerpt_duration_ticks
         .ok_or(StatusCode::NOT_FOUND)?;
+    let _admission = state.hls_registry().acquire_continuation()?;
     let query = CacheLookup {
         item: &item,
         kind: "video",

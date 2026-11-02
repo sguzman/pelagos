@@ -68,6 +68,7 @@ pub(super) struct CacheLookup<'a> {
 pub struct HlsRegistry {
     pub(super) jobs: Semaphore,
     pub(super) waiters: Semaphore,
+    continuations: Semaphore,
     pub(super) controller: TranscodeController,
     pub(super) entries: Mutex<VecDeque<Arc<Published>>>,
 }
@@ -76,6 +77,7 @@ impl HlsRegistry {
         Self {
             jobs: Semaphore::new(1),
             waiters: Semaphore::new(4),
+            continuations: Semaphore::new(4),
             controller: TranscodeController::new(
                 executable,
                 1,
@@ -85,6 +87,16 @@ impl HlsRegistry {
             .expect("constant HLS worker limits"),
             entries: Mutex::new(VecDeque::new()),
         }
+    }
+
+    /// Bound probes and downstream encodes begun by next-window requests.
+    /// A rejected request never starts FFprobe or allocates a private HLS root.
+    pub(super) fn acquire_continuation(
+        &self,
+    ) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
+        self.continuations
+            .try_acquire()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)
     }
 
     /// Join at most four ongoing HLS publication requests. Once the first
