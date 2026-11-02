@@ -439,19 +439,19 @@ async fn validate_hls_track_selection(
             if position > 31 {
                 return Err(StatusCode::NOT_IMPLEMENTED);
             }
-            if matches!(stream["codec_name"].as_str(), Some("subrip" | "ass" | "ssa")) {
+            if matches!(
+                stream["codec_name"].as_str(),
+                Some("subrip" | "ass" | "ssa")
+            ) {
                 return Ok(Some(HlsSubtitle::Embedded(position as u8)));
             }
             if matches!(
                 stream["codec_name"].as_str(),
                 Some("hdmv_pgs_subtitle" | "pgssub")
             ) {
-                let bytes = playback::extract_embedded_pgs(
-                    state.ffmpeg_executable(),
-                    source,
-                    global_index,
-                )
-                .await?;
+                let bytes =
+                    playback::extract_embedded_pgs(state.ffmpeg_executable(), source, global_index)
+                        .await?;
                 return Ok(Some(HlsSubtitle::EmbeddedPgs(bytes)));
             }
             return Err(StatusCode::NOT_IMPLEMENTED);
@@ -867,8 +867,7 @@ async fn generate_hls_playlist(
             )
             .await
         }
-        Some(HlsSubtitle::EmbeddedPgs(bytes))
-        | Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
+        Some(HlsSubtitle::EmbeddedPgs(bytes)) | Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
             hls::generate_segmented_vod_with_pgs_from(
                 &registry.controller,
                 state.probe_executable(),
