@@ -1514,6 +1514,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                    excerpt_duration_ticks: None,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1542,6 +1543,7 @@ mod tests {
                     modified: original.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                    excerpt_duration_ticks: None,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1592,6 +1594,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                    excerpt_duration_ticks: None,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1614,6 +1617,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                    excerpt_duration_ticks: None,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1636,6 +1640,7 @@ mod tests {
                     modified: expected.modified().ok(),
                     target_seconds: 2,
                     start_time_ticks: 0,
+                    excerpt_duration_ticks: None,
                     rendition_count: 1,
                     subtitle_stream_index: None,
                     sidecar: None,
@@ -1672,6 +1677,7 @@ mod tests {
                 source_modified: None,
                 target_seconds: 2,
                 start_time_ticks: 0,
+                excerpt_duration_ticks: None,
                 rendition_count: 1,
                 subtitle_stream_index: None,
                 sidecar: None,
@@ -1708,6 +1714,7 @@ mod tests {
             modified: None,
             target_seconds: 2,
             start_time_ticks: 0,
+            excerpt_duration_ticks: None,
             rendition_count: 1,
             subtitle_stream_index: None,
             sidecar: None,
@@ -1716,6 +1723,16 @@ mod tests {
         // recently used publication is now returned, rather than the one
         // with the highest original insertion position.
         assert_eq!(registry.cached(&key).unwrap().id, "playlist-0");
+        // An explicitly bounded excerpt cannot reuse the same session's
+        // complete-VOD publication or another excerpt duration.
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    excerpt_duration_ticks: Some(40_000_000),
+                    ..key
+                })
+                .is_none()
+        );
         assert!(
             registry
                 .cached(&CacheLookup {
@@ -1792,6 +1809,7 @@ mod tests {
             source_modified: None,
             target_seconds: 2,
             start_time_ticks: 0,
+            excerpt_duration_ticks: None,
             rendition_count: 1,
             subtitle_stream_index: None,
             sidecar: None,
