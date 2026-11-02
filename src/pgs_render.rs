@@ -635,6 +635,22 @@ mod tests {
         missing_after_reset.extend(reset);
         assert!(render_epoch_timeline(&missing_after_reset).is_none());
 
+        // A changed canvas without an epoch reset cannot safely reuse
+        // palette colors selected under another video color matrix.
+        let mut drifting = reused.clone();
+        drifting[13 + 1] = 5;
+        let mut changed_geometry = first.clone();
+        changed_geometry.extend(drifting);
+        assert!(render_epoch_timeline(&changed_geometry).is_none());
+
+        // An independent epoch-start composition can establish new geometry.
+        let mut new_epoch = sample(false);
+        new_epoch[13 + 1] = 5;
+        new_epoch[2..6].copy_from_slice(&180_000_u32.to_be_bytes());
+        let mut restarted = first.clone();
+        restarted.extend(new_epoch);
+        assert_eq!(render_epoch_timeline(&restarted).unwrap()[1].image.width, 5);
+
         // An incremental PDS may change one cached palette index, while
         // the previous object pixels and window remain untouched.
         let mut changed = reused[..reused.len() - 13].to_vec();
