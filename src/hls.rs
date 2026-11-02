@@ -1371,11 +1371,12 @@ mod tests {
         let mut late = synthetic_pgs_clear_show_clear();
         let mut position = 0;
         while position < late.len() {
-            let size = usize::from(u16::from_be_bytes([late[position + 11], late[position + 12]]));
-            let pts =
-                u32::from_be_bytes(late[position + 2..position + 6].try_into().unwrap());
-            late[position + 2..position + 6]
-                .copy_from_slice(&(pts + 3591 * 90_000).to_be_bytes());
+            let size = usize::from(u16::from_be_bytes([
+                late[position + 11],
+                late[position + 12],
+            ]));
+            let pts = u32::from_be_bytes(late[position + 2..position + 6].try_into().unwrap());
+            late[position + 2..position + 6].copy_from_slice(&(pts + 3591 * 90_000).to_be_bytes());
             position += 13 + size;
         }
         sup.extend(late);
