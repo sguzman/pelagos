@@ -84,6 +84,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     // The WDS declares two windows but provides only one record.
     bad_windows[13 + 11 + 13] = 2;
     fs::write(root.join("Feature.de.sup"), &bad_windows).unwrap();
+    let mut bad_composition = PGS.to_vec();
+    // Reserved PCS state bits must not reach the advertised graphical inventory.
+    bad_composition[13 + 7] = 0x20;
+    fs::write(root.join("Feature.pl.sup"), &bad_composition).unwrap();
     let mut unfinished_object = PGS[..24].to_vec();
     unfinished_object.extend_from_slice(&[
         b'P', b'G', 0, 0, 0, 2, 0, 0, 0, 2, 0x15, 0, 12, 0, 1, 0, 0x80, 0, 0, 6, 0, 2, 0, 1, 0xaa,
@@ -160,6 +164,7 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
             .all(|stream| stream["IsExternal"] == true && stream["IsTextSubtitleStream"] == false)
     );
     assert!(streams.iter().all(|stream| stream["Language"] != "it"));
+    assert!(streams.iter().all(|stream| stream["Language"] != "pl"));
     let track = pgs.iter().find(|track| track["Language"] == "es").unwrap();
     let index = track["Index"].as_i64().unwrap();
     let url = format!("/Videos/{id}/{id}/Subtitles/{index}/Stream.pgssub");
