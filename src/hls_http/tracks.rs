@@ -1,5 +1,6 @@
 //! Confined subtitle sidecars, embedded track selection and HLS encode negotiation.
 use super::*;
+use crate::streaming;
 use tokio::io::AsyncReadExt;
 
 pub(super) enum HlsSubtitle {
