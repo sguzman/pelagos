@@ -72,6 +72,17 @@ pub struct SubtitleTextWindow<'a> {
     pub quality: Option<MpegTsQuality>,
 }
 
+/// A bounded RGBA graphic window and validated optional CPU bitrate
+/// target. Use a named request to keep quality and source timing explicit.
+#[derive(Debug, Clone, Copy)]
+pub struct GraphicOverlayWindow<'a> {
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+    pub remaining_bytes: u64,
+    pub graphic: &'a RgbaDisplaySet,
+    pub quality: Option<MpegTsQuality>,
+}
+
 /// Caller-scoped, bounded input window for embedded-subtitle burn-in.
 /// The index is relative to subtitle streams, not an FFprobe global index.
 #[derive(Debug, Clone, Copy)]
@@ -473,11 +484,13 @@ impl TranscodeController {
         self.try_run_window_graphic_quality_capped(
             source,
             output,
-            start_seconds,
-            duration_seconds,
-            remaining_bytes,
-            graphic,
-            None,
+            GraphicOverlayWindow {
+                start_seconds,
+                duration_seconds,
+                remaining_bytes,
+                graphic,
+                quality: None,
+            },
         )
         .await
     }
@@ -488,12 +501,15 @@ impl TranscodeController {
         &self,
         source: &Path,
         output: &Path,
-        start_seconds: f64,
-        duration_seconds: f64,
-        remaining_bytes: u64,
-        graphic: &RgbaDisplaySet,
-        quality: Option<MpegTsQuality>,
+        request: GraphicOverlayWindow<'_>,
     ) -> io::Result<u64> {
+        let GraphicOverlayWindow {
+            start_seconds,
+            duration_seconds,
+            remaining_bytes,
+            graphic,
+            quality,
+        } = request;
         let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
         let tga = graphic.to_uncompressed_tga().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "invalid bounded RGBA graphic")
@@ -1408,14 +1424,16 @@ mod tests {
                 .try_run_window_graphic_quality_capped(
                     &source,
                     &output,
-                    0.0,
-                    1.0,
-                    1024,
-                    &rgba,
-                    Some(MpegTsQuality {
-                        video_kbps: 1500,
-                        audio_kbps: 1,
-                    }),
+                    GraphicOverlayWindow {
+                        start_seconds: 0.0,
+                        duration_seconds: 1.0,
+                        remaining_bytes: 1024,
+                        graphic: &rgba,
+                        quality: Some(MpegTsQuality {
+                            video_kbps: 1500,
+                            audio_kbps: 1,
+                        }),
+                    },
                 )
                 .await
                 .unwrap_err()
@@ -1427,14 +1445,16 @@ mod tests {
             .try_run_window_graphic_quality_capped(
                 &source,
                 &output,
-                0.0,
-                1.0,
-                1024,
-                &rgba,
-                Some(MpegTsQuality {
-                    video_kbps: 1500,
-                    audio_kbps: 96,
-                }),
+                GraphicOverlayWindow {
+                    start_seconds: 0.0,
+                    duration_seconds: 1.0,
+                    remaining_bytes: 1024,
+                    graphic: &rgba,
+                    quality: Some(MpegTsQuality {
+                        video_kbps: 1500,
+                        audio_kbps: 96,
+                    }),
+                },
             )
             .await
             .unwrap();
