@@ -70,7 +70,23 @@ fn set_media_sequence(playlist: String, sequence: u64) -> Result<String, StatusC
     if playlist.matches(ORIGINAL).count() != 1 {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    let replacement = format!("#EXT-X-MEDIA-SEQUENCE:{sequence}\n");
+    // Every excerpt segment is independently encoded and its MPEG-TS PTS
+    // resets at each boundary. A later private excerpt must account for
+    // all earlier discontinuities, including the boundary to this window.
+    // Thus for this specific independent-window encoder the cumulative
+    // discontinuity sequence equals the cumulative media segment sequence.
+    let replacement = if sequence == 0 {
+        ORIGINAL.to_owned()
+    } else {
+        let segments = playlist.matches("#EXTINF:").count();
+        let discontinuities = playlist.matches("#EXT-X-DISCONTINUITY\n").count();
+        if segments == 0 || discontinuities != segments - 1 {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        format!(
+            "#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n"
+        )
+    };
     let rewritten = playlist.replacen(ORIGINAL, &replacement, 1);
     if rewritten.len() > MAX_MANIFEST {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -1008,12 +1024,22 @@ mod tests {
             "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXT-X-ENDLIST\n";
         let playlist = set_media_sequence(original.to_owned(), 64).unwrap();
         assert!(playlist.contains("#EXT-X-MEDIA-SEQUENCE:64\n"));
+        assert!(playlist.contains("#EXT-X-DISCONTINUITY-SEQUENCE:64\n"));
         assert!(playlist.contains("segment00000.ts\n"));
         assert!(!playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
         assert_eq!(
             set_media_sequence("not HLS".to_owned(), 0),
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         );
+        let wrongly_joined = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXTINF:1.000,\nsegment00001.ts\n";
+        assert_eq!(
+            set_media_sequence(wrongly_joined.to_owned(), 10),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+        let double_window = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.000,\nsegment00000.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:1.000,\nsegment00001.ts\n";
+        let valid = set_media_sequence(double_window.to_owned(), 10).unwrap();
+        assert!(valid.contains("#EXT-X-DISCONTINUITY-SEQUENCE:10\n"));
+        assert_eq!(valid.matches("#EXT-X-DISCONTINUITY\n").count(), 1);
         let duplicate = format!("{original}{original}");
         assert_eq!(
             set_media_sequence(duplicate, 64),
