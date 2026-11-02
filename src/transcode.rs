@@ -470,14 +470,41 @@ impl TranscodeController {
         remaining_bytes: u64,
         graphic: &RgbaDisplaySet,
     ) -> io::Result<u64> {
+        self.try_run_window_graphic_quality_capped(
+            source,
+            output,
+            start_seconds,
+            duration_seconds,
+            remaining_bytes,
+            graphic,
+            None,
+        )
+        .await
+    }
+
+    /// Overlay a bounded graphic with independently validated CPU bitrate
+    /// targets. Measured bandwidth and HLS alignment remain builder duties.
+    pub async fn try_run_window_graphic_quality_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        start_seconds: f64,
+        duration_seconds: f64,
+        remaining_bytes: u64,
+        graphic: &RgbaDisplaySet,
+        quality: Option<MpegTsQuality>,
+    ) -> io::Result<u64> {
         let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
         let tga = graphic.to_uncompressed_tga().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "invalid bounded RGBA graphic")
         })?;
-        if remaining_bytes == 0 || remaining_bytes > MAX_TRANSCODE_BYTES {
+        if remaining_bytes == 0
+            || remaining_bytes > MAX_TRANSCODE_BYTES
+            || quality.is_some_and(|target| !target.valid())
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "invalid graphic FFmpeg output budget",
+                "invalid graphic FFmpeg output budget or bitrate",
             ));
         }
         let _permit = self.permits.try_acquire().map_err(|_| {
@@ -493,6 +520,7 @@ impl TranscodeController {
             self.deadline,
             self.max_bytes.min(remaining_bytes),
             EncoderOptions {
+                quality,
                 window: Some(window),
                 external_graphic: Some(&tga),
                 ..EncoderOptions::default()
