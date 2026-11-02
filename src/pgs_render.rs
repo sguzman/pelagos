@@ -488,7 +488,9 @@ fn render_timeline(
             // first composition at/after the requested end as a duration
             // sentinel, even if it has identical pixels.
             if window.is_some_and(|(_, end)| stamp < end)
-                && frames.last().is_some_and(|previous| previous.image == image)
+                && frames
+                    .last()
+                    .is_some_and(|previous| previous.image == image)
             {
                 display_start = position;
                 continue;
@@ -1119,8 +1121,7 @@ mod tests {
         // Repeated identical visible compositions are not evidence of a
         // final clear. Unknown opaque tails remain unsupported.
         let unknown_tail = &stream[..stream.len() - (13 + 11 + 13)];
-        let frames =
-            render_epoch_timeline_for_window(unknown_tail, 0, 82 * 90_000).unwrap();
+        let frames = render_epoch_timeline_for_window(unknown_tail, 0, 82 * 90_000).unwrap();
         assert_eq!(frames.len(), 1);
         assert!(plan_graphic_window_chunks(&frames, 0, 82 * 90_000).is_none());
     }
