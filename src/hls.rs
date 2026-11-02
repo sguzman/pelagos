@@ -1441,6 +1441,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_seeked_pgs_hls_real_ffmpeg_renders_cues_after_long_history() {
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("seeked-video.mkv");
+        let fixture = tokio::process::Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=32x32:r=5:d=74",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=600:duration=74",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "aac",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+
+        let packet = |kind: u8, pts: u32, body: &[u8]| {
+            let mut bytes = b"PG".to_vec();
+            bytes.extend_from_slice(&pts.to_be_bytes());
+            bytes.extend_from_slice(&[0; 4]);
+            bytes.push(kind);
+            bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(body);
+            bytes
+        };
+        let mut sup = Vec::new();
+        for second in 0..70_u32 {
+            let pts = second * 90_000;
+            sup.extend(packet(0x16, pts, &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0]));
+            sup.extend(packet(0x80, pts, &[]));
+        }
+        // Shift the existing validated clear/show/clear fixture to 70s.
+        let mut late = synthetic_pgs_clear_show_clear();
+        let mut pos = 0;
+        while pos < late.len() {
+            let size = usize::from(u16::from_be_bytes([late[pos + 11], late[pos + 12]]));
+            let pts = u32::from_be_bytes(late[pos + 2..pos + 6].try_into().unwrap());
+            late[pos + 2..pos + 6].copy_from_slice(&(pts + 70 * 90_000).to_be_bytes());
+            pos += 13 + size;
+        }
+        sup.extend(late);
+
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(40),
+            8 * 1024 * 1024,
+        )
+        .unwrap();
+        let directory = temp.path().join("seeked-pgs-ffmpeg");
+        let artifact = generate_segmented_vod_with_pgs_from(
+            &controller,
+            Path::new("ffprobe"),
+            &source,
+            &directory,
+            10,
+            70.0,
+            &sup,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 3);
+        for (index, visible) in [false, true, false].into_iter().enumerate() {
+            let decoded = tokio::process::Command::new("ffmpeg")
+                .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+                .arg(&artifact.segment_paths[index])
+                .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                decoded.status.success(),
+                "segment {index}: {}",
+                String::from_utf8_lossy(&decoded.stderr)
+            );
+            assert_eq!(decoded.stdout.len(), 32 * 32 * 3);
+            let center = &decoded.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
+            assert!(
+                center.iter().all(|channel| {
+                    if visible {
+                        *channel > 170
+                    } else {
+                        *channel < 65
+                    }
+                }),
+                "segment {index}: expected visible={visible}, pixel={center:?}"
+            );
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+        artifact.remove().unwrap();
+        assert!(!directory.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_real_ffmpeg_preserves_show_clear_video_transitions() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
