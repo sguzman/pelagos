@@ -83,6 +83,31 @@ fn bright_pixels(media: &[u8], path: &std::path::Path) -> usize {
     output.stdout.iter().filter(|pixel| **pixel > 80).count()
 }
 
+fn adaptive_caption_bottom_pixels(media: &[u8], path: &std::path::Path) -> usize {
+    fs::write(path, media).unwrap();
+    let decoded = Command::new("ffmpeg")
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+        .arg(path)
+        .args([
+            "-frames:v",
+            "1",
+            "-vf",
+            "select=eq(n\\,7),crop=640:90:0:270,format=gray",
+            "-f",
+            "rawvideo",
+            "pipe:1",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        decoded.status.success(),
+        "{}",
+        String::from_utf8_lossy(&decoded.stderr)
+    );
+    assert_eq!(decoded.stdout.len(), 640 * 90);
+    decoded.stdout.iter().filter(|pixel| **pixel > 100).count()
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn selected_subrip_track_is_burned_into_seeked_hls_without_cross_cache_reuse() {
@@ -734,6 +759,12 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     fs::create_dir_all(&library).unwrap();
     let source = library.join("Feature.mkv");
     let sidecar = library.join("Feature.es.srt");
+    let embedded = temp.path().join("embedded.srt");
+    fs::write(
+        &embedded,
+        b"1\n00:00:00,200 --> 00:00:01,800\nEMBEDDED ADAPTIVE CAPTION\n\n",
+    )
+    .unwrap();
     let created = Command::new("ffmpeg")
         .args([
             "-nostdin",
@@ -744,10 +775,22 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
             "lavfi",
             "-i",
             "testsrc2=size=640x360:rate=15:duration=4",
+            "-f",
+            "srt",
+            "-i",
+        ])
+        .arg(&embedded)
+        .args([
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:s:0",
             "-vf",
             "drawbox=x=0:y=270:w=640:h=90:color=black:t=fill",
             "-c:v",
             "mpeg4",
+            "-c:s",
+            "srt",
             "-y",
         ])
         .arg(&source)
@@ -828,30 +871,49 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
             .unwrap();
         assert!(!bytes.is_empty() && bytes.len() % 188 == 0);
         let segment_file = temp.path().join(format!("variant{index}.ts"));
-        fs::write(&segment_file, &bytes).unwrap();
-        let decoded = Command::new("ffmpeg")
-            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
-            .arg(&segment_file)
-            .args([
-                "-frames:v",
-                "1",
-                "-vf",
-                "select=eq(n\\,7),crop=640:90:0:270,format=gray",
-                "-f",
-                "rawvideo",
-                "pipe:1",
-            ])
-            .output()
+        assert!(
+            adaptive_caption_bottom_pixels(&bytes, &segment_file) > 40,
+            "variant {index} did not render the selected caption"
+        );
+    }
+    assert_eq!(fs::read(&source).unwrap(), unchanged);
+    // Embedded subtitles use FFmpeg's subtitle-relative index, while
+    // external sidecars use a distinct deterministic PlaybackInfo index.
+    let embedded_index = details["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == false && stream["Codec"] == "subrip")
+        .unwrap()["Index"]
+        .as_i64()
+        .unwrap();
+    assert_ne!(embedded_index, subtitle_index);
+    let embedded_route = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={embedded_index}&subtitleMethod=Encode"
+    );
+    let embedded_response = call(&app, &embedded_route, Some(&token)).await;
+    assert_eq!(embedded_response.status(), StatusCode::OK);
+    let embedded_master = body_string(embedded_response).await;
+    assert_eq!(embedded_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    assert_ne!(embedded_master, master);
+    for (index, variant) in embedded_master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .enumerate()
+    {
+        let segment_name = format!("{}0.ts", variant.strip_suffix("index.m3u8").unwrap());
+        let segment_route = format!("/Videos/{id}/{segment_name}");
+        let segment = call(&app, &segment_route, Some(&token)).await;
+        assert_eq!(segment.status(), StatusCode::OK);
+        let bytes = to_bytes(segment.into_body(), 8 * 1024 * 1024)
+            .await
             .unwrap();
         assert!(
-            decoded.status.success(),
-            "{}",
-            String::from_utf8_lossy(&decoded.stderr)
-        );
-        assert_eq!(decoded.stdout.len(), 640 * 90);
-        assert!(
-            decoded.stdout.iter().filter(|pixel| **pixel > 100).count() > 40,
-            "variant {index} did not render the selected caption"
+            adaptive_caption_bottom_pixels(
+                &bytes,
+                &temp.path().join(format!("embedded-variant{index}.ts"))
+            ) > 40,
+            "embedded variant {index} dropped selected subtitles"
         );
     }
     assert_eq!(fs::read(&source).unwrap(), unchanged);
