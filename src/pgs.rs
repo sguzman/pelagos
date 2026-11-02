@@ -503,8 +503,7 @@ mod tests {
 
         let mut windows = vec![
             2, // two window records
-            0, 0, 0, 0, 0, 0, 32, 0, 32,
-            1, 0, 0, 0, 0, 0, 32, 0, 32,
+            0, 0, 0, 0, 0, 0, 32, 0, 32, 1, 0, 0, 0, 0, 0, 32, 0, 32,
         ];
         assert!(segment_shape_valid(0x17, &windows));
         windows[10] = 0; // duplicate window ID
