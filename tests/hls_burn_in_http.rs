@@ -909,6 +909,52 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
             "variant {index} did not render the selected caption"
         );
     }
+    // Exercise a real variant switch with subtitle overlay and AAC audio:
+    // first transport part at quality 0, second at quality 1.
+    let switched_segment = format!(
+        "{}1.ts",
+        variants[1].strip_suffix("index.m3u8").unwrap()
+    );
+    let switched_route = format!("/Videos/{id}/{switched_segment}");
+    assert_eq!(
+        call(&app, &switched_route, Some(&sibling)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let switched = call(&app, &switched_route, Some(&token)).await;
+    assert_eq!(switched.status(), StatusCode::OK);
+    let switched_bytes = to_bytes(switched.into_body(), 8 * 1024 * 1024)
+        .await
+        .unwrap();
+    assert!(
+        adaptive_caption_bottom_pixels(
+            &switched_bytes,
+            &temp.path().join("switched1.ts")
+        ) > 40,
+        "second caption missing after variant switch"
+    );
+    fs::write(
+        temp.path().join("switch.m3u8"),
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\nvariant0.ts\n#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\nswitched1.ts\n#EXT-X-ENDLIST\n",
+    )
+    .unwrap();
+    let decoded_switch = Command::new("ffmpeg")
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+        .arg(temp.path().join("switch.m3u8"))
+        .args(["-map", "0:v:0", "-f", "framemd5", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        decoded_switch.status.success(),
+        "switch decode: {}",
+        String::from_utf8_lossy(&decoded_switch.stderr)
+    );
+    let timestamps = String::from_utf8_lossy(&decoded_switch.stdout)
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .map(|line| line.split(',').nth(2).unwrap().trim().parse::<i64>().unwrap())
+        .collect::<Vec<_>>();
+    assert!(timestamps.len() >= 50);
+    assert!(timestamps.windows(2).all(|pair| pair[0] < pair[1]));
     assert_eq!(fs::read(&source).unwrap(), unchanged);
     // Embedded subtitles use FFmpeg's subtitle-relative index, while
     // external sidecars use a distinct deterministic PlaybackInfo index.
