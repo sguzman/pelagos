@@ -444,6 +444,132 @@ async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() 
 
 #[cfg(unix)]
 #[tokio::test]
+async fn adaptive_embedded_matroska_pgs_renders_every_variant_without_source_changes() {
+    if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let library = temp.path().join("Movies");
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&library).unwrap();
+    let raw_sup = temp.path().join("input.sup");
+    fs::write(&raw_sup, synthetic_sup()).unwrap();
+    let source = library.join("AdaptiveEmbedded.mkv");
+    let created = Command::new("ffmpeg")
+        .args([
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=15:duration=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=600:duration=3",
+            "-i",
+        ])
+        .arg(&raw_sup)
+        .args([
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-map",
+            "2:s:0",
+            "-vf",
+            "drawbox=x=0:y=0:w=32:h=32:color=black:t=fill",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            "-c:s",
+            "copy",
+            "-y",
+        ])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(
+        created.status.success(),
+        "{}",
+        String::from_utf8_lossy(&created.stderr)
+    );
+    let original = fs::read(&source).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    auth::create_user(&state_dir, "admin", "adaptive-embedded-pgs-admin-password").unwrap();
+    let token = auth::authenticate(
+        &state_dir,
+        "admin",
+        "adaptive-embedded-pgs-admin-password",
+        "server",
+    )
+    .unwrap()
+    .unwrap()
+    .access_token;
+    let app = app::router(Arc::new(AppState::with_auth_dir(
+        "server".to_owned(),
+        state_dir,
+    )));
+    let items = call(&app, "/Items", Some(&token)).await;
+    let items: Value = serde_json::from_str(&body(items).await).unwrap();
+    let id = items["Items"][0]["Id"].as_str().unwrap();
+    let details = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
+    let details: Value = serde_json::from_str(&body(details).await).unwrap();
+    let stream = details["MediaSources"][0]["MediaStreams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|stream| stream["IsExternal"] == false && stream["Codec"] == "hdmv_pgs_subtitle")
+        .expect("embedded PGS track must be advertised");
+    let index = stream["Index"].as_i64().unwrap();
+    let master_url = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    let response = call(&app, &master_url, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let master = body(response).await;
+    assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    let variants = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(variants.len(), 2);
+    for (position, variant) in variants.iter().enumerate() {
+        let response = call(&app, &format!("/Videos/{id}/{variant}"), Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let playlist = body(response).await;
+        assert_eq!(playlist.matches("#EXTINF:").count(), 4);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 3);
+        for (index, expected) in [(1, true), (3, false)] {
+            let prefix = variant.strip_suffix("index.m3u8").unwrap();
+            let response = call(
+                &app,
+                &format!("/Videos/{id}/{prefix}{index}.ts"),
+                Some(&token),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+                .await
+                .unwrap()
+                .to_vec();
+            assert_eq!(
+                visible_center(
+                    &bytes,
+                    &temp.path().join(format!("embedded-adaptive-{position}-{index}.ts"))
+                ),
+                expected
+            );
+        }
+    }
+    assert_eq!(fs::read(&source).unwrap(), original);
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
     if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
         return;
