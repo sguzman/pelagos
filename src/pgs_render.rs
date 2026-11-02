@@ -1048,18 +1048,11 @@ mod tests {
 
         // Seeking into the middle of a visible cue must retain its plane
         // from the preceding PCS instead of producing an empty subtitle.
-        let mid = render_epoch_timeline_for_window(
-            &stream,
-            79 * 90_000 + 45_000,
-            80 * 90_000 + 45_000,
-        )
-        .unwrap();
-        let selected = plan_graphic_window_chunks(
-            &mid,
-            79 * 90_000 + 45_000,
-            80 * 90_000 + 45_000,
-        )
-        .unwrap();
+        let mid =
+            render_epoch_timeline_for_window(&stream, 79 * 90_000 + 45_000, 80 * 90_000 + 45_000)
+                .unwrap();
+        let selected =
+            plan_graphic_window_chunks(&mid, 79 * 90_000 + 45_000, 80 * 90_000 + 45_000).unwrap();
         assert_eq!(selected.len(), 2);
         assert!(matches!(selected[0].graphic, WindowGraphic::Image(_)));
         assert_eq!(selected[1].graphic, WindowGraphic::Clear);
