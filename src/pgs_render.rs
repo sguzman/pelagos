@@ -74,10 +74,10 @@ impl EpochState {
             .objects
             .values()
             .try_fold(0_usize, |sum, item| sum.checked_add(item.indices.len()))?;
-        let next = used.checked_sub(current)?.checked_add(object.indices.len())?;
-        if next > MAX_EPOCH_OBJECT_PIXELS
-            || (current == 0 && self.objects.len() >= 64)
-        {
+        let next = used
+            .checked_sub(current)?
+            .checked_add(object.indices.len())?;
+        if next > MAX_EPOCH_OBJECT_PIXELS || (current == 0 && self.objects.len() >= 64) {
             return None;
         }
         self.objects.insert(id, object);
