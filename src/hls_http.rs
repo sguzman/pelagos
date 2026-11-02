@@ -1101,6 +1101,10 @@ mod tests {
         let injected =
             serde_json::from_str::<PlaylistQuery>(r#"{"expectedRevision":{"size":1234}}"#);
         assert!(injected.is_err());
+        let injected_sequence = serde_json::from_str::<PlaylistQuery>(
+            r#"{"mediaSequence":18446744073709551615}"#,
+        );
+        assert!(injected_sequence.is_err());
     }
 
     #[test]
@@ -1485,6 +1489,14 @@ mod tests {
         // recently used publication is now returned, rather than the one
         // with the highest original insertion position.
         assert_eq!(registry.cached(&key).unwrap().id, "playlist-0");
+        assert!(
+            registry
+                .cached(&CacheLookup {
+                    media_sequence: 3,
+                    ..key
+                })
+                .is_none()
+        );
         // An explicitly bounded excerpt cannot reuse the same session's
         // complete-VOD publication or another excerpt duration.
         assert!(
