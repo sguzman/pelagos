@@ -15,6 +15,7 @@ use tokio::{
 };
 
 use crate::{
+    pgs_render::{WindowGraphic, plan_graphic_window_chunks, render_epoch_timeline},
     probe,
     transcode::{
         ExternalTextFormat, ExternalTextTrack, MpegTsQuality, SubtitleBurnInWindow,
@@ -314,6 +315,7 @@ struct SegmentedOptions<'a> {
     quality: Option<MpegTsQuality>,
     subtitle_index: Option<u8>,
     external_text: Option<ExternalTextTrack<'a>>,
+    pgs_track: Option<&'a [u8]>,
 }
 
 /// Encode a bounded VOD from an explicit seek position. The source is
@@ -419,6 +421,36 @@ pub async fn generate_segmented_vod_with_external_text_from(
     .await
 }
 
+/// Encode a private bounded VOD with one caller-authorized PGS SUP track.
+/// Windows are split at explicit PCS composition timestamps *before* output
+/// creation and are then independently decoded and measured like text HLS.
+/// Only the bounded supported PGS subset can be encoded; requests whose cue
+/// boundaries would generate sub-100ms segments fail closed. This API does
+/// not discover tracks, authorize access, or publish client-facing manifests.
+pub async fn generate_segmented_vod_with_pgs_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    start_seconds: f64,
+    sup_bytes: &[u8],
+) -> io::Result<HlsSegmentedArtifact> {
+    generate_segmented_vod_configured(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        start_seconds,
+        SegmentedOptions {
+            pgs_track: Some(sup_bytes),
+            ..SegmentedOptions::default()
+        },
+    )
+    .await
+}
+
 async fn generate_segmented_vod_configured(
     controller: &TranscodeController,
     ffprobe: &Path,
@@ -473,17 +505,18 @@ async fn generate_segmented_vod_configured(
             "HLS window count exceeds limit",
         ));
     }
-    // The synchronous create + guard ensures cancellation cleans the entire
-    // private output tree, even while FFmpeg is still producing one window.
-    std::fs::create_dir(output_dir)?;
-    let mut partial = PartialBundle {
-        dir: output_dir.to_path_buf(),
-        committed: false,
-    };
-    let mut segments = Vec::with_capacity(segment_count);
-    let mut segment_paths = Vec::with_capacity(segment_count);
-    let mut total_bytes = 0_u64;
-    let mut resolution: Option<(u32, u32)> = None;
+    // Plan PGS cue-aligned windows before touching the filesystem. Keep
+    // graphics borrowed from one bounded validation/render pass instead of
+    // decoding the same SUP for each generated FFmpeg process.
+    let pgs_frames = options
+        .pgs_track
+        .map(|track| {
+            render_epoch_timeline(track).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "unsupported PGS composition timeline")
+            })
+        })
+        .transpose()?;
+    let mut windows = Vec::with_capacity(segment_count);
     for index in 0..segment_count {
         let start = start_seconds + index as f64 * f64::from(target_seconds);
         let remaining = source_seconds - start;
@@ -494,8 +527,6 @@ async fn generate_segmented_vod_configured(
             ));
         }
         let target = f64::from(target_seconds);
-        // Avoid sub-100ms tail jobs by adding short remainders to the
-        // preceding segment, still well under the 30s FFmpeg window cap.
         let duration = if remaining > target && remaining - target < 0.1 {
             remaining
         } else {
@@ -507,6 +538,48 @@ async fn generate_segmented_vod_configured(
                 "short HLS tail window",
             ));
         }
+        if let Some(frames) = &pgs_frames {
+            let first = (start * 90_000.0).round() as u32;
+            let last = ((start + duration) * 90_000.0).round() as u32;
+            let chunks = plan_graphic_window_chunks(frames, first, last).ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "unsupported PGS cue boundaries")
+            })?;
+            for chunk in chunks {
+                let duration = f64::from(chunk.end_90khz - chunk.start_90khz) / 90_000.0;
+                if duration < 0.1 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "PGS cue requires sub-100ms HLS segment",
+                    ));
+                }
+                windows.push((
+                    f64::from(chunk.start_90khz) / 90_000.0,
+                    duration,
+                    Some(chunk.graphic),
+                ));
+            }
+        } else {
+            windows.push((start, duration, None));
+        }
+        if windows.len() > MAX_ENCODED_SEGMENTS {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "PGS HLS segment count exceeds limit",
+            ));
+        }
+    }
+    // The synchronous create + guard ensures cancellation cleans the entire
+    // private output tree, even while FFmpeg is still producing one window.
+    std::fs::create_dir(output_dir)?;
+    let mut partial = PartialBundle {
+        dir: output_dir.to_path_buf(),
+        committed: false,
+    };
+    let mut segments = Vec::with_capacity(segment_count);
+    let mut segment_paths = Vec::with_capacity(segment_count);
+    let mut total_bytes = 0_u64;
+    let mut resolution: Option<(u32, u32)> = None;
+    for (index, (start, duration, graphic)) in windows.into_iter().enumerate() {
         let path = output_dir.join(format!("segment{index:05}.ts"));
         let budget = MAX_SEGMENTED_BYTES
             .checked_sub(total_bytes)
@@ -519,7 +592,22 @@ async fn generate_segmented_vod_configured(
                 "HLS segment budget exhausted",
             ));
         }
-        let size = if let Some(track) = options.external_text {
+        let size = if let Some(graphic) = graphic {
+            match graphic {
+                WindowGraphic::Clear => {
+                    controller
+                        .try_run_window_capped(source, &path, start, duration, budget, None)
+                        .await?
+                }
+                WindowGraphic::Image(image) => {
+                    controller
+                        .try_run_window_graphic_capped(
+                            source, &path, start, duration, budget, image,
+                        )
+                        .await?
+                }
+            }
+        } else if let Some(track) = options.external_text {
             controller
                 .try_run_window_external_text_quality_capped(
                     source,
