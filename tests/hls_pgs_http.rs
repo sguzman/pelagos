@@ -216,6 +216,36 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
             expected
         );
     }
+    // A seeked PGS session starts in the visible composition and must
+    // still split at the 2.5-second clear. Its cache identity must not
+    // alias the previous playback session starting at timestamp zero.
+    let seeked_url = format!("{selected}&startTimeTicks=10000000");
+    let seeked_response = call(&app, &seeked_url, Some(&token)).await;
+    assert_eq!(seeked_response.status(), StatusCode::OK);
+    let seeked = body(seeked_response).await;
+    assert_ne!(seeked, manifest);
+    let seeked_segments = seeked
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .collect::<Vec<_>>();
+    assert_eq!(seeked_segments.len(), 2);
+    for (position, expected) in [true, false].into_iter().enumerate() {
+        let response = call(
+            &app,
+            &format!("/Videos/{id}/{}", seeked_segments[position]),
+            Some(&token),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        assert_eq!(
+            visible_center(&bytes, &temp.path().join(format!("seeked-pgs-{position}.ts"))),
+            expected
+        );
+    }
     let first_uri = format!("/Videos/{id}/{}", urls[0]);
     assert_eq!(
         call(&app, &first_uri, None).await.status(),
