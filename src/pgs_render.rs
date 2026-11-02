@@ -179,7 +179,9 @@ fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplay
                 let width = be16(&segment[0..2]);
                 let height = be16(&segment[2..4]);
                 if usize::from(width).checked_mul(usize::from(height))? > MAX_BITMAP_PIXELS
-                    || state.geometry.is_some_and(|previous| previous != (width, height))
+                    || state
+                        .geometry
+                        .is_some_and(|previous| previous != (width, height))
                 {
                     return None;
                 }
