@@ -641,33 +641,31 @@ async fn transcode_mpegts_inner(
     // interpolate the user's media pathname into libavfilter's syntax.
     // Instead, use a private directory and an invariant relative filename
     // pointing read-only at the already approved source.
-    let burn_in_dir = if burn_in_subtitle.is_some()
-        || external_text.is_some()
-        || external_graphic.is_some()
-    {
-        #[cfg(unix)]
-        {
-            let resolved = fs::canonicalize(source).await?;
-            let dir = tempfile::tempdir()?;
-            std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
-            if let Some(subtitle) = external_text {
-                std::fs::write(dir.path().join(subtitle.format.filename()), subtitle.bytes)?;
+    let burn_in_dir =
+        if burn_in_subtitle.is_some() || external_text.is_some() || external_graphic.is_some() {
+            #[cfg(unix)]
+            {
+                let resolved = fs::canonicalize(source).await?;
+                let dir = tempfile::tempdir()?;
+                std::os::unix::fs::symlink(resolved, dir.path().join("input.mkv"))?;
+                if let Some(subtitle) = external_text {
+                    std::fs::write(dir.path().join(subtitle.format.filename()), subtitle.bytes)?;
+                }
+                if let Some(graphic) = external_graphic {
+                    std::fs::write(dir.path().join("input.tga"), graphic)?;
+                }
+                Some(dir)
             }
-            if let Some(graphic) = external_graphic {
-                std::fs::write(dir.path().join("input.tga"), graphic)?;
+            #[cfg(not(unix))]
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "subtitle burn-in requires a Unix confined link",
+                ));
             }
-            Some(dir)
-        }
-        #[cfg(not(unix))]
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "subtitle burn-in requires a Unix confined link",
-            ));
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
     // create_new makes an existing file or symlink an error and does not
     // silently clobber it, including when concurrently created.
     let mut destination = OpenOptions::new()
