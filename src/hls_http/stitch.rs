@@ -187,3 +187,97 @@ pub(super) async fn video_stitch(
     set_continuation_path(&mut response, &item, &next.id, Some(duration));
     Ok(response)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(
+        root: &Path,
+        id: &str,
+        start: u64,
+        duration: u64,
+        media_sequence: u64,
+        count: usize,
+    ) -> Published {
+        let mut media_playlist = format!(
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:{media_sequence}\n#EXT-X-PLAYLIST-TYPE:VOD\n"
+        );
+        let segments = (0..count)
+            .map(|index| {
+                if index != 0 {
+                    media_playlist.push_str("#EXT-X-DISCONTINUITY\n");
+                }
+                media_playlist.push_str(&format!("#EXTINF:2.000,\n{index}.ts\n"));
+                (root.join(format!("fake-{id}-{index}.ts")), 376_u64)
+            })
+            .collect();
+        media_playlist.push_str("#EXT-X-ENDLIST\n");
+        Published {
+            id: id.to_owned(),
+            item: "synthetic-item".to_owned(),
+            kind: "video",
+            digest: [7; 32],
+            source: PathBuf::from("/synthetic/feature.mkv"),
+            source_size: 123,
+            source_modified: None,
+            target_seconds: 2,
+            start_time_ticks: start,
+            excerpt_duration_ticks: Some(duration),
+            media_sequence,
+            rendition_count: 1,
+            subtitle_stream_index: Some(1),
+            sidecar: Some(SidecarRevision {
+                filename: "feature.es.sup".to_owned(),
+                digest: [9; 32],
+            }),
+            private_root: root.join(format!("preview-{id}")),
+            main_playlist: media_playlist.clone(),
+            master_playlist: String::new(),
+            media_playlist,
+            segments,
+            variants: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn preview_pair_requires_exact_published_timeline_and_shared_grant() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = sample(temp.path(), "first", 100_000_000, 40_000_000, 0, 2);
+        let mut next = sample(temp.path(), "next", 140_000_000, 20_000_000, 2, 1);
+        let (manifest, duration) = make_preview("synthetic-item", &first, &next).unwrap();
+        assert_eq!(duration, 60_000_000);
+        assert_eq!(manifest.matches("#EXTINF:").count(), 3);
+        assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY\n").count(), 2);
+        assert!(manifest.contains("/Videos/synthetic-item/hls1/first/0.ts"));
+        assert!(manifest.contains("/Videos/synthetic-item/hls1/next/0.ts"));
+        assert!(manifest.contains("#EXT-X-DISCONTINUITY-SEQUENCE:0\n"));
+        assert_eq!(validate_pair(&next, &first), Err(StatusCode::NOT_FOUND));
+
+        next.start_time_ticks += 1;
+        assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
+        next.start_time_ticks -= 1;
+
+        next.media_sequence += 1;
+        assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
+        next.media_sequence -= 1;
+
+        next.digest = [0; 32];
+        assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
+        next.digest = [7; 32];
+
+        next.sidecar.as_mut().unwrap().digest = [0; 32];
+        assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
+        next.sidecar.as_mut().unwrap().digest = [9; 32];
+
+        next.rendition_count = 2;
+        assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
+        next.rendition_count = 1;
+
+        next.media_playlist = "untrusted fragment".to_owned();
+        assert_eq!(
+            make_preview("synthetic-item", &first, &next),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+    }
+}
