@@ -760,10 +760,12 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     fs::write(&sidecar, &sup).unwrap();
     catalog::index(&state_dir, &library).unwrap();
     auth::create_user(&state_dir, "admin", "private-excerpt-admin-password").unwrap();
+    auth::create_user(&state_dir, "viewer", "private-excerpt-viewer-password").unwrap();
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
     let token = auth::authenticate(
         &state_dir,
-        "admin",
-        "private-excerpt-admin-password",
+        "viewer",
+        "private-excerpt-viewer-password",
         "server",
     )
     .unwrap()
@@ -771,8 +773,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     .access_token;
     let other = auth::authenticate(
         &state_dir,
-        "admin",
-        "private-excerpt-admin-password",
+        "viewer",
+        "private-excerpt-viewer-password",
         "server",
     )
     .unwrap()
@@ -780,7 +782,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     .access_token;
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
-        state_dir,
+        state_dir.clone(),
     )));
     let items = call(&app, "/Items", Some(&token)).await;
     assert_eq!(items.status(), StatusCode::OK);
@@ -1107,6 +1109,25 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NO_CONTENT
     );
 
+    // A token-scoped continuation cannot outlive the viewer's library grant,
+    // including at EOF where no new FFmpeg job is needed.
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&app, &format!("/Videos/{id}/{}", final_variants[0]), Some(&token))
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
     let first_uri = final_segment_uri;
     let mut modified = sup;
     let index = modified
@@ -1119,5 +1140,23 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &first_uri, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(fs::read(&source).unwrap(), original);
+    // Even if a sidecar is restored, replacing the underlying media must
+    // invalidate the original continuation UUID, including at EOF.
+    fs::write(&sidecar, &sup).unwrap();
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    let mut replacement = original;
+    replacement.extend_from_slice(b"synthetic changed source revision");
+    fs::write(&source, replacement).unwrap();
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
 }
