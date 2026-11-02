@@ -976,6 +976,64 @@ mod tests {
         );
     }
 
+    #[test]
+    fn private_continuation_revision_guard_rejects_source_and_sidecar_changes() {
+        let sidecar = SidecarRevision {
+            filename: "feature.es.sup".to_owned(),
+            digest: [42; 32],
+        };
+        let source = Path::new("/synthetic/feature.mkv");
+        let original = ExpectedRevision {
+            source: source.to_path_buf(),
+            size: 1234,
+            modified: Some(std::time::SystemTime::UNIX_EPOCH),
+            sidecar: Some(sidecar.clone()),
+        };
+        assert!(original.matches(
+            source,
+            1234,
+            Some(std::time::SystemTime::UNIX_EPOCH),
+            Some(&sidecar),
+        ));
+        assert!(!original.matches(
+            Path::new("/synthetic/replacement.mkv"),
+            1234,
+            Some(std::time::SystemTime::UNIX_EPOCH),
+            Some(&sidecar),
+        ));
+        assert!(!original.matches(
+            source,
+            1235,
+            Some(std::time::SystemTime::UNIX_EPOCH),
+            Some(&sidecar),
+        ));
+        assert!(!original.matches(source, 1234, None, Some(&sidecar)));
+        assert!(!original.matches(
+            source,
+            1234,
+            Some(std::time::SystemTime::UNIX_EPOCH),
+            Some(&SidecarRevision {
+                filename: sidecar.filename.clone(),
+                digest: [99; 32],
+            }),
+        ));
+        assert!(!original.matches(
+            source,
+            1234,
+            Some(std::time::SystemTime::UNIX_EPOCH),
+            None,
+        ));
+        let query: PlaylistQuery = serde_json::from_str(r#"{"pelagosExcerptDurationTicks":10000000}"#).unwrap();
+        assert!(query.expected_revision.is_none());
+        // The caller cannot inject or override the internal chain guard.
+        assert!(
+            serde_json::from_str::<PlaylistQuery>(
+                r#"{"expectedRevision":{"size":1234}}"#,
+            )
+            .is_err()
+        );
+    }
+
     #[tokio::test]
     async fn bounded_hls_generation_queue_coalesces_and_recovers_after_cancellation() {
         let registry = Arc::new(HlsRegistry::new(PathBuf::from("ffmpeg")));
