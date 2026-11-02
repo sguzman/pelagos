@@ -324,7 +324,7 @@ mod tests {
             pcs.extend_from_slice(&[0, 1, 0, 0, 0, 1, 0, 1]);
         }
         let mut bytes = packet(0x16, &pcs);
-        bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 4, 0, 2]));
+        bytes.extend(packet(0x17, &[1, 0, 0, 0, 0, 0, 0, 4, 0, 2]));
         bytes.extend(packet(
             0x14,
             &[0, 0, 0, 235, 128, 128, 255, 1, 16, 128, 128, 255],
