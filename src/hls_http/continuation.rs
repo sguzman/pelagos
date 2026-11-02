@@ -75,6 +75,12 @@ pub(super) async fn video_next(
         media_source_id: Some(item.clone()),
         subtitle_stream_index: publication.subtitle_stream_index,
         subtitle_method: Some("Encode".to_owned()),
+        expected_revision: Some(ExpectedRevision {
+            source: publication.source.clone(),
+            size: publication.source_size,
+            modified: publication.source_modified,
+            sidecar: publication.sidecar.clone(),
+        }),
         ..PlaylistQuery::default()
     };
     generate_hls_playlist(

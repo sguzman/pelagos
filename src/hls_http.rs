@@ -154,6 +154,35 @@ struct PlaylistQuery {
     video_stream_index: Option<i64>,
     subtitle_stream_index: Option<i64>,
     subtitle_method: Option<String>,
+    // Only the internal continuation handler can set this. Never accepted
+    // from an HTTP query, even if the caller guesses the field name.
+    #[serde(skip)]
+    expected_revision: Option<ExpectedRevision>,
+}
+
+/// An internal-only chain guard: continuation must not silently move from
+/// the authorized original source/sidecar bytes to a newly selected revision.
+#[derive(Debug, Clone)]
+struct ExpectedRevision {
+    source: PathBuf,
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+    sidecar: Option<SidecarRevision>,
+}
+
+impl ExpectedRevision {
+    fn matches(
+        &self,
+        source: &Path,
+        size: u64,
+        modified: Option<std::time::SystemTime>,
+        sidecar: Option<&SidecarRevision>,
+    ) -> bool {
+        self.source == source
+            && self.size == size
+            && self.modified == modified
+            && self.sidecar.as_ref() == sidecar
+    }
 }
 
 /// Recognize explicit pinned v12.3 codec/container constraints without
@@ -338,6 +367,16 @@ async fn generate_hls_playlist(
         .map_err(|_| StatusCode::NOT_FOUND)?;
     let source_size = metadata.len();
     let source_modified = metadata.modified().ok();
+    if query.expected_revision.as_ref().is_some_and(|expected| {
+        !expected.matches(
+            &source,
+            source_size,
+            source_modified,
+            sidecar_revision.as_ref(),
+        )
+    }) {
+        return Err(StatusCode::NOT_FOUND);
+    }
     let registry = state.hls_registry();
     let cache_key = CacheLookup {
         item: &item,
