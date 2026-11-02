@@ -529,6 +529,48 @@ pub fn constant_window_graphic(
     }
 }
 
+/// A source-time subwindow that holds one constant PGS composition.
+/// A future HLS scheduler may align segment boundaries with these timestamps,
+/// but this planner does not encode or publish any media.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphicWindowChunk<'a> {
+    pub start_90khz: u32,
+    pub end_90khz: u32,
+    pub graphic: WindowGraphic<'a>,
+}
+
+/// Split a requested half-open source interval only at verified PCS changes.
+/// The resulting at-most-17 chunks preserve explicit clears and refuse
+/// extrapolation beyond an unknown final display-set duration.
+pub fn plan_graphic_window_chunks(
+    frames: &[TimedRgbaDisplaySet],
+    start_90khz: u32,
+    end_90khz: u32,
+) -> Option<Vec<GraphicWindowChunk<'_>>> {
+    if frames.is_empty() || frames.len() > MAX_TIMELINE_FRAMES || start_90khz >= end_90khz {
+        return None;
+    }
+    let mut chunks = Vec::new();
+    let mut cursor = start_90khz;
+    while cursor < end_90khz {
+        if chunks.len() > MAX_TIMELINE_FRAMES {
+            return None;
+        }
+        let boundary = frames
+            .iter()
+            .find(|frame| frame.pts_90khz > cursor)
+            .map_or(end_90khz, |frame| frame.pts_90khz.min(end_90khz));
+        let graphic = constant_window_graphic(frames, cursor, boundary)?;
+        chunks.push(GraphicWindowChunk {
+            start_90khz: cursor,
+            end_90khz: boundary,
+            graphic,
+        });
+        cursor = boundary;
+    }
+    Some(chunks)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
