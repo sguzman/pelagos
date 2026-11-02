@@ -1601,7 +1601,7 @@ pub(crate) async fn reauthorize_video_source(
 /// Copy an FFprobe-confirmed embedded PGS track to its raw SUP framing.
 /// Never render/burn bitmap subtitles or modify source media. The output is
 /// bounded like external SUP sidecars and shares text-extraction workers.
-async fn extract_embedded_pgs(
+pub(crate) async fn extract_embedded_pgs(
     executable: &Path,
     source: &Path,
     index: i64,
