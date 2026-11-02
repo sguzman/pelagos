@@ -956,6 +956,31 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         .collect::<Vec<_>>();
     assert!(timestamps.len() >= 50);
     assert!(timestamps.windows(2).all(|pair| pair[0] < pair[1]));
+    let decoded_audio = Command::new("ffmpeg")
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+        .arg(temp.path().join("switch.m3u8"))
+        .args(["-map", "0:a:0", "-f", "framemd5", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        decoded_audio.status.success(),
+        "AAC switch decode: {}",
+        String::from_utf8_lossy(&decoded_audio.stderr)
+    );
+    let audio_pts = String::from_utf8_lossy(&decoded_audio.stdout)
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .map(|line| {
+            line.split(',')
+                .nth(2)
+                .unwrap()
+                .trim()
+                .parse::<i64>()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert!(audio_pts.len() >= 80);
+    assert!(audio_pts.windows(2).all(|pair| pair[0] < pair[1]));
     assert_eq!(fs::read(&source).unwrap(), unchanged);
     // Embedded subtitles use FFmpeg's subtitle-relative index, while
     // external sidecars use a distinct deterministic PlaybackInfo index.
