@@ -27,10 +27,12 @@ use std::{
 };
 use uuid::Uuid;
 
+mod continuation;
 mod registry;
 mod segments;
 mod tracks;
 pub use registry::HlsRegistry;
+use continuation::video_next;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
 use segments::serve_segment;
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
@@ -806,6 +808,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/Videos/{item_id}/master.m3u8", get(video_master))
         .route("/Audio/{item_id}/main.m3u8", get(audio_main))
         .route("/Audio/{item_id}/master.m3u8", get(audio_master))
+        .route(
+            "/Videos/{item_id}/hls1/{playlist_id}/next.m3u8",
+            get(video_next),
+        )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
             get(video_segment).head(head_video_segment),
