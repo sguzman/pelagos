@@ -116,6 +116,29 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
+    // Verify in stream order: a same-duration EXTINF at another position
+    // must not make a swapped segment reference look valid.
+    let mut expected = 0_usize;
+    let mut lines = body.lines();
+    let mut preceding = None;
+    while let Some(line) = lines.next() {
+        if line.starts_with("#EXTINF:") {
+            if expected > 0 && preceding != Some("#EXT-X-DISCONTINUITY") {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            let actual = lines.next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+            if actual != format!("{expected}.ts") {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            expected += 1;
+            preceding = Some(actual);
+        } else {
+            preceding = Some(line);
+        }
+    }
+    if expected != pieces.len() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
     Ok((target, pieces))
 }
 
