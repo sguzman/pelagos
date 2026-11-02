@@ -783,6 +783,56 @@ mod tests {
     }
 
     #[test]
+    fn constant_window_selects_graphics_and_explicit_clear_without_cue_bleed() {
+        let mut first = sample(false);
+        first[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        let mut stream = first;
+        for tick in [180_000_u32, 270_000] {
+            let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 1, 0, 0, 0, 0]);
+            clear[2..6].copy_from_slice(&tick.to_be_bytes());
+            clear.extend(packet(0x80, &[]));
+            stream.extend(clear);
+        }
+        let frames = render_epoch_timeline(&stream).unwrap();
+        assert_eq!(frames.len(), 3);
+        assert!(matches!(
+            constant_window_graphic(&frames, 0, 90_000),
+            Some(WindowGraphic::Clear)
+        ));
+        assert!(matches!(
+            constant_window_graphic(&frames, 90_000, 180_000),
+            Some(WindowGraphic::Image(_))
+        ));
+        assert!(matches!(
+            constant_window_graphic(&frames, 135_000, 150_000),
+            Some(WindowGraphic::Image(_))
+        ));
+        assert!(matches!(
+            constant_window_graphic(&frames, 180_000, 270_000),
+            Some(WindowGraphic::Clear)
+        ));
+        for (start, end) in [
+            (0, 120_000),
+            (135_000, 225_000),
+            (240_000, 300_000),
+            (270_000, 280_000),
+            (90_000, 90_000),
+            (180_000, 100_000),
+        ] {
+            assert!(
+                constant_window_graphic(&frames, start, end).is_none(),
+                "invalid window {start}..{end} should not leak graphics"
+            );
+        }
+        let mut inconsistent = frames.clone();
+        inconsistent[0].duration_90khz = Some(1);
+        assert!(constant_window_graphic(&inconsistent, 90_000, 95_000).is_none());
+        let mut fabricated_last = frames;
+        fabricated_last[2].duration_90khz = Some(90_000);
+        assert!(constant_window_graphic(&fabricated_last, 90_000, 100_000).is_none());
+    }
+
+    #[test]
     fn timeline_rejects_unbounded_number_of_clear_frames() {
         let mut stream = Vec::new();
         for tick in 1..=17_u32 {
