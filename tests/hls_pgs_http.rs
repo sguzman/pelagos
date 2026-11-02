@@ -800,6 +800,15 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
 
     let base = format!("/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6050000000");
     let selected = format!("{base}&subtitleStreamIndex={index}&subtitleMethod=Encode");
+    // Without an explicitly bounded excerpt the existing client-facing
+    // VOD route must not publish a truncated 610-second source.
+    let legacy = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=10&subtitleStreamIndex={index}&subtitleMethod=Encode"
+    );
+    assert_eq!(
+        call(&app, &legacy, Some(&token)).await.status(),
+        StatusCode::NOT_IMPLEMENTED
+    );
     let excerpt = format!("{selected}&pelagosExcerptDurationTicks=40000000");
     assert_eq!(
         call(&app, &excerpt, None).await.status(),
