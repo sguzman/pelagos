@@ -913,7 +913,10 @@ mod tests {
         assert_eq!(windows[2].graphic, WindowGraphic::Clear);
         let tail = plan_graphic_window_chunks(&frames, 240_000, 300_000).unwrap();
         assert_eq!(tail.len(), 2);
-        assert!(tail.iter().all(|window| window.graphic == WindowGraphic::Clear));
+        assert!(
+            tail.iter()
+                .all(|window| window.graphic == WindowGraphic::Clear)
+        );
         assert!(plan_graphic_window_chunks(&frames, 45_000, 45_000).is_none());
         assert!(matches!(
             plan_graphic_window_chunks(&frames, 290_000, 300_000)
