@@ -404,18 +404,40 @@ const MAX_TIMELINE_RGBA_BYTES: usize = 64 * 1024 * 1024;
 /// complete palette and object data. It does not support epoch reuse,
 /// 32-bit PTS rollover, live streaming, or inferred final cue durations.
 pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
-    render_timeline(bytes, false)
+    render_timeline(bytes, false, None)
 }
 
 /// Decode a bounded sequence of PGS display sets retaining palette, window,
 /// and object definitions between normal compositions within an epoch.
-/// Epoch starts/acquisition points reset the cache; the same strict 16-frame,
+/// Epoch starts/acquisition points reset the cache; the strict 64-frame,
 /// 64-MiB output budget applies. No video burn-in or client parity is implied.
 pub fn render_epoch_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
-    render_timeline(bytes, true)
+    render_timeline(bytes, true, None)
 }
 
-fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgbaDisplaySet>> {
+/// Decode only the compositions needed for a half-open playback interval.
+/// A single preceding cue establishes the state at the requested seek time;
+/// the first following cue establishes the preceding cue's known end.
+/// Earlier compositions still update the bounded epoch state, but their
+/// rendered planes are discarded. The complete SUP packet framing is checked
+/// before processing; this does not lift the 64-plane, 64-MiB, 32-MiB SUP,
+/// or 32-bit PTS limits, and does not implement a long-VOD scheduler.
+pub fn render_epoch_timeline_for_window(
+    bytes: &[u8],
+    start_90khz: u32,
+    end_90khz: u32,
+) -> Option<Vec<TimedRgbaDisplaySet>> {
+    if start_90khz >= end_90khz {
+        return None;
+    }
+    render_timeline(bytes, true, Some((start_90khz, end_90khz)))
+}
+
+fn render_timeline(
+    bytes: &[u8],
+    keep_epoch_state: bool,
+    window: Option<(u32, u32)>,
+) -> Option<Vec<TimedRgbaDisplaySet>> {
     let mut validation = bytes;
     if !packets_valid(&mut validation, bytes.len() as u64) {
         return None;
@@ -426,6 +448,7 @@ fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgba
     let mut position = 0_usize;
     let mut display_start = 0_usize;
     let mut pts = None;
+    let mut previous_stamp = None;
     while position < bytes.len() {
         let kind = bytes[position + 10];
         let length = usize::from(be16(&bytes[position + 11..position + 13]));
@@ -442,24 +465,31 @@ fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgba
         }
         position += 13 + length;
         if kind == 0x80 {
-            if frames.len() >= MAX_TIMELINE_FRAMES {
+            let stamp = pts.take()?;
+            if previous_stamp.is_some_and(|previous| stamp <= previous) {
                 return None;
             }
-            let stamp = pts.take()?;
+            previous_stamp = Some(stamp);
             let image = if keep_epoch_state {
                 render_with_state(&bytes[display_start..position], &mut epoch)?
             } else {
                 render_single_display_set(&bytes[display_start..position])?
             };
+            // Retain only the latest pre-seek composition; without it a
+            // caption already visible at start could vanish or leak.
+            if window.is_some_and(|(start, _)| stamp < start) {
+                frames.clear();
+                total_rgba_bytes = 0;
+            }
+            if frames.len() >= MAX_TIMELINE_FRAMES {
+                return None;
+            }
             total_rgba_bytes = total_rgba_bytes.checked_add(image.rgba.len())?;
             if total_rgba_bytes > MAX_TIMELINE_RGBA_BYTES {
                 return None;
             }
             if let Some(previous) = frames.last_mut() {
                 previous.duration_90khz = Some(stamp.checked_sub(previous.pts_90khz)?);
-                if previous.duration_90khz == Some(0) {
-                    return None;
-                }
             }
             frames.push(TimedRgbaDisplaySet {
                 pts_90khz: stamp,
@@ -467,6 +497,11 @@ fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgba
                 image,
             });
             display_start = position;
+            // The first cue after the requested end is a duration sentinel.
+            // No later PCS can change any pixel inside this interval.
+            if window.is_some_and(|(_, end)| stamp >= end) {
+                return Some(frames);
+            }
         }
     }
     (display_start == bytes.len() && !frames.is_empty()).then_some(frames)
@@ -971,6 +1006,59 @@ mod tests {
         overflow.extend(extra);
         assert!(render_epoch_timeline(&overflow).is_none());
         assert!(render_self_contained_timeline(&overflow).is_none());
+    }
+
+    #[test]
+    fn seek_scoped_timeline_discards_old_cues_without_losing_boundaries() {
+        let mut stream = Vec::new();
+        for cue in 1..=96_u32 {
+            let mut display = if cue % 2 == 1 {
+                sample(false)
+            } else {
+                let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 0]);
+                clear.extend(packet(0x80, &[]));
+                clear
+            };
+            display[2..6].copy_from_slice(&(cue * 90_000).to_be_bytes());
+            stream.extend(display);
+        }
+        assert!(render_epoch_timeline(&stream).is_none());
+        let frames = render_epoch_timeline_for_window(&stream, 80 * 90_000, 90 * 90_000)
+            .expect("seek must retain the preceding and following compositions");
+        assert_eq!(frames.len(), 12);
+        assert_eq!(frames.first().unwrap().pts_90khz, 79 * 90_000);
+        assert_eq!(frames.last().unwrap().pts_90khz, 90 * 90_000);
+        let windows =
+            plan_graphic_window_chunks(&frames, 80 * 90_000, 90 * 90_000).unwrap();
+        assert_eq!(windows.len(), 10);
+        for (index, chunk) in windows.iter().enumerate() {
+            let cue = 80 + index as u32;
+            assert_eq!(chunk.start_90khz, cue * 90_000);
+            assert_eq!(chunk.end_90khz, (cue + 1) * 90_000);
+            if cue % 2 == 0 {
+                assert_eq!(chunk.graphic, WindowGraphic::Clear);
+            } else {
+                assert!(matches!(chunk.graphic, WindowGraphic::Image(_)));
+            }
+        }
+        // A final explicit clear remains safe through end of source.
+        let tail = render_epoch_timeline_for_window(&stream, 94 * 90_000, 97 * 90_000)
+            .unwrap();
+        let tail_chunks =
+            plan_graphic_window_chunks(&tail, 94 * 90_000, 97 * 90_000).unwrap();
+        assert_eq!(tail_chunks.len(), 3);
+        assert_eq!(tail_chunks[2].graphic, WindowGraphic::Clear);
+
+        assert!(render_epoch_timeline_for_window(&stream, 1, 1).is_none());
+        assert!(render_epoch_timeline_for_window(&stream, 2, 1).is_none());
+        // An opaque final cue is not assumed to stay visible indefinitely.
+        let mut opaque_tail = stream;
+        let mut opaque = sample(false);
+        opaque[2..6].copy_from_slice(&(97 * 90_000_u32).to_be_bytes());
+        opaque_tail.extend(opaque);
+        let frames =
+            render_epoch_timeline_for_window(&opaque_tail, 96 * 90_000, 98 * 90_000).unwrap();
+        assert!(plan_graphic_window_chunks(&frames, 97 * 90_000, 98 * 90_000).is_none());
     }
 
     #[test]
