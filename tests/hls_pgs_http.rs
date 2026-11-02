@@ -723,7 +723,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             "-f",
             "lavfi",
             "-i",
-            "color=c=black:s=32x32:r=2:d=610",
+            "testsrc2=size=160x90:rate=5:duration=610",
             "-f",
             "lavfi",
             "-i",
@@ -732,6 +732,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             "0:v:0",
             "-map",
             "1:a:0",
+            "-vf",
+            "drawbox=x=0:y=0:w=32:h=32:color=black:t=fill",
             "-c:v",
             "mpeg4",
             "-c:a",
@@ -882,6 +884,60 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(response.status(), StatusCode::OK);
     let shorter_playlist = body(response).await;
     assert_ne!(shorter_playlist, playlist);
+
+    // Explicit adaptive excerpts share a cue timeline but publish separate,
+    // token-scoped quality variants. The old full-source path remains closed.
+    let master_url = format!(
+        "/Videos/{id}/master.m3u8?segmentLength=10&startTimeTicks=6050000000&renditions=2&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=40000000"
+    );
+    assert_eq!(
+        call(&app, &master_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let result = call(&app, &master_url, Some(&token)).await;
+    assert_eq!(result.status(), StatusCode::OK);
+    assert_eq!(result.headers()["x-pelagos-excerpt"], "true");
+    let master = body(result).await;
+    let variants = master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .collect::<Vec<_>>();
+    assert_eq!(variants.len(), 2);
+    assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
+    let reused = call(&app, &master_url, Some(&token)).await;
+    assert_eq!(reused.status(), StatusCode::OK);
+    assert_eq!(reused.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(body(reused).await, master);
+    for (variant_index, path) in variants.iter().enumerate() {
+        let response = call(&app, &format!("/Videos/{id}/{path}"), Some(&token)).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["x-pelagos-excerpt"], "true");
+        let manifest = body(response).await;
+        assert_eq!(manifest.matches("#EXTINF:").count(), 3);
+        assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY").count(), 2);
+        let prefix = path.strip_suffix("index.m3u8").unwrap();
+        for (position, expected_visible) in [false, true, false].into_iter().enumerate() {
+            let segment_url = format!("/Videos/{id}/{prefix}{position}.ts");
+            assert_eq!(
+                call(&app, &segment_url, Some(&other)).await.status(),
+                StatusCode::NOT_FOUND
+            );
+            let response = call(&app, &segment_url, Some(&token)).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+                .await
+                .unwrap()
+                .to_vec();
+            assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+            assert_eq!(
+                visible_center(
+                    &bytes,
+                    &temp.path().join(format!("variant-{variant_index}-{position}.ts"))
+                ),
+                expected_visible
+            );
+        }
+    }
 
     let first_uri = format!("/Videos/{id}/{}", urls[0]);
     let mut modified = sup;
