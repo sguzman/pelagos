@@ -951,8 +951,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .split('/')
         .nth(1)
         .unwrap();
-    let invalid_pair =
-        format!("/Videos/{id}/hls1/{original_id}/stitch.m3u8?next={shorter_id}");
+    let invalid_pair = format!("/Videos/{id}/hls1/{original_id}/stitch.m3u8?next={shorter_id}");
     assert_eq!(
         call(&app, &invalid_pair, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
