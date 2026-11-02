@@ -1293,6 +1293,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rgba_graphic_overlay_is_bounded_and_decodes_with_aac() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("media:odd,quote' name.mkv");
+        let output = temp.path().join("graphic-burned.ts");
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(30),
+            16 * 1024 * 1024,
+        )
+        .unwrap();
+        let invalid = RgbaDisplaySet {
+            width: 32,
+            height: 32,
+            rgba: vec![0; 5],
+        };
+        assert_eq!(
+            controller
+                .try_run_window_graphic_capped(&source, &output, 0.0, 1.0, 8 * 1024 * 1024, &invalid)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!output.exists());
+        if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
+            return;
+        }
+        let fixture = Command::new("ffmpeg")
+            .args([
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=black:s=32x32:r=5:d=3",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=1000:duration=3",
+                "-c:v",
+                "mpeg4",
+                "-c:a",
+                "aac",
+                "-y",
+            ])
+            .arg(&source)
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            fixture.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixture.stderr)
+        );
+        let original = stdfs::read(&source).unwrap();
+        let mut rgba = vec![0; 32 * 32 * 4];
+        for y in 8..24 {
+            for x in 8..24 {
+                let pixel = (y * 32 + x) * 4;
+                rgba[pixel..pixel + 4].copy_from_slice(&[255, 255, 255, 255]);
+            }
+        }
+        let plane = RgbaDisplaySet {
+            width: 32,
+            height: 32,
+            rgba,
+        };
+        assert!(
+            controller
+                .try_run_window_graphic_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &plane)
+                .await
+                .unwrap()
+                > 188
+        );
+        let decoded = Command::new("ffmpeg")
+            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&output)
+            .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            decoded.status.success(),
+            "{}",
+            String::from_utf8_lossy(&decoded.stderr)
+        );
+        assert_eq!(decoded.stdout.len(), 32 * 32 * 3);
+        let center = &decoded.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
+        let corner = &decoded.stdout[0..3];
+        assert!(center.iter().all(|channel| *channel > 180), "{center:?}");
+        assert!(corner.iter().all(|channel| *channel < 50), "{corner:?}");
+        let probe = Command::new("ffprobe")
+            .args([
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+            ])
+            .arg(&output)
+            .output()
+            .await
+            .unwrap();
+        assert!(probe.status.success());
+        assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "aac");
+        assert_eq!(stdfs::read(&source).unwrap(), original);
+    }
+
+    #[tokio::test]
     async fn embedded_text_subtitle_burn_in_modifies_video_pixels_when_ci_requires_ffmpeg() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
