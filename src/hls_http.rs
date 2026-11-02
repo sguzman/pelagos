@@ -598,9 +598,7 @@ async fn generate_hls_playlist(
         | Some(HlsSubtitle::ExternalPgs { revision, .. }) => Some(revision.clone()),
         _ => None,
     };
-    if rendition_count > 1
-        && matches!(burn_in_subtitle, Some(HlsSubtitle::ExternalPgs { .. }))
-    {
+    if rendition_count > 1 && matches!(burn_in_subtitle, Some(HlsSubtitle::ExternalPgs { .. })) {
         // A graphical adaptive ladder must share precisely aligned cue
         // windows between every rendition; this single-rendition subset
         // cannot safely claim that compatibility yet.
@@ -706,7 +704,10 @@ async fn generate_hls_playlist(
                 } else {
                     ExternalTextFormat::Srt
                 };
-                Some(hls::AdaptiveSubtitle::External(ExternalTextTrack { bytes, format }))
+                Some(hls::AdaptiveSubtitle::External(ExternalTextTrack {
+                    bytes,
+                    format,
+                }))
             }
             HlsSubtitle::ExternalPgs { .. } => None,
         });
