@@ -22,65 +22,25 @@ use axum::{
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::VecDeque,
     fs, io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncSeekExt},
-    sync::Semaphore,
 };
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
-const MAX_PUBLISHED: usize = 3;
+mod registry;
+pub use registry::HlsRegistry;
+use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
+
 const MAX_MANIFEST: usize = 32 * 1024;
 const MAX_SEGMENT_BYTES: u64 = 128 * 1024 * 1024;
 // Unwrapped 32-bit PGS timestamps use a 90 kHz clock. No rollover is supported.
 const MAX_PGS_START_END_TICKS: u64 = u32::MAX as u64 * 10_000_000 / 90_000;
-
-#[derive(Debug)]
-struct PublishedVariant {
-    name: String,
-    media_playlist: String,
-    segments: Vec<(PathBuf, u64)>,
-}
-
-#[derive(Debug)]
-struct Published {
-    id: String,
-    item: String,
-    kind: &'static str,
-    digest: [u8; 32],
-    source: PathBuf,
-    source_size: u64,
-    source_modified: Option<std::time::SystemTime>,
-    target_seconds: u32,
-    start_time_ticks: u64,
-    excerpt_duration_ticks: Option<u64>,
-    rendition_count: u8,
-    subtitle_stream_index: Option<i64>,
-    sidecar: Option<SidecarRevision>,
-    private_root: PathBuf,
-    main_playlist: String,
-    master_playlist: String,
-    media_playlist: String,
-    segments: Vec<(PathBuf, u64)>,
-    variants: Vec<PublishedVariant>,
-}
-impl Drop for Published {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.private_root);
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SidecarRevision {
-    filename: String,
-    digest: [u8; 32],
-}
 
 enum HlsSubtitle {
     Embedded(u8),
@@ -173,122 +133,6 @@ async fn read_selected_sidecar(source: &Path, filename: &str) -> Result<Vec<u8>,
         read_confined_sup(source, filename).await
     } else {
         read_confined_srt(source, filename).await
-    }
-}
-
-struct CacheLookup<'a> {
-    item: &'a str,
-    kind: &'a str,
-    token: &'a str,
-    source: &'a Path,
-    size: u64,
-    modified: Option<std::time::SystemTime>,
-    target_seconds: u32,
-    start_time_ticks: u64,
-    excerpt_duration_ticks: Option<u64>,
-    rendition_count: u8,
-    subtitle_stream_index: Option<i64>,
-    sidecar: Option<&'a SidecarRevision>,
-}
-
-/// Small private LRU cache; segment access promotes active publications and
-/// an in-flight request holds its own Arc during eviction.
-#[derive(Debug)]
-pub struct HlsRegistry {
-    jobs: Semaphore,
-    waiters: Semaphore,
-    controller: TranscodeController,
-    entries: Mutex<VecDeque<Arc<Published>>>,
-}
-impl HlsRegistry {
-    pub fn new(executable: PathBuf) -> Self {
-        Self {
-            jobs: Semaphore::new(1),
-            waiters: Semaphore::new(4),
-            controller: TranscodeController::new(
-                executable,
-                1,
-                Duration::from_secs(120),
-                MAX_SEGMENT_BYTES,
-            )
-            .expect("constant HLS worker limits"),
-            entries: Mutex::new(VecDeque::new()),
-        }
-    }
-
-    /// Join at most four ongoing HLS publication requests. Once the first
-    /// worker publishes, a waiter rechecks its exact cache key before
-    /// considering any additional FFmpeg work. Cancellation releases both
-    /// admission permits without a background worker or unbounded queue.
-    async fn acquire_generation(&self) -> Result<tokio::sync::SemaphorePermit<'_>, StatusCode> {
-        if let Ok(permit) = self.jobs.try_acquire() {
-            return Ok(permit);
-        }
-        let queued = self
-            .waiters
-            .try_acquire()
-            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
-        let permit = tokio::time::timeout(Duration::from_secs(120), self.jobs.acquire())
-            .await
-            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?
-            .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-        drop(queued);
-        Ok(permit)
-    }
-
-    fn lookup(&self, id: &str, item: &str, kind: &str, token: &str) -> Option<Arc<Published>> {
-        let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let index = entries.iter().position(|entry| {
-            entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest
-        })?;
-        let entry = entries.remove(index)?;
-        entries.push_back(entry.clone());
-        Some(entry)
-    }
-
-    /// Reuse an already completed rendition, never one owned by a sibling
-    /// session or built for different source bytes/segment settings.
-    fn cached(&self, query: &CacheLookup<'_>) -> Option<Arc<Published>> {
-        let digest: [u8; 32] = Sha256::digest(query.token.as_bytes()).into();
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let index = entries.iter().rposition(|entry| {
-            entry.item == query.item
-                && entry.kind == query.kind
-                && entry.digest == digest
-                && entry.source == query.source
-                && entry.source_size == query.size
-                && entry.source_modified == query.modified
-                && entry.target_seconds == query.target_seconds
-                && entry.start_time_ticks == query.start_time_ticks
-                && entry.excerpt_duration_ticks == query.excerpt_duration_ticks
-                && entry.rendition_count == query.rendition_count
-                && entry.subtitle_stream_index == query.subtitle_stream_index
-                && entry.sidecar.as_ref() == query.sidecar
-        })?;
-        let entry = entries.remove(index)?;
-        entries.push_back(entry.clone());
-        Some(entry)
-    }
-
-    fn publish(&self, entry: Arc<Published>) {
-        let removed = {
-            let mut entries = self
-                .entries
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            entries.push_back(entry);
-            (entries.len() > MAX_PUBLISHED)
-                .then(|| entries.pop_front())
-                .flatten()
-        };
-        drop(removed);
     }
 }
 
