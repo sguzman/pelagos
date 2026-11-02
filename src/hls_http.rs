@@ -1023,9 +1023,8 @@ mod tests {
             serde_json::from_str(r#"{"pelagosExcerptDurationTicks":10000000}"#).unwrap();
         assert!(query.expected_revision.is_none());
         // The caller cannot inject or override the internal chain guard.
-        let injected = serde_json::from_str::<PlaylistQuery>(
-            r#"{"expectedRevision":{"size":1234}}"#,
-        );
+        let injected =
+            serde_json::from_str::<PlaylistQuery>(r#"{"expectedRevision":{"size":1234}}"#);
         assert!(injected.is_err());
     }
 
