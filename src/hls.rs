@@ -1206,6 +1206,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_hls_supports_more_than_sixteen_cue_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("many-cues.mkv");
+        stdfs::write(&source, b"unchanged synthetic source").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "many-cues-encoder",
+            "printf '\\107C'; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "many-cues-prober",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"19.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let mut sup = synthetic_pgs_clear_show_clear();
+        let packet = |kind: u8, pts: u32, body: &[u8]| {
+            let mut bytes = b"PG".to_vec();
+            bytes.extend_from_slice(&pts.to_be_bytes());
+            bytes.extend_from_slice(&[0; 4]);
+            bytes.push(kind);
+            bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(body);
+            bytes
+        };
+        // Nineteen valid PCS display sets, ending in an explicit clear.
+        // The old sixteen-frame ceiling rejected this before HLS planning.
+        for second in 3..=18_u32 {
+            let pts = second * 90_000;
+            sup.extend(packet(
+                0x16,
+                pts,
+                &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0],
+            ));
+            sup.extend(packet(0x80, pts, &[]));
+        }
+        let output_dir = temp.path().join("nineteen-cues");
+        let artifact = generate_segmented_vod_with_pgs_from(
+            &controller,
+            &inspector,
+            &source,
+            &output_dir,
+            10,
+            0.0,
+            &sup,
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 19);
+        assert_eq!(artifact.transport_bytes, 19 * 376);
+        let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(playlist.matches("#EXTINF:").count(), 19);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 18);
+        assert_eq!(stdfs::read(&source).unwrap(), b"unchanged synthetic source");
+        artifact.remove().unwrap();
+        assert!(!output_dir.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_rolls_back_after_later_graphic_encoding_failure() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("media.mkv");
