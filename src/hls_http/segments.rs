@@ -83,6 +83,12 @@ pub(super) async fn serve_segment(
             publication.start_time_ticks,
             publication.excerpt_duration_ticks,
         );
+        set_continuation_path(
+            &mut response,
+            &publication.item,
+            &publication.id,
+            publication.excerpt_duration_ticks,
+        );
         return Ok(response);
     }
     let segment_number = name.strip_suffix(".ts").ok_or(StatusCode::NOT_FOUND)?;

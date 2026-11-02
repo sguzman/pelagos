@@ -104,6 +104,22 @@ fn excerpt_playlist_response(
     response
 }
 
+/// This is an experimental opt-in navigation hint, not an HLS protocol tag.
+/// The URL inherits token-scoped publication access and returns 204 at EOF.
+fn set_continuation_path(
+    response: &mut Response,
+    item: &str,
+    publication_id: &str,
+    excerpt_duration_ticks: Option<u64>,
+) {
+    if excerpt_duration_ticks.is_some() {
+        let path = format!("/Videos/{item}/hls1/{publication_id}/next.m3u8");
+        if let Ok(value) = HeaderValue::from_str(&path) {
+            response.headers_mut().insert("x-pelagos-next-path", value);
+        }
+    }
+}
+
 fn set_private_headers(response: &mut Response, mime: &'static str, size: usize) {
     response
         .headers_mut()
@@ -338,7 +354,7 @@ async fn generate_hls_playlist(
         sidecar: sidecar_revision.as_ref(),
     };
     if let Some(existing) = registry.cached(&cache_key) {
-        return Ok(excerpt_playlist_response(
+        let mut response = excerpt_playlist_response(
             if master {
                 &existing.master_playlist
             } else {
@@ -346,7 +362,14 @@ async fn generate_hls_playlist(
             },
             existing.start_time_ticks,
             existing.excerpt_duration_ticks,
-        ));
+        );
+        set_continuation_path(
+            &mut response,
+            &item,
+            &existing.id,
+            existing.excerpt_duration_ticks,
+        );
+        return Ok(response);
     }
     // Admission is reserved before touching any private output path.
     let _permit = registry.acquire_generation().await?;
@@ -354,7 +377,7 @@ async fn generate_hls_playlist(
     // Recheck after reserving the slot: the previous request may have
     // just published this rendition and no second encode is necessary.
     if let Some(existing) = registry.cached(&cache_key) {
-        return Ok(excerpt_playlist_response(
+        let mut response = excerpt_playlist_response(
             if master {
                 &existing.master_playlist
             } else {
@@ -362,7 +385,14 @@ async fn generate_hls_playlist(
             },
             existing.start_time_ticks,
             existing.excerpt_duration_ticks,
-        ));
+        );
+        set_continuation_path(
+            &mut response,
+            &item,
+            &existing.id,
+            existing.excerpt_duration_ticks,
+        );
+        return Ok(response);
     }
     let id = Uuid::new_v4().simple().to_string();
     let private_root = std::env::temp_dir().join(format!("pelagos-hls-{id}"));
@@ -534,8 +564,9 @@ async fn generate_hls_playlist(
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
         reauthorize_publication(&state, &headers, &cache_key).await?;
-        let response =
+        let mut response =
             excerpt_playlist_response(&master_playlist, start_time_ticks, excerpt_duration_ticks);
+        set_continuation_path(&mut response, &item, &id, excerpt_duration_ticks);
         let publication = Arc::new(Published {
             id,
             item,
@@ -671,11 +702,12 @@ async fn generate_hls_playlist(
     let master_playlist = format!(
         "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH={peak_bandwidth}\nhls1/{id}/index.m3u8\n"
     );
-    let response = excerpt_playlist_response(
+    let mut response = excerpt_playlist_response(
         if master { &master_playlist } else { &playlist },
         start_time_ticks,
         excerpt_duration_ticks,
     );
+    set_continuation_path(&mut response, &item, &id, excerpt_duration_ticks);
     let publication = Arc::new(Published {
         id,
         item,

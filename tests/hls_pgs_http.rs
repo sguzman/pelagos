@@ -864,6 +864,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         response.headers()["x-pelagos-excerpt-duration-ticks"],
         "40000000"
     );
+    let advertised_next = response.headers()["x-pelagos-next-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
     let playlist = body(response).await;
     let urls = playlist
         .lines()
@@ -930,6 +934,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         result.headers()["x-pelagos-excerpt-duration-ticks"],
         "40000000"
     );
+    let adaptive_advertised_next = result.headers()["x-pelagos-next-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
     let master = body(result).await;
     let variants = master
         .lines()
@@ -995,6 +1003,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     // the real source end rather than inventing a 600-second full playlist.
     let publication_id = urls[0].split('/').nth(1).unwrap();
     let next_url = format!("/Videos/{id}/hls1/{publication_id}/next.m3u8");
+    assert_eq!(advertised_next, next_url);
     assert_eq!(
         call(&app, &next_url, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -1044,6 +1053,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     // independently encoded variants and the same exact source interval.
     let adaptive_id = variants[0].split('/').nth(1).unwrap();
     let adaptive_next = format!("/Videos/{id}/hls1/{adaptive_id}/next.m3u8");
+    assert_eq!(adaptive_advertised_next, adaptive_next);
     assert_eq!(
         call(&app, &adaptive_next, Some(&other)).await.status(),
         StatusCode::NOT_FOUND
