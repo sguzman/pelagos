@@ -1599,6 +1599,9 @@ pub(crate) async fn reauthorize_video_source(
 }
 
 /// Copy an FFprobe-confirmed embedded PGS track to its raw SUP framing.
+/// Preserve the original PGS timestamps: without -copyts FFmpeg can shift
+/// every SUP packet by AAC encoder-priming time (e.g. 23 ms), creating
+/// spurious sub-100ms cue boundaries in otherwise valid HLS windows.
 /// Never render/burn bitmap subtitles or modify source media. The output is
 /// bounded like external SUP sidecars and shares text-extraction workers.
 pub(crate) async fn extract_embedded_pgs(
@@ -1616,7 +1619,7 @@ pub(crate) async fn extract_embedded_pgs(
         .try_acquire_owned()
         .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
     let mut child = Command::new(executable)
-        .args(["-nostdin", "-hide_banner", "-loglevel", "error"])
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-copyts"])
         .arg("-i")
         .arg(source)
         .arg("-map")
