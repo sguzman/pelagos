@@ -1415,6 +1415,49 @@ mod tests {
                 && audio_codecs.lines().all(|codec| codec == "aac"),
             "expected only AAC audio in probe output: {audio_codecs}"
         );
+        let prior_transport = stdfs::read(&output).unwrap();
+        assert_eq!(
+            controller
+                .try_run_window_graphic_capped(&source, &output, 0.0, 2.0, 8 * 1024 * 1024, &plane)
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(stdfs::read(&output).unwrap(), prior_transport);
+
+        // HLS segments seek the source. A fixed staged image must remain
+        // visible throughout the requested source window, not at PTS zero.
+        let seek_output = temp.path().join("graphic-seeked.ts");
+        assert!(
+            controller
+                .try_run_window_graphic_capped(
+                    &source,
+                    &seek_output,
+                    1.0,
+                    1.0,
+                    8 * 1024 * 1024,
+                    &plane,
+                )
+                .await
+                .unwrap()
+                > 188
+        );
+        let seeked = Command::new("ffmpeg")
+            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
+            .arg(&seek_output)
+            .args(["-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
+            .output()
+            .await
+            .unwrap();
+        assert!(
+            seeked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&seeked.stderr)
+        );
+        assert_eq!(seeked.stdout.len(), 32 * 32 * 3);
+        let center = &seeked.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
+        assert!(center.iter().all(|component| *component > 180), "{center:?}");
         assert_eq!(stdfs::read(&source).unwrap(), original);
     }
 
