@@ -559,6 +559,21 @@ mod tests {
     }
 
     #[test]
+    fn undefined_palette_indices_fail_closed_but_declared_clear_pixels_render() {
+        let mut missing = sample(false);
+        let pcs_len = usize::from(be16(&missing[11..13]));
+        let second_color_index = 13 + pcs_len + 13 + 10 + 13 + 7;
+        missing[second_color_index] = 2;
+        assert!(render_single_display_set(&missing).is_none());
+
+        let mut explicit_clear = sample(false);
+        explicit_clear[second_color_index + 4] = 0;
+        let frame = render_single_display_set(&explicit_clear).unwrap();
+        assert_eq!(&frame.rgba[20..24], &[255, 255, 255, 255]);
+        assert_eq!(&frame.rgba[24..28], &[0, 0, 0, 0]);
+    }
+
+    #[test]
     fn fragmented_objects_and_incremental_palette_updates_render_identically() {
         let original = sample(false);
         let ods_start = original.len() - (13 + 15) - 13;
