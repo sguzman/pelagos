@@ -274,6 +274,17 @@ mod tests {
         assert_eq!(validate_pair(&first, &next), Err(StatusCode::NOT_FOUND));
         next.rendition_count = 1;
 
+        let mut reordered = sample(temp.path(), "swapped", 100_000_000, 40_000_000, 0, 2);
+        reordered.media_playlist = reordered
+            .media_playlist
+            .replace("0.ts", "placeholder.ts")
+            .replace("1.ts", "0.ts")
+            .replace("placeholder.ts", "1.ts");
+        assert_eq!(
+            make_preview("synthetic-item", &reordered, &next),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+
         next.media_playlist = "untrusted fragment".to_owned();
         assert_eq!(
             make_preview("synthetic-item", &first, &next),
