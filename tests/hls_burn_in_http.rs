@@ -987,6 +987,40 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
             "seeked variant {index} lost timed subtitle or AAC"
         );
     }
+    // Verify the complete current 2–4-rendition bounded ladder with a
+    // selected external subtitle. Every variant must contain caption pixels
+    // and AAC audio; source and sidecar are still unchanged.
+    let four_route = route.replacen("renditions=2", "renditions=4", 1);
+    let four_response = call(&app, &four_route, Some(&token)).await;
+    assert_eq!(four_response.status(), StatusCode::OK);
+    let four_master = body_string(four_response).await;
+    assert_eq!(four_master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 4);
+    for (index, variant) in four_master
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with("/index.m3u8"))
+        .enumerate()
+    {
+        let segment_name = format!("{}0.ts", variant.strip_suffix("index.m3u8").unwrap());
+        let segment_route = format!("/Videos/{id}/{segment_name}");
+        if index == 0 {
+            // The cache retains three publications. Check stale-subtitle
+            // rejection on this newest publication, not an evicted one.
+            old_segment = Some(segment_route.clone());
+        }
+        let segment = call(&app, &segment_route, Some(&token)).await;
+        assert_eq!(segment.status(), StatusCode::OK);
+        let bytes = to_bytes(segment.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(
+            adaptive_caption_bottom_pixels(
+                &bytes,
+                &temp.path().join(format!("four-variant{index}.ts"))
+            ) > 40,
+            "four-rendition variant {index} lost captions or AAC"
+        );
+    }
+    assert_eq!(fs::read(&source).unwrap(), unchanged);
     fs::write(
         &sidecar,
         b"1\n00:00:00,200 --> 00:00:01,800\nCHANGED ADAPTIVE TEXT\n\n",
