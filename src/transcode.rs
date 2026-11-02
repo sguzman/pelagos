@@ -269,6 +269,7 @@ impl TranscodeController {
                 window: Some(window),
                 burn_in_subtitle: None,
                 external_text: None,
+                external_graphic: None,
             },
         )
         .await
