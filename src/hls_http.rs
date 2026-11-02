@@ -81,6 +81,7 @@ struct SidecarRevision {
 
 enum HlsSubtitle {
     Embedded(u8),
+    EmbeddedPgs(Vec<u8>),
     ExternalSrt {
         bytes: Vec<u8>,
         revision: SidecarRevision,
@@ -435,15 +436,25 @@ async fn validate_hls_track_selection(
             .enumerate()
             .find(|(_, stream)| stream["index"].as_i64() == Some(global_index));
         if let Some((position, stream)) = track {
-            if position > 31
-                || !matches!(
-                    stream["codec_name"].as_str(),
-                    Some("subrip" | "ass" | "ssa")
-                )
-            {
+            if position > 31 {
                 return Err(StatusCode::NOT_IMPLEMENTED);
             }
-            return Ok(Some(HlsSubtitle::Embedded(position as u8)));
+            if matches!(stream["codec_name"].as_str(), Some("subrip" | "ass" | "ssa")) {
+                return Ok(Some(HlsSubtitle::Embedded(position as u8)));
+            }
+            if matches!(
+                stream["codec_name"].as_str(),
+                Some("hdmv_pgs_subtitle" | "pgssub")
+            ) {
+                let bytes = playback::extract_embedded_pgs(
+                    state.ffmpeg_executable(),
+                    source,
+                    global_index,
+                )
+                .await?;
+                return Ok(Some(HlsSubtitle::EmbeddedPgs(bytes)));
+            }
+            return Err(StatusCode::NOT_IMPLEMENTED);
         }
         if let Some(filename) = playback::hls_text_sidecar_filename(source, &report, global_index) {
             let bytes = read_confined_srt(source, &filename).await?;
@@ -598,7 +609,12 @@ async fn generate_hls_playlist(
         | Some(HlsSubtitle::ExternalPgs { revision, .. }) => Some(revision.clone()),
         _ => None,
     };
-    if rendition_count > 1 && matches!(burn_in_subtitle, Some(HlsSubtitle::ExternalPgs { .. })) {
+    if rendition_count > 1
+        && matches!(
+            burn_in_subtitle,
+            Some(HlsSubtitle::ExternalPgs { .. } | HlsSubtitle::EmbeddedPgs(_))
+        )
+    {
         // A graphical adaptive ladder must share precisely aligned cue
         // windows between every rendition; this single-rendition subset
         // cannot safely claim that compatibility yet.
@@ -709,7 +725,7 @@ async fn generate_hls_playlist(
                     format,
                 }))
             }
-            HlsSubtitle::ExternalPgs { .. } => None,
+            HlsSubtitle::ExternalPgs { .. } | HlsSubtitle::EmbeddedPgs(_) => None,
         });
         let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
             &registry.controller,
@@ -851,7 +867,8 @@ async fn generate_hls_playlist(
             )
             .await
         }
-        Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
+        Some(HlsSubtitle::EmbeddedPgs(bytes))
+        | Some(HlsSubtitle::ExternalPgs { bytes, .. }) => {
             hls::generate_segmented_vod_with_pgs_from(
                 &registry.controller,
                 state.probe_executable(),
