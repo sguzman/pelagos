@@ -79,11 +79,28 @@ struct Window {
 
 /// Decoder state kept within one PGS epoch. Object pixels are separately
 /// bounded in addition to the compressed SUP input and returned RGBA planes.
+/// A missing indexed color is not equivalent to an explicitly defined
+/// transparent entry. Reject incomplete graphical palettes rather than
+/// silently rendering an opaque subtitle glyph invisible.
+struct RgbaPalette {
+    rgba: [[u8; 4]; 256],
+    defined: [bool; 256],
+}
+
+impl Default for RgbaPalette {
+    fn default() -> Self {
+        Self {
+            rgba: [[0; 4]; 256],
+            defined: [false; 256],
+        }
+    }
+}
+
 #[derive(Default)]
 struct EpochState {
     geometry: Option<(u16, u16)>,
     windows: BTreeMap<u8, Window>,
-    palettes: BTreeMap<u8, [[u8; 4]; 256]>,
+    palettes: BTreeMap<u8, RgbaPalette>,
     objects: BTreeMap<u16, ObjectPixels>,
 }
 
@@ -260,10 +277,12 @@ fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplay
                 if !state.palettes.contains_key(&id) && state.palettes.len() >= 8 {
                     return None;
                 }
-                let colors = state.palettes.entry(id).or_insert([[0_u8; 4]; 256]);
+                let palette = state.palettes.entry(id).or_default();
                 for entry in segment[2..].chunks_exact(5) {
-                    colors[usize::from(entry[0])] =
+                    let index = usize::from(entry[0]);
+                    palette.rgba[index] =
                         palette_rgba(entry[1], entry[2], entry[3], entry[4], pcs.height);
+                    palette.defined[index] = true;
                 }
             }
             0x15 => {
@@ -320,7 +339,7 @@ fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplay
     let width = usize::from(pcs.width);
     let height = usize::from(pcs.height);
     let mut rgba = vec![0_u8; width.checked_mul(height)?.checked_mul(4)?];
-    let colors = if pcs.objects.is_empty() {
+    let palette = if pcs.objects.is_empty() {
         None
     } else {
         Some(state.palettes.get(&pcs.palette_id)?)
@@ -351,7 +370,11 @@ fn render_with_state(bytes: &[u8], state: &mut EpochState) -> Option<RgbaDisplay
                 let index =
                     usize::from(object.indices[(crop_y + row) * object.width + crop_x + col]);
                 let offset = (dest_y * width + dest_x) * 4;
-                over(&mut rgba[offset..offset + 4], colors?[index]);
+                let color_table = palette?;
+                if !color_table.defined[index] {
+                    return None;
+                }
+                over(&mut rgba[offset..offset + 4], color_table.rgba[index]);
             }
         }
     }
