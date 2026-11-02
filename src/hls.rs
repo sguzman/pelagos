@@ -1332,6 +1332,151 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_window_encodes_short_excerpt_from_hour_long_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("readonly-feature.mkv");
+        stdfs::write(&source, b"unchanged long source").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "window-encoder",
+            "if [ -f input.tga ]; then printf '\\107I'; else printf '\\107C'; fi; head -c 186 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "window-prober",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3600.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let packet = |kind: u8, pts: u32, body: &[u8]| {
+            let mut bytes = b"PG".to_vec();
+            bytes.extend_from_slice(&pts.to_be_bytes());
+            bytes.extend_from_slice(&[0; 4]);
+            bytes.push(kind);
+            bytes.extend_from_slice(&(body.len() as u16).to_be_bytes());
+            bytes.extend_from_slice(body);
+            bytes
+        };
+        let mut sup = Vec::new();
+        // These historical cues would exceed the old retained-frame limit.
+        for second in (0..=74_u32).map(|index| index * 45) {
+            let pts = second * 90_000;
+            sup.extend(packet(
+                0x16,
+                pts,
+                &[0, 32, 0, 32, 0x10, 0, 0, 0x80, 0, 0, 0],
+            ));
+            sup.extend(packet(0x80, pts, &[]));
+        }
+        let mut late = synthetic_pgs_clear_show_clear();
+        let mut position = 0;
+        while position < late.len() {
+            let size = usize::from(u16::from_be_bytes([late[position + 11], late[position + 12]]));
+            let pts =
+                u32::from_be_bytes(late[position + 2..position + 6].try_into().unwrap());
+            late[position + 2..position + 6]
+                .copy_from_slice(&(pts + 3591 * 90_000).to_be_bytes());
+            position += 13 + size;
+        }
+        sup.extend(late);
+
+        let output = temp.path().join("excerpt");
+        let artifact = generate_segmented_pgs_window(
+            &controller,
+            &inspector,
+            &source,
+            &output,
+            10,
+            PgsPlaybackWindow {
+                start_seconds: 3591.0,
+                duration_seconds: 6.0,
+                sup_bytes: &sup,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(artifact.segment_paths.len(), 3);
+        assert_eq!(artifact.transport_bytes, 3 * 376);
+        for (index, marker) in b"CIC".iter().copied().enumerate() {
+            let bytes = stdfs::read(&artifact.segment_paths[index]).unwrap();
+            assert_eq!(bytes.len(), 376);
+            assert_eq!(bytes[0], 0x47);
+            assert_eq!(bytes[1], marker);
+            assert_eq!(bytes[188], 0x47);
+        }
+        let playlist = stdfs::read_to_string(&artifact.playlist_path).unwrap();
+        assert_eq!(playlist.matches("#EXTINF:").count(), 3);
+        assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 2);
+        assert_eq!(stdfs::read(&source).unwrap(), b"unchanged long source");
+        artifact.remove().unwrap();
+        assert!(!output.exists());
+
+        // The original full-VOD entry point must not silently treat a
+        // 3600-second movie as if it were a complete 600-second playlist.
+        let legacy = temp.path().join("legacy");
+        let err = generate_segmented_vod_with_pgs_from(
+            &controller,
+            &inspector,
+            &source,
+            &legacy,
+            10,
+            3591.0,
+            &sup,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(!legacy.exists());
+    }
+
+    #[tokio::test]
+    async fn private_pgs_window_rejects_invalid_ranges_before_creation() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source.mkv");
+        stdfs::write(&source, b"immutable media").unwrap();
+        let encoder = executable(temp.path(), "unused-encoder", "exit 99");
+        let inspector = executable(
+            temp.path(),
+            "source-prober",
+            r#"printf '%s' '{"format":{"duration":"3600.0"},"streams":[{"codec_type":"video","width":32,"height":32}]}'"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let sup = synthetic_pgs_clear_show_clear();
+        for (index, (start, duration)) in [
+            (3590.0, 0.0),
+            (3590.0, 0.09),
+            (3590.0, 601.0),
+            (3599.0, 5.0),
+            (-1.0, 5.0),
+            (f64::NAN, 5.0),
+            (3590.0, f64::INFINITY),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let output = temp.path().join(format!("invalid-{index}"));
+            let err = generate_segmented_pgs_window(
+                &controller,
+                &inspector,
+                &source,
+                &output,
+                10,
+                PgsPlaybackWindow {
+                    start_seconds: start,
+                    duration_seconds: duration,
+                    sup_bytes: &sup,
+                },
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+            assert!(!output.exists());
+        }
+        assert_eq!(stdfs::read(&source).unwrap(), b"immutable media");
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_seek_uses_late_compositions_from_longer_sup() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("readonly.mkv");
