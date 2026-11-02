@@ -295,6 +295,75 @@ pub fn render_single_display_set(bytes: &[u8]) -> Option<RgbaDisplaySet> {
     })
 }
 
+/// A separately rasterized self-contained display set and its presentation
+/// time. The final duration remains unknown until a subsequent clear/update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimedRgbaDisplaySet {
+    pub pts_90khz: u32,
+    pub duration_90khz: Option<u32>,
+    pub image: RgbaDisplaySet,
+}
+
+const MAX_TIMELINE_FRAMES: usize = 16;
+const MAX_TIMELINE_RGBA_BYTES: usize = 64 * 1024 * 1024;
+
+/// Decode a small sequence of independent display sets, retaining only
+/// the stream's actual PCS timestamps and bounded RGBA snapshots. This
+/// experimental subset requires every displayed image to carry its own
+/// complete palette and object data. It does not support epoch reuse,
+/// 32-bit PTS rollover, live streaming, or inferred final cue durations.
+pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
+    let mut validation = bytes;
+    if !packets_valid(&mut validation, bytes.len() as u64) {
+        return None;
+    }
+    let mut frames: Vec<TimedRgbaDisplaySet> = Vec::new();
+    let mut total_rgba_bytes = 0_usize;
+    let mut position = 0_usize;
+    let mut display_start = 0_usize;
+    let mut pts = None;
+    while position < bytes.len() {
+        let kind = bytes[position + 10];
+        let length = usize::from(be16(&bytes[position + 11..position + 13]));
+        if kind == 0x16 {
+            if pts.is_some() {
+                return None;
+            }
+            pts = Some(u32::from_be_bytes([
+                bytes[position + 2],
+                bytes[position + 3],
+                bytes[position + 4],
+                bytes[position + 5],
+            ]));
+        }
+        position += 13 + length;
+        if kind == 0x80 {
+            if frames.len() >= MAX_TIMELINE_FRAMES {
+                return None;
+            }
+            let stamp = pts.take()?;
+            let image = render_single_display_set(&bytes[display_start..position])?;
+            total_rgba_bytes = total_rgba_bytes.checked_add(image.rgba.len())?;
+            if total_rgba_bytes > MAX_TIMELINE_RGBA_BYTES {
+                return None;
+            }
+            if let Some(previous) = frames.last_mut() {
+                previous.duration_90khz = Some(stamp.checked_sub(previous.pts_90khz)?);
+                if previous.duration_90khz == Some(0) {
+                    return None;
+                }
+            }
+            frames.push(TimedRgbaDisplaySet {
+                pts_90khz: stamp,
+                duration_90khz: None,
+                image,
+            });
+            display_start = position;
+        }
+    }
+    (display_start == bytes.len() && !frames.is_empty()).then_some(frames)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
