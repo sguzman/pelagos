@@ -128,7 +128,7 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
 
 /// Keep bitmap expansion bounded independently of the raw SUP file cap.
 /// This is a decoder preflight, not a renderer or bitmap-to-PNG API.
-const MAX_BITMAP_PIXELS: usize = 4 * 1024 * 1024;
+pub(crate) const MAX_BITMAP_PIXELS: usize = 4 * 1024 * 1024;
 const MAX_OBJECT_RLE_BYTES: usize = 4 * 1024 * 1024;
 
 struct PendingObject {
@@ -142,7 +142,7 @@ struct PendingObject {
 /// octet is one literal pixel; zero introduces short/long transparent or
 /// colored runs, or an explicit end-of-line marker. No palette interpretation
 /// occurs here. Dimensions and output memory are checked before allocation.
-fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
+pub(crate) fn decode_rle_bitmap(data: &[u8], width: u16, height: u16) -> Option<Vec<u8>> {
     let width = usize::from(width);
     let height = usize::from(height);
     let area = width.checked_mul(height)?;
