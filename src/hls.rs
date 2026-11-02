@@ -1204,6 +1204,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_hls_rolls_back_after_later_graphic_encoding_failure() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("media.mkv");
+        stdfs::write(&source, b"immutable source fixture").unwrap();
+        // Clear segment succeeds, then graphic staging begins in a private
+        // directory and the next FFmpeg job fails. No partially published
+        // playlist, segment or directory is allowed to survive that error.
+        let encoder = executable(
+            temp.path(),
+            "fail-graphic-ffmpeg",
+            "if [ -f input.tga ]; then exit 42; fi; printf '\\107'; head -c 187 /dev/zero; printf '\\107'; head -c 187 /dev/zero",
+        );
+        let inspector = executable(
+            temp.path(),
+            "fixture-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let controller =
+            TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let output = temp.path().join("rollback-graphic-hls");
+        assert!(
+            generate_segmented_vod_with_pgs_from(
+                &controller,
+                &inspector,
+                &source,
+                &output,
+                2,
+                0.0,
+                &synthetic_pgs_clear_show_clear(),
+            )
+            .await
+            .is_err()
+        );
+        assert!(!output.exists());
+        assert_eq!(stdfs::read(&source).unwrap(), b"immutable source fixture");
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_real_ffmpeg_preserves_show_clear_video_transitions() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
