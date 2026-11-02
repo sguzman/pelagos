@@ -911,10 +911,7 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     }
     // Exercise a real variant switch with subtitle overlay and AAC audio:
     // first transport part at quality 0, second at quality 1.
-    let switched_segment = format!(
-        "{}1.ts",
-        variants[1].strip_suffix("index.m3u8").unwrap()
-    );
+    let switched_segment = format!("{}1.ts", variants[1].strip_suffix("index.m3u8").unwrap());
     let switched_route = format!("/Videos/{id}/{switched_segment}");
     assert_eq!(
         call(&app, &switched_route, Some(&sibling)).await.status(),
@@ -926,10 +923,7 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
         .await
         .unwrap();
     assert!(
-        adaptive_caption_bottom_pixels(
-            &switched_bytes,
-            &temp.path().join("switched1.ts")
-        ) > 40,
+        adaptive_caption_bottom_pixels(&switched_bytes, &temp.path().join("switched1.ts")) > 40,
         "second caption missing after variant switch"
     );
     fs::write(
@@ -951,7 +945,14 @@ async fn adaptive_external_srt_burn_in_preserves_text_in_every_variant() {
     let timestamps = String::from_utf8_lossy(&decoded_switch.stdout)
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
-        .map(|line| line.split(',').nth(2).unwrap().trim().parse::<i64>().unwrap())
+        .map(|line| {
+            line.split(',')
+                .nth(2)
+                .unwrap()
+                .trim()
+                .parse::<i64>()
+                .unwrap()
+        })
         .collect::<Vec<_>>();
     assert!(timestamps.len() >= 50);
     assert!(timestamps.windows(2).all(|pair| pair[0] < pair[1]));
