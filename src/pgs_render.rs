@@ -880,6 +880,35 @@ mod tests {
     }
 
     #[test]
+    fn cue_aligned_chunks_split_clear_show_clear_without_extrapolation() {
+        let mut first = sample(false);
+        first[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
+        let mut bytes = first;
+        for timestamp in [180_000_u32, 270_000] {
+            let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 1, 0, 0, 0, 0]);
+            clear[2..6].copy_from_slice(&timestamp.to_be_bytes());
+            clear.extend(packet(0x80, &[]));
+            bytes.extend(clear);
+        }
+        let frames = render_epoch_timeline(&bytes).unwrap();
+        let windows = plan_graphic_window_chunks(&frames, 45_000, 240_000).unwrap();
+        assert_eq!(windows.len(), 3);
+        assert_eq!(
+            windows
+                .iter()
+                .map(|window| (window.start_90khz, window.end_90khz))
+                .collect::<Vec<_>>(),
+            vec![(45_000, 90_000), (90_000, 180_000), (180_000, 240_000)]
+        );
+        assert_eq!(windows[0].graphic, WindowGraphic::Clear);
+        assert!(matches!(windows[1].graphic, WindowGraphic::Image(_)));
+        assert_eq!(windows[2].graphic, WindowGraphic::Clear);
+        assert!(plan_graphic_window_chunks(&frames, 240_000, 300_000).is_none());
+        assert!(plan_graphic_window_chunks(&frames, 45_000, 45_000).is_none());
+        assert!(plan_graphic_window_chunks(&frames, 290_000, 300_000).is_none());
+    }
+
+    #[test]
     fn timeline_rejects_unbounded_number_of_clear_frames() {
         let mut stream = Vec::new();
         for tick in 1..=17_u32 {
