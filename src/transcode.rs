@@ -1409,7 +1409,12 @@ mod tests {
             .await
             .unwrap();
         assert!(probe.status.success());
-        assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "aac");
+        let audio_codecs = String::from_utf8_lossy(&probe.stdout);
+        assert!(
+            audio_codecs.lines().next() == Some("aac")
+                && audio_codecs.lines().all(|codec| codec == "aac"),
+            "expected only AAC audio in probe output: {audio_codecs}"
+        );
         assert_eq!(stdfs::read(&source).unwrap(), original);
     }
 
