@@ -185,7 +185,7 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         call(
             &app,
             &format!(
-                "/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode&EnableAdaptiveBitrateStreaming=true"
+                "/Videos/{id}/master.m3u8?segmentLength=2&subtitleStreamIndex={index}&subtitleMethod=Encode&enableAdaptiveBitrateStreaming=true"
             ),
             Some(&token)
         )
