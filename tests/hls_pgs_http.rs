@@ -932,7 +932,9 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             assert_eq!(
                 visible_center(
                     &bytes,
-                    &temp.path().join(format!("variant-{variant_index}-{position}.ts"))
+                    &temp
+                        .path()
+                        .join(format!("variant-{variant_index}-{position}.ts"))
                 ),
                 expected_visible
             );
