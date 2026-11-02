@@ -1126,6 +1126,17 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         "50000000"
     );
     let stitched_playlist = body(stitched).await;
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(stitch_url.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(head).await.unwrap().status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    assert!(stitched_playlist.contains("#EXT-X-PLAYLIST-TYPE:VOD\n"));
     assert!(stitched_playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
     assert!(stitched_playlist.contains("#EXT-X-DISCONTINUITY-SEQUENCE:0\n"));
     assert_eq!(stitched_playlist.matches("#EXTINF:").count(), 4);

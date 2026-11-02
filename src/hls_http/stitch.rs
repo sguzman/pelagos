@@ -168,6 +168,9 @@ pub(super) async fn video_stitch(
         .lookup(&query.next, &item, "video", &token)
         .ok_or(StatusCode::NOT_FOUND)?;
     validate_pair(&first, &next)?;
+    // Pair validation is cheap, but each source/sidecar reauthorization may
+    // read bounded subtitle bytes. Share the existing preflight limit.
+    let _probe = registry.acquire_track_probe()?;
     reauthorize_publication(&state, &headers, &lookup(&first, &token)).await?;
     reauthorize_publication(&state, &headers, &lookup(&next, &token)).await?;
     let (playlist, duration) = make_preview(&item, &first, &next)?;
