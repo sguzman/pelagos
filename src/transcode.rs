@@ -1045,6 +1045,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn invalid_adaptive_subtitle_targets_fail_before_creating_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("synthetic-unopened-media.mkv");
+        let output = temp.path().join("must-not-exist.ts");
+        let controller = TranscodeController::new(
+            PathBuf::from("ffmpeg"),
+            1,
+            Duration::from_secs(10),
+            4 * 1024 * 1024,
+        )
+        .unwrap();
+        let invalid = MpegTsQuality {
+            video_kbps: 0,
+            audio_kbps: 0,
+        };
+        let embedded = controller
+            .try_run_window_burn_in_quality_capped(
+                &source,
+                &output,
+                SubtitleBurnInWindow {
+                    start_seconds: 0.0,
+                    duration_seconds: 1.0,
+                    remaining_bytes: 1024,
+                    subtitle_index: 0,
+                },
+                Some(invalid),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(embedded.kind(), io::ErrorKind::InvalidInput);
+        let external = controller
+            .try_run_window_external_text_quality_capped(
+                &source,
+                &output,
+                SubtitleTextWindow {
+                    start_seconds: 0.0,
+                    duration_seconds: 1.0,
+                    remaining_bytes: 1024,
+                    subtitle: ExternalTextTrack {
+                        bytes: b"1\n00:00:00,100 --> 00:00:00,900\nTEST\n\n",
+                        format: ExternalTextFormat::Srt,
+                    },
+                    quality: Some(invalid),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(external.kind(), io::ErrorKind::InvalidInput);
+        assert!(!output.exists());
+        assert_eq!(controller.active_jobs(), 0);
+    }
+
+    #[tokio::test]
     async fn native_external_ass_preserves_distinct_style_colors_in_decoded_video() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
