@@ -1105,9 +1105,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(to_bytes(response.into_body(), 16).await.unwrap().len(), 0);
 
     let final_id = final_segments[0].split('/').nth(1).unwrap();
-    let stitch_url = format!(
-        "/Videos/{id}/hls1/{publication_id}/stitch.m3u8?next={final_id}"
-    );
+    let stitch_url = format!("/Videos/{id}/hls1/{publication_id}/stitch.m3u8?next={final_id}");
     assert_eq!(
         call(&app, &stitch_url, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -1131,17 +1129,14 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(stitched_playlist.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
     assert!(stitched_playlist.contains("#EXT-X-DISCONTINUITY-SEQUENCE:0\n"));
     assert_eq!(stitched_playlist.matches("#EXTINF:").count(), 4);
-    assert_eq!(stitched_playlist.matches("#EXT-X-DISCONTINUITY\n").count(), 3);
-    assert!(stitched_playlist.ends_with("#EXT-X-ENDLIST\n"));
-    assert!(stitched_playlist.contains(&format!(
-        "/Videos/{id}/hls1/{publication_id}/0.ts"
-    )));
-    assert!(stitched_playlist.contains(&format!(
-        "/Videos/{id}/hls1/{final_id}/0.ts"
-    )));
-    let reversed = format!(
-        "/Videos/{id}/hls1/{final_id}/stitch.m3u8?next={publication_id}"
+    assert_eq!(
+        stitched_playlist.matches("#EXT-X-DISCONTINUITY\n").count(),
+        3
     );
+    assert!(stitched_playlist.ends_with("#EXT-X-ENDLIST\n"));
+    assert!(stitched_playlist.contains(&format!("/Videos/{id}/hls1/{publication_id}/0.ts")));
+    assert!(stitched_playlist.contains(&format!("/Videos/{id}/hls1/{final_id}/0.ts")));
+    let reversed = format!("/Videos/{id}/hls1/{final_id}/stitch.m3u8?next={publication_id}");
     assert_eq!(
         call(&app, &reversed, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
