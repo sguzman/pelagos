@@ -1364,9 +1364,8 @@ mod tests {
 
     #[tokio::test]
     async fn pgs_window_dispatches_clear_bitmap_and_rejects_cue_transitions() {
-        let (temp, executable, source, _) = fixture(
-            "if [ -f input.tga ]; then printf 'IMAGE'; else printf 'CLEAR'; fi",
-        );
+        let (temp, executable, source, _) =
+            fixture("if [ -f input.tga ]; then printf 'IMAGE'; else printf 'CLEAR'; fi");
         let controller =
             TranscodeController::new(executable, 1, Duration::from_secs(3), 64).unwrap();
         let packet = |kind: u8, body: &[u8]| {
@@ -1378,8 +1377,7 @@ mod tests {
             bytes
         };
         let mut pcs = vec![
-            0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 1,
-            0, 1, 0, 0, 0, 0, 0, 0,
+            0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0,
         ];
         let mut sup = packet(0x16, &pcs);
         sup[2..6].copy_from_slice(&90_000_u32.to_be_bytes());
