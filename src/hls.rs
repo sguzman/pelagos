@@ -1169,7 +1169,7 @@ mod tests {
         .unwrap();
         assert_eq!(artifact.segment_paths.len(), 4);
         assert_eq!(artifact.transport_bytes, 4 * 376);
-        for (index, expected) in [b'C', b'I', b'I', b'C'].into_iter().enumerate() {
+        for (index, expected) in b"CIIC".iter().copied().enumerate() {
             let bytes = stdfs::read(&artifact.segment_paths[index]).unwrap();
             assert_eq!(bytes.len(), 376);
             assert_eq!(bytes[0], 0x47);
