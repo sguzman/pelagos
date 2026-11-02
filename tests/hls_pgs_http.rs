@@ -529,55 +529,7 @@ async fn adaptive_embedded_matroska_pgs_renders_every_variant_without_source_cha
         "/Videos/{id}/master.m3u8?segmentLength=2&renditions=2&subtitleStreamIndex={index}&subtitleMethod=Encode"
     );
     let response = call(&app, &master_url, Some(&token)).await;
-    if response.status() != StatusCode::OK {
-        // Diagnostic for the separate embedded graphical input path.
-        // Keep this test failing until the real cause is understood.
-        let extracted = Command::new("ffmpeg")
-            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
-            .arg(&source)
-            .args(["-map", "0:2", "-c:s", "copy", "-f", "sup", "pipe:1"])
-            .output()
-            .unwrap();
-        let frames = pelagos::pgs_render::render_epoch_timeline(&extracted.stdout)
-            .map(|timeline| timeline.len());
-        let controller = pelagos::transcode::TranscodeController::new(
-            "ffmpeg".into(),
-            1,
-            std::time::Duration::from_secs(120),
-            128 * 1024 * 1024,
-        )
-        .unwrap();
-        let qualities = [
-            pelagos::transcode::MpegTsQuality {
-                video_kbps: 400,
-                audio_kbps: 96,
-            },
-            pelagos::transcode::MpegTsQuality {
-                video_kbps: 800,
-                audio_kbps: 128,
-            },
-        ];
-        let direct = pelagos::hls::generate_adaptive_segmented_vod_with_subtitle_from(
-            &controller,
-            std::path::Path::new("ffprobe"),
-            &source,
-            &temp.path().join("diagnostic-adaptive"),
-            2,
-            pelagos::hls::AdaptiveWindow {
-                start_seconds: 0.0,
-                qualities: &qualities,
-                subtitle: Some(pelagos::hls::AdaptiveSubtitle::Pgs(&extracted.stdout)),
-            },
-        )
-        .await
-        .map(|artifact| artifact.variants.len());
-        panic!(
-            "embedded adaptive HTTP={}; extracted_status={}; sup_len={}; frames={frames:?}; direct={direct:?}",
-            response.status(),
-            extracted.status,
-            extracted.stdout.len()
-        );
-    }
+    assert_eq!(response.status(), StatusCode::OK);
     let master = body(response).await;
     assert_eq!(master.matches("#EXT-X-STREAM-INF:BANDWIDTH=").count(), 2);
     let variants = master
