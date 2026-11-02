@@ -260,6 +260,18 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
         );
     }
     let first_uri = format!("/Videos/{id}/{}", urls[0]);
+    // A normal Jellyfin-compatible VOD publication is never implicitly
+    // promoted into the Pelagos-only long-source continuation protocol.
+    let legacy_id = urls[0].split('/').nth(1).unwrap();
+    let forbidden_next = format!("/Videos/{id}/hls1/{legacy_id}/next.m3u8");
+    assert_eq!(
+        call(&app, &forbidden_next, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&app, &forbidden_next, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_eq!(
         call(&app, &first_uri, None).await.status(),
         StatusCode::UNAUTHORIZED
