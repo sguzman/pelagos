@@ -18,7 +18,7 @@ use crate::{
     probe,
     transcode::{
         ExternalTextFormat, ExternalTextTrack, MpegTsQuality, SubtitleBurnInWindow,
-        TranscodeController,
+        SubtitleTextWindow, TranscodeController,
     },
 };
 
@@ -521,11 +521,21 @@ async fn generate_segmented_vod_configured(
         }
         let size = if let Some(track) = options.external_text {
             controller
-                .try_run_window_external_text_capped(source, &path, start, duration, budget, track)
+                .try_run_window_external_text_quality_capped(
+                    source,
+                    &path,
+                    SubtitleTextWindow {
+                        start_seconds: start,
+                        duration_seconds: duration,
+                        remaining_bytes: budget,
+                        subtitle: track,
+                        quality: options.quality,
+                    },
+                )
                 .await?
         } else if let Some(subtitle_index) = options.subtitle_index {
             controller
-                .try_run_window_burn_in_capped(
+                .try_run_window_burn_in_quality_capped(
                     source,
                     &path,
                     SubtitleBurnInWindow {
@@ -534,6 +544,7 @@ async fn generate_segmented_vod_configured(
                         remaining_bytes: budget,
                         subtitle_index,
                     },
+                    options.quality,
                 )
                 .await?
         } else {
@@ -703,6 +714,21 @@ fn adaptive_segments_aligned(reference: &[HlsSegment], next: &[HlsSegment]) -> b
     true
 }
 
+/// Exactly one subtitle selection is burned into every independently
+/// encoded adaptive rendition, preserving a common cue timeline.
+#[derive(Debug, Clone, Copy)]
+pub enum AdaptiveSubtitle<'a> {
+    Embedded(u8),
+    External(ExternalTextTrack<'a>),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AdaptiveWindow<'a> {
+    pub start_seconds: f64,
+    pub qualities: &'a [MpegTsQuality],
+    pub subtitle: Option<AdaptiveSubtitle<'a>>,
+}
+
 /// Produce 2–4 independently encoded, short-segment HLS VOD renditions.
 /// Publish the master only after all requested outputs are verified. The
 /// authenticated audio/video HTTP paths can expose these as opt-in, source- and
@@ -740,6 +766,36 @@ pub async fn generate_adaptive_segmented_vod_from(
     start_seconds: f64,
     qualities: &[MpegTsQuality],
 ) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    generate_adaptive_segmented_vod_with_subtitle_from(
+        controller,
+        ffprobe,
+        source,
+        output_dir,
+        target_seconds,
+        AdaptiveWindow {
+            start_seconds,
+            qualities,
+            subtitle: None,
+        },
+    )
+    .await
+}
+
+/// Two to four bitrate-distinct HLS variants with the same selected subtitle
+/// overlay. Returns only after all renditions pass independent validation.
+pub async fn generate_adaptive_segmented_vod_with_subtitle_from(
+    controller: &TranscodeController,
+    ffprobe: &Path,
+    source: &Path,
+    output_dir: &Path,
+    target_seconds: u32,
+    request: AdaptiveWindow<'_>,
+) -> io::Result<HlsAdaptiveSegmentedArtifact> {
+    let AdaptiveWindow {
+        start_seconds,
+        qualities,
+        subtitle,
+    } = request;
     if !(2..=4).contains(&qualities.len()) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -763,7 +819,14 @@ pub async fn generate_adaptive_segmented_vod_from(
             start_seconds,
             SegmentedOptions {
                 quality: Some(*quality),
-                ..SegmentedOptions::default()
+                subtitle_index: match subtitle {
+                    Some(AdaptiveSubtitle::Embedded(index)) => Some(index),
+                    _ => None,
+                },
+                external_text: match subtitle {
+                    Some(AdaptiveSubtitle::External(track)) => Some(track),
+                    _ => None,
+                },
             },
         )
         .await?;
