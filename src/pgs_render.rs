@@ -347,11 +347,24 @@ const MAX_TIMELINE_RGBA_BYTES: usize = 64 * 1024 * 1024;
 /// complete palette and object data. It does not support epoch reuse,
 /// 32-bit PTS rollover, live streaming, or inferred final cue durations.
 pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
+    render_timeline(bytes, false)
+}
+
+/// Decode a bounded sequence of PGS display sets retaining palette, window,
+/// and object definitions between normal compositions within an epoch.
+/// Epoch starts/acquisition points reset the cache; the same strict 16-frame,
+/// 64-MiB output budget applies. No video burn-in or client parity is implied.
+pub fn render_epoch_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDisplaySet>> {
+    render_timeline(bytes, true)
+}
+
+fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgbaDisplaySet>> {
     let mut validation = bytes;
     if !packets_valid(&mut validation, bytes.len() as u64) {
         return None;
     }
     let mut frames: Vec<TimedRgbaDisplaySet> = Vec::new();
+    let mut epoch = EpochState::default();
     let mut total_rgba_bytes = 0_usize;
     let mut position = 0_usize;
     let mut display_start = 0_usize;
@@ -376,7 +389,11 @@ pub fn render_self_contained_timeline(bytes: &[u8]) -> Option<Vec<TimedRgbaDispl
                 return None;
             }
             let stamp = pts.take()?;
-            let image = render_single_display_set(&bytes[display_start..position])?;
+            let image = if keep_epoch_state {
+                render_with_state(&bytes[display_start..position], &mut epoch)?
+            } else {
+                render_single_display_set(&bytes[display_start..position])?
+            };
             total_rgba_bytes = total_rgba_bytes.checked_add(image.rgba.len())?;
             if total_rgba_bytes > MAX_TIMELINE_RGBA_BYTES {
                 return None;
