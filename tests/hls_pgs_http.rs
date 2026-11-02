@@ -86,8 +86,7 @@ fn visible_center(media: &[u8], path: &std::path::Path) -> bool {
     assert_eq!(decoded.stdout.len(), 32 * 32 * 3);
     let center = &decoded.stdout[(16 * 32 + 16) * 3..(16 * 32 + 16) * 3 + 3];
     assert!(
-        center.iter().all(|channel| *channel < 65)
-            || center.iter().all(|channel| *channel > 170),
+        center.iter().all(|channel| *channel < 65) || center.iter().all(|channel| *channel > 170),
         "ambiguous synthetic PGS pixel: {center:?}"
     );
     center.iter().all(|channel| *channel > 170)
@@ -144,15 +143,10 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
     auth::create_user(&state_dir, "admin", "pgs-test-admin-password").unwrap();
     auth::create_user(&state_dir, "viewer", "pgs-test-viewer-password").unwrap();
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
-    let token = auth::authenticate(
-        &state_dir,
-        "viewer",
-        "pgs-test-viewer-password",
-        "server",
-    )
-    .unwrap()
-    .unwrap()
-    .access_token;
+    let token = auth::authenticate(&state_dir, "viewer", "pgs-test-viewer-password", "server")
+        .unwrap()
+        .unwrap()
+        .access_token;
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
         state_dir,
@@ -161,12 +155,7 @@ async fn external_pgs_opt_in_hls_is_authorized_timed_and_rechecks_sidecar_revisi
     assert_eq!(response.status(), StatusCode::OK);
     let items: Value = serde_json::from_str(&body(response).await).unwrap();
     let id = items["Items"][0]["Id"].as_str().unwrap();
-    let response = call(
-        &app,
-        &format!("/Items/{id}/PlaybackInfo"),
-        Some(&token),
-    )
-    .await;
+    let response = call(&app, &format!("/Items/{id}/PlaybackInfo"), Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let info: Value = serde_json::from_str(&body(response).await).unwrap();
     let subtitle = info["MediaSources"][0]["MediaStreams"]
