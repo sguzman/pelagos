@@ -481,6 +481,18 @@ fn render_timeline(
                 frames.clear();
                 total_rgba_bytes = 0;
             }
+            // Inside a bounded playback interval, identical consecutive
+            // images are not visible transitions. Keep their ordered PTS
+            // checks and epoch-state updates, but do not consume another
+            // snapshot or force an extra short HLS segment. Preserve the
+            // first composition at/after the requested end as a duration
+            // sentinel, even if it has identical pixels.
+            if window.is_some_and(|(_, end)| stamp < end)
+                && frames.last().is_some_and(|previous| previous.image == image)
+            {
+                display_start = position;
+                continue;
+            }
             if frames.len() >= MAX_TIMELINE_FRAMES {
                 return None;
             }
@@ -1077,6 +1089,40 @@ mod tests {
         let frames =
             render_epoch_timeline_for_window(&opaque_tail, 96 * 90_000, 98 * 90_000).unwrap();
         assert!(plan_graphic_window_chunks(&frames, 97 * 90_000, 98 * 90_000).is_none());
+    }
+
+    #[test]
+    fn seek_timeline_coalesces_redundant_compositions_without_cue_bleed() {
+        let mut stream = Vec::new();
+        for second in 0..=80_u32 {
+            let mut show = sample(false);
+            show[2..6].copy_from_slice(&(second * 90_000).to_be_bytes());
+            stream.extend(show);
+        }
+        let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 0]);
+        clear[2..6].copy_from_slice(&(81 * 90_000_u32).to_be_bytes());
+        clear.extend(packet(0x80, &[]));
+        stream.extend(clear);
+
+        // Whole-track rendering still has the strict 64-frame limit.
+        assert!(render_epoch_timeline(&stream).is_none());
+        let frames = render_epoch_timeline_for_window(&stream, 0, 82 * 90_000).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].pts_90khz, 0);
+        assert_eq!(frames[0].duration_90khz, Some(81 * 90_000));
+        assert_eq!(frames[1].pts_90khz, 81 * 90_000);
+        let chunks = plan_graphic_window_chunks(&frames, 0, 82 * 90_000).unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert!(matches!(chunks[0].graphic, WindowGraphic::Image(_)));
+        assert_eq!(chunks[1].graphic, WindowGraphic::Clear);
+
+        // Repeated identical visible compositions are not evidence of a
+        // final clear. Unknown opaque tails remain unsupported.
+        let unknown_tail = &stream[..stream.len() - (13 + 11 + 13)];
+        let frames =
+            render_epoch_timeline_for_window(unknown_tail, 0, 82 * 90_000).unwrap();
+        assert_eq!(frames.len(), 1);
+        assert!(plan_graphic_window_chunks(&frames, 0, 82 * 90_000).is_none());
     }
 
     #[test]
