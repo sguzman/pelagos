@@ -48,7 +48,7 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
                 && (bytes.len() - 2) % 5 == 0
                 && (bytes.len() - 2) / 5 <= 256
                 && palette_entries_unique(bytes)
-        },
+        }
         // Object ID, version, sequence flags, and optionally image metadata.
         0x15 => {
             if bytes.len() < 4 || bytes[3] & 0x3f != 0 {
