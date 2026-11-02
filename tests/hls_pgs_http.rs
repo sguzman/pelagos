@@ -76,8 +76,15 @@ fn visible_center(media: &[u8], path: &std::path::Path) -> bool {
         .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-i"])
         .arg(path)
         .args([
-            "-frames:v", "1", "-vf", "crop=32:32:0:0", "-pix_fmt", "rgb24", "-f",
-            "rawvideo", "-",
+            "-frames:v",
+            "1",
+            "-vf",
+            "crop=32:32:0:0",
+            "-pix_fmt",
+            "rgb24",
+            "-f",
+            "rawvideo",
+            "-",
         ])
         .output()
         .unwrap();
@@ -389,7 +396,11 @@ async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() 
         assert_eq!(playlist.matches("#EXT-X-DISCONTINUITY").count(), 3);
         assert!(playlist.ends_with("#EXT-X-ENDLIST\n"));
         for (position, expected) in [false, true, true, false].into_iter().enumerate() {
-            let segment = format!("{}{}.ts", variant.strip_suffix("index.m3u8").unwrap(), position);
+            let segment = format!(
+                "{}{}.ts",
+                variant.strip_suffix("index.m3u8").unwrap(),
+                position
+            );
             let uri = format!("/Videos/{id}/{segment}");
             if variant_index == 0 && position == 1 {
                 stale_uri = uri.clone();
@@ -408,7 +419,9 @@ async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() 
             assert_eq!(
                 visible_center(
                     &bytes,
-                    &temp.path().join(format!("adaptive-{variant_index}-{position}.ts"))
+                    &temp
+                        .path()
+                        .join(format!("adaptive-{variant_index}-{position}.ts"))
                 ),
                 expected
             );
