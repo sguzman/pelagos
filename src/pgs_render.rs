@@ -471,6 +471,59 @@ fn render_timeline(bytes: &[u8], keep_epoch_state: bool) -> Option<Vec<TimedRgba
     (display_start == bytes.len() && !frames.is_empty()).then_some(frames)
 }
 
+/// A graphics plane that is provably constant for a requested media
+/// window, or a known blank window before the first cue / during a clear PCS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowGraphic<'a> {
+    Clear,
+    Image(&'a RgbaDisplaySet),
+}
+
+/// Resolve a half-open source-time window in 90 kHz PGS ticks. Reject a
+/// window crossing any composition change; a final display set without a
+/// subsequent timestamp has no proven end and is therefore unsupported.
+/// This prevents one still bitmap from leaking into the next subtitle cue.
+///
+/// The timeline must originate from the bounded render_*_timeline APIs.
+/// No HLS, FFmpeg, media access or authorization is performed here.
+pub fn constant_window_graphic(
+    frames: &[TimedRgbaDisplaySet],
+    start_90khz: u32,
+    end_90khz: u32,
+) -> Option<WindowGraphic<'_>> {
+    if frames.is_empty()
+        || frames.len() > MAX_TIMELINE_FRAMES
+        || start_90khz >= end_90khz
+    {
+        return None;
+    }
+    for (index, frame) in frames.iter().enumerate() {
+        if let Some(next) = frames.get(index + 1) {
+            if frame.pts_90khz >= next.pts_90khz
+                || frame.duration_90khz != next.pts_90khz.checked_sub(frame.pts_90khz)
+            {
+                return None;
+            }
+        } else if frame.duration_90khz.is_some() {
+            // The last cue must not fabricate a duration.
+            return None;
+        }
+    }
+    if end_90khz <= frames[0].pts_90khz {
+        return Some(WindowGraphic::Clear);
+    }
+    let current = frames.iter().rev().find(|frame| frame.pts_90khz <= start_90khz)?;
+    let end = current.pts_90khz.checked_add(current.duration_90khz?)?;
+    if end_90khz > end {
+        return None;
+    }
+    if current.image.rgba.chunks_exact(4).all(|pixel| pixel[3] == 0) {
+        Some(WindowGraphic::Clear)
+    } else {
+        Some(WindowGraphic::Image(&current.image))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
