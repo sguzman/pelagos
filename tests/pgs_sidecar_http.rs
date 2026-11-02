@@ -369,7 +369,10 @@ async fn native_pgs_sidecar_is_ranged_and_keeps_source_untouched() {
     );
     assert_eq!(fs::read(root.join("Feature.ja.sup")).unwrap(), invalid_rle);
     assert_eq!(fs::read(root.join("Feature.ko.sup")).unwrap(), crossing_row);
-    assert_eq!(fs::read(root.join("Feature.pl.sup")).unwrap(), bad_composition);
+    assert_eq!(
+        fs::read(root.join("Feature.pl.sup")).unwrap(),
+        bad_composition
+    );
     assert_eq!(fs::read(root.join("Feature.es.sup")).unwrap(), PGS);
     assert_eq!(fs::read(&movie).unwrap(), source_bytes);
     auth::revoke_library(&state, "viewer", &root).unwrap();
