@@ -1391,6 +1391,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn graphical_quality_is_validated_before_output_and_forwarded_to_ffmpeg() {
+        let (temp, executable, source, _) = fixture(
+            "for arg in \"$@\"; do if [ \"$arg\" = \"1500k\" ]; then printf 'QUALITY'; exit 0; fi; done; printf 'NOQUALITY'",
+        );
+        let runner =
+            TranscodeController::new(executable, 1, Duration::from_secs(3), 1024).unwrap();
+        let rgba = RgbaDisplaySet {
+            width: 16,
+            height: 16,
+            rgba: vec![255; 16 * 16 * 4],
+        };
+        let output = temp.path().join("rated.ts");
+        assert_eq!(
+            runner
+                .try_run_window_graphic_quality_capped(
+                    &source,
+                    &output,
+                    0.0,
+                    1.0,
+                    1024,
+                    &rgba,
+                    Some(MpegTsQuality {
+                        video_kbps: 1500,
+                        audio_kbps: 1,
+                    }),
+                )
+                .await
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!output.exists());
+        let written = runner
+            .try_run_window_graphic_quality_capped(
+                &source,
+                &output,
+                0.0,
+                1.0,
+                1024,
+                &rgba,
+                Some(MpegTsQuality {
+                    video_kbps: 1500,
+                    audio_kbps: 96,
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(written, 7);
+        assert_eq!(stdfs::read(&output).unwrap(), b"QUALITY");
+        let plain = temp.path().join("plain.ts");
+        runner
+            .try_run_window_graphic_capped(&source, &plain, 0.0, 1.0, 1024, &rgba)
+            .await
+            .unwrap();
+        assert_eq!(stdfs::read(&plain).unwrap(), b"NOQUALITY");
+    }
+
+    #[tokio::test]
     async fn pgs_window_dispatches_clear_bitmap_and_rejects_cue_transitions() {
         let (temp, executable, source, _) =
             fixture("if [ -f input.tga ]; then printf 'IMAGE'; else printf 'CLEAR'; fi");
