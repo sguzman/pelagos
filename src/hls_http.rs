@@ -544,9 +544,6 @@ async fn generate_hls_playlist(
     }
     let burn_in_subtitle =
         validate_hls_track_selection(&state, &source, &query, expected_kind).await?;
-    if burn_in_subtitle.is_some() && rendition_count > 1 {
-        return Err(StatusCode::NOT_IMPLEMENTED);
-    }
     let selected_index = query.subtitle_stream_index.filter(|index| *index >= 0);
     let sidecar_revision = match burn_in_subtitle.as_ref() {
         Some(HlsSubtitle::ExternalSrt { revision, .. }) => Some(revision.clone()),
@@ -642,14 +639,30 @@ async fn generate_hls_playlist(
         } else {
             &VIDEO_PROFILES
         };
-        let adaptive = hls::generate_adaptive_segmented_vod_from(
+        let subtitle = burn_in_subtitle.as_ref().map(|track| match track {
+            HlsSubtitle::Embedded(index) => hls::AdaptiveSubtitle::Embedded(*index),
+            HlsSubtitle::ExternalSrt { bytes, revision } => {
+                let format = if revision.filename.to_ascii_lowercase().ends_with(".ass") {
+                    ExternalTextFormat::Ass
+                } else if revision.filename.to_ascii_lowercase().ends_with(".ssa") {
+                    ExternalTextFormat::Ssa
+                } else {
+                    ExternalTextFormat::Srt
+                };
+                hls::AdaptiveSubtitle::External(ExternalTextTrack { bytes, format })
+            }
+        });
+        let adaptive = hls::generate_adaptive_segmented_vod_with_subtitle_from(
             &registry.controller,
             state.probe_executable(),
             &source,
             &private_root.join("bundle"),
             target_seconds,
-            start_time_ticks as f64 / 10_000_000.0,
-            &profiles[..usize::from(rendition_count)],
+            hls::AdaptiveWindow {
+                start_seconds: start_time_ticks as f64 / 10_000_000.0,
+                qualities: &profiles[..usize::from(rendition_count)],
+                subtitle,
+            },
         )
         .await
         .map_err(|err| match err.kind() {
