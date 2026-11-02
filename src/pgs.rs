@@ -69,7 +69,7 @@ fn segment_shape_valid(kind: u8, bytes: &[u8]) -> bool {
             if bytes.len() < 11
                 || !(1..=8192).contains(&be16(&bytes[0..2]))
                 || !(1..=8192).contains(&be16(&bytes[2..4]))
-                || !matches!(bytes[7], 0x00 | 0x40 | 0x80)
+                || !matches!(bytes[7], 0x00 | 0x40 | 0x80 | 0xc0)
                 || !matches!(bytes[8], 0x00 | 0x80)
             {
                 return false;
@@ -495,7 +495,9 @@ mod tests {
         composition[24] = 0;
         assert!(!segment_shape_valid(0x16, &composition));
         composition[24] = 1;
-        composition[7] = 0x20; // unknown composition state
+        composition[7] = 0xc0; // epoch continuation remains valid
+        assert!(segment_shape_valid(0x16, &composition));
+        composition[7] = 0x20; // reserved state bits
         assert!(!segment_shape_valid(0x16, &composition));
         composition[7] = 0x80;
         composition[8] = 0x40; // unknown palette-update flag
