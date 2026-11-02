@@ -1046,6 +1046,34 @@ mod tests {
         assert_eq!(tail_chunks.len(), 3);
         assert_eq!(tail_chunks[2].graphic, WindowGraphic::Clear);
 
+        // Seeking into the middle of a visible cue must retain its plane
+        // from the preceding PCS instead of producing an empty subtitle.
+        let mid = render_epoch_timeline_for_window(
+            &stream,
+            79 * 90_000 + 45_000,
+            80 * 90_000 + 45_000,
+        )
+        .unwrap();
+        let selected = plan_graphic_window_chunks(
+            &mid,
+            79 * 90_000 + 45_000,
+            80 * 90_000 + 45_000,
+        )
+        .unwrap();
+        assert_eq!(selected.len(), 2);
+        assert!(matches!(selected[0].graphic, WindowGraphic::Image(_)));
+        assert_eq!(selected[1].graphic, WindowGraphic::Clear);
+
+        // Nonmonotonic historical PTS cannot be hidden by seeking past it.
+        let mut reversed = Vec::new();
+        for second in [51_u32, 50, 81] {
+            let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 0]);
+            clear[2..6].copy_from_slice(&(second * 90_000).to_be_bytes());
+            reversed.extend(clear);
+            reversed.extend(packet(0x80, &[]));
+        }
+        assert!(render_epoch_timeline_for_window(&reversed, 80 * 90_000, 90 * 90_000).is_none());
+
         assert!(render_epoch_timeline_for_window(&stream, 1, 1).is_none());
         assert!(render_epoch_timeline_for_window(&stream, 2, 1).is_none());
         // An opaque final cue is not assumed to stay visible indefinitely.
