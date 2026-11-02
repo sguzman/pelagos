@@ -1242,6 +1242,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn private_pgs_adaptive_ladder_keeps_cue_boundaries_across_quality_targets() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("synthetic.mkv");
+        stdfs::write(&source, b"synthetic media").unwrap();
+        let encoder = executable(
+            temp.path(),
+            "pgs-adaptive-ffmpeg",
+            r#"low=0; for arg in "$@"; do if [ "$arg" = "64k" ]; then low=1; fi; done; if [ -f input.tga ]; then cue=I; else cue=C; fi; if [ "$low" -eq 1 ]; then count=2; else count=4; fi; i=0; while [ "$i" -lt "$count" ]; do printf '\107%s' "$cue"; head -c 186 /dev/zero; i=$((i+1)); done"#,
+        );
+        let inspector = executable(
+            temp.path(),
+            "pgs-adaptive-ffprobe",
+            r#"case "$*" in *segment*) printf '%s' '{"format":{"duration":"1.0"},"streams":[{"codec_type":"video","codec_name":"h264","width":32,"height":32}]}' ;; *) printf '%s' '{"format":{"duration":"3.0"},"streams":[{"codec_type":"video","codec_name":"mpeg4","width":32,"height":32}]}' ;; esac"#,
+        );
+        let runner = TranscodeController::new(encoder, 1, Duration::from_secs(5), 4096).unwrap();
+        let low = MpegTsQuality {
+            video_kbps: 400,
+            audio_kbps: 64,
+        };
+        let high = MpegTsQuality {
+            video_kbps: 1600,
+            audio_kbps: 128,
+        };
+        let sup = synthetic_pgs_clear_show_clear();
+        let root = temp.path().join("private-pgs-ladder");
+        let result = generate_adaptive_segmented_vod_with_subtitle_from(
+            &runner,
+            &inspector,
+            &source,
+            &root,
+            2,
+            AdaptiveWindow {
+                start_seconds: 0.0,
+                qualities: &[high, low],
+                subtitle: Some(AdaptiveSubtitle::Pgs(&sup)),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.variants.len(), 2);
+        assert!(result.variants[0].bandwidth < result.variants[1].bandwidth);
+        for (variant, expected_packets) in result.renditions.iter().zip([2, 4]) {
+            assert_eq!(variant.segment_paths.len(), 4);
+            assert_eq!(variant.segments.len(), 4);
+            assert_eq!(variant.transport_bytes, 4 * expected_packets * 188);
+            for (path, marker) in variant.segment_paths.iter().zip(b"CIIC") {
+                let bytes = stdfs::read(path).unwrap();
+                assert_eq!(bytes.len(), expected_packets as usize * 188);
+                assert_eq!(&bytes[..2], &[0x47, *marker]);
+            }
+            let media = stdfs::read_to_string(&variant.playlist_path).unwrap();
+            assert_eq!(media.matches("#EXT-X-DISCONTINUITY").count(), 3);
+            assert_eq!(media.matches("#EXTINF:1.000").count(), 4);
+        }
+        let master = stdfs::read_to_string(&result.master_path).unwrap();
+        assert_eq!(master.matches("#EXT-X-STREAM-INF").count(), 2);
+        assert_eq!(stdfs::read(&source).unwrap(), b"synthetic media");
+        result.remove().unwrap();
+        assert!(!root.exists());
+    }
+
+    #[tokio::test]
     async fn private_pgs_hls_real_ffmpeg_preserves_show_clear_video_transitions() {
         if std::env::var_os("PELAGOS_REQUIRE_FFMPEG").is_none() {
             return;
