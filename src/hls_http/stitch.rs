@@ -80,6 +80,12 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
     {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
+    if entry.media_sequence != 0 {
+        let expected = format!("#EXT-X-DISCONTINUITY-SEQUENCE:{}", entry.media_sequence);
+        if !body.lines().any(|line| line == expected) {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
     let target = body
         .lines()
         .find_map(|line| line.strip_prefix("#EXT-X-TARGETDURATION:"))
