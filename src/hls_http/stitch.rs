@@ -233,9 +233,7 @@ mod tests {
             "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:{media_sequence}\n"
         );
         if media_sequence != 0 {
-            media_playlist.push_str(&format!(
-                "#EXT-X-DISCONTINUITY-SEQUENCE:{media_sequence}\n"
-            ));
+            media_playlist.push_str(&format!("#EXT-X-DISCONTINUITY-SEQUENCE:{media_sequence}\n"));
         }
         media_playlist.push_str("#EXT-X-PLAYLIST-TYPE:VOD\n");
         let segments = (0..count)
