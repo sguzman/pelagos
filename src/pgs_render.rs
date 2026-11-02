@@ -394,7 +394,8 @@ pub struct TimedRgbaDisplaySet {
     pub image: RgbaDisplaySet,
 }
 
-const MAX_TIMELINE_FRAMES: usize = 16;
+// Limit decode work and HLS cue planning independently of the 64 MiB RGBA cap.
+const MAX_TIMELINE_FRAMES: usize = 64;
 const MAX_TIMELINE_RGBA_BYTES: usize = 64 * 1024 * 1024;
 
 /// Decode a small sequence of independent display sets, retaining only
@@ -545,7 +546,7 @@ pub struct GraphicWindowChunk<'a> {
 }
 
 /// Split a requested half-open source interval only at verified PCS changes.
-/// The resulting at-most-17 chunks preserve explicit clears and refuse
+/// The resulting at-most-65 chunks preserve explicit clears and refuse
 /// extrapolation beyond an unknown final display-set duration.
 pub fn plan_graphic_window_chunks(
     frames: &[TimedRgbaDisplaySet],
@@ -928,15 +929,48 @@ mod tests {
     }
 
     #[test]
-    fn timeline_rejects_unbounded_number_of_clear_frames() {
+    fn bounded_sixty_four_cue_timeline_preserves_show_clear_transitions() {
         let mut stream = Vec::new();
-        for tick in 1..=17_u32 {
-            let mut clear = packet(0x16, &[0, 2, 0, 1, 0x10, 0, 0, 0x80, 0, 0, 0]);
-            clear[2..6].copy_from_slice(&(tick * 90_000).to_be_bytes());
-            stream.extend(clear);
-            stream.extend(packet(0x80, &[]));
+        for cue in 1..=MAX_TIMELINE_FRAMES {
+            let pts = u32::try_from(cue).unwrap() * 90_000;
+            let mut display = if cue % 2 == 1 {
+                sample(false)
+            } else {
+                let mut clear = packet(0x16, &[0, 4, 0, 2, 0x10, 0, 0, 0x80, 0, 0, 0]);
+                clear.extend(packet(0x80, &[]));
+                clear
+            };
+            display[2..6].copy_from_slice(&pts.to_be_bytes());
+            stream.extend(display);
         }
-        assert!(render_self_contained_timeline(&stream).is_none());
+        let frames = render_epoch_timeline(&stream).unwrap();
+        assert_eq!(frames.len(), MAX_TIMELINE_FRAMES);
+        assert_eq!(frames[0].duration_90khz, Some(90_000));
+        assert_eq!(frames[MAX_TIMELINE_FRAMES - 1].duration_90khz, None);
+
+        let end = (u32::try_from(MAX_TIMELINE_FRAMES).unwrap() + 1) * 90_000;
+        let windows = plan_graphic_window_chunks(&frames, 0, end).unwrap();
+        assert_eq!(windows.len(), MAX_TIMELINE_FRAMES + 1);
+        assert_eq!(windows[0].graphic, WindowGraphic::Clear);
+        for (index, window) in windows.iter().enumerate().skip(1) {
+            assert_eq!(window.start_90khz, u32::try_from(index).unwrap() * 90_000);
+            assert_eq!(window.end_90khz, u32::try_from(index + 1).unwrap() * 90_000);
+            if index % 2 == 1 {
+                assert!(matches!(window.graphic, WindowGraphic::Image(_)));
+            } else {
+                assert_eq!(window.graphic, WindowGraphic::Clear);
+            }
+        }
+        assert!(render_self_contained_timeline(&stream).is_some());
+
+        // The extra cue must fail closed even though the decoded image
+        // planes would still fit comfortably under the separate byte cap.
+        let mut overflow = stream;
+        let mut extra = sample(false);
+        extra[2..6].copy_from_slice(&end.to_be_bytes());
+        overflow.extend(extra);
+        assert!(render_epoch_timeline(&overflow).is_none());
+        assert!(render_self_contained_timeline(&overflow).is_none());
     }
 
     #[test]
