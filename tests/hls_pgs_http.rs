@@ -990,7 +990,57 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         }
     }
 
-    let first_uri = format!("/Videos/{id}/{}", urls[0]);
+    // The private continuation route is only available to the exact token
+    // that owns the selected excerpt. It must clamp the final interval to
+    // the real source end rather than inventing a 600-second full playlist.
+    let publication_id = urls[0].split('/').nth(1).unwrap();
+    let next_url = format!("/Videos/{id}/hls1/{publication_id}/next.m3u8");
+    assert_eq!(
+        call(&app, &next_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &next_url, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let response = call(&app, &next_url, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-pelagos-excerpt"], "true");
+    assert_eq!(
+        response.headers()["x-pelagos-excerpt-start-ticks"],
+        "6090000000"
+    );
+    let final_duration = response.headers()["x-pelagos-excerpt-duration-ticks"]
+        .to_str()
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    assert!((10_000_000..=11_000_000).contains(&final_duration));
+    let final_manifest = body(response).await;
+    let final_segments = final_manifest
+        .lines()
+        .filter(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .collect::<Vec<_>>();
+    assert_eq!(final_segments.len(), 1);
+    let final_segment_uri = format!("/Videos/{id}/{}", final_segments[0]);
+    let response = call(&app, &final_segment_uri, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+        .await
+        .unwrap()
+        .to_vec();
+    assert!(!visible_center(
+        &bytes,
+        &temp.path().join("continuation-clear.ts")
+    ));
+    let final_id = final_segments[0].split('/').nth(1).unwrap();
+    let exhausted = format!("/Videos/{id}/hls1/{final_id}/next.m3u8");
+    assert_eq!(
+        call(&app, &exhausted, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
+    let first_uri = final_segment_uri;
     let mut modified = sup;
     let index = modified
         .windows(7)
