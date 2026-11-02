@@ -59,6 +59,16 @@ pub struct ExternalTextTrack<'a> {
     pub format: ExternalTextFormat,
 }
 
+/// Bounded external-text overlay request with an optional bitrate target.
+#[derive(Debug, Clone, Copy)]
+pub struct SubtitleTextWindow<'a> {
+    pub start_seconds: f64,
+    pub duration_seconds: f64,
+    pub remaining_bytes: u64,
+    pub subtitle: ExternalTextTrack<'a>,
+    pub quality: Option<MpegTsQuality>,
+}
+
 /// Caller-scoped, bounded input window for embedded-subtitle burn-in.
 /// The index is relative to subtitle streams, not an FFprobe global index.
 #[derive(Debug, Clone, Copy)]
@@ -295,10 +305,24 @@ impl TranscodeController {
         output: &Path,
         request: SubtitleBurnInWindow,
     ) -> io::Result<u64> {
+        self.try_run_window_burn_in_quality_capped(source, output, request, None)
+            .await
+    }
+
+    /// Allow the same checked subtitle overlay at a validated bitrate target,
+    /// without changing the per-window bytes, deadline or worker admission.
+    pub async fn try_run_window_burn_in_quality_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        request: SubtitleBurnInWindow,
+        quality: Option<MpegTsQuality>,
+    ) -> io::Result<u64> {
         let window = TranscodeWindow::new(request.start_seconds, request.duration_seconds)?;
         if request.subtitle_index > 31
             || request.remaining_bytes == 0
             || request.remaining_bytes > MAX_TRANSCODE_BYTES
+            || quality.is_some_and(|target| !target.valid())
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -318,6 +342,7 @@ impl TranscodeController {
             self.deadline,
             self.max_bytes.min(request.remaining_bytes),
             EncoderOptions {
+                quality,
                 window: Some(window),
                 burn_in_subtitle: Some(request.subtitle_index),
                 ..EncoderOptions::default()
@@ -364,12 +389,42 @@ impl TranscodeController {
         remaining_bytes: u64,
         subtitle: ExternalTextTrack<'_>,
     ) -> io::Result<u64> {
+        self.try_run_window_external_text_quality_capped(
+            source,
+            output,
+            SubtitleTextWindow {
+                start_seconds,
+                duration_seconds,
+                remaining_bytes,
+                subtitle,
+                quality: None,
+            },
+        )
+        .await
+    }
+
+    /// Group a selected external subtitle and an optional target bitrate
+    /// into a bounded, typed request rather than exposing FFmpeg parameters.
+    pub async fn try_run_window_external_text_quality_capped(
+        &self,
+        source: &Path,
+        output: &Path,
+        request: SubtitleTextWindow<'_>,
+    ) -> io::Result<u64> {
+        let SubtitleTextWindow {
+            start_seconds,
+            duration_seconds,
+            remaining_bytes,
+            subtitle,
+            quality,
+        } = request;
         let window = TranscodeWindow::new(start_seconds, duration_seconds)?;
         if subtitle.bytes.is_empty()
             || subtitle.bytes.len() > 4 * 1024 * 1024
             || std::str::from_utf8(subtitle.bytes).is_err()
             || remaining_bytes == 0
             || remaining_bytes > MAX_TRANSCODE_BYTES
+            || quality.is_some_and(|target| !target.valid())
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -389,6 +444,7 @@ impl TranscodeController {
             self.deadline,
             self.max_bytes.min(remaining_bytes),
             EncoderOptions {
+                quality,
                 window: Some(window),
                 external_text: Some(subtitle),
                 ..EncoderOptions::default()
