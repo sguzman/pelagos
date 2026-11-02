@@ -15,6 +15,28 @@ pub struct RgbaDisplaySet {
     pub rgba: Vec<u8>,
 }
 
+impl RgbaDisplaySet {
+    /// Convert a validated transparent subtitle plane to uncompressed,
+    /// top-left-origin BGRA TGA bytes for a future private FFmpeg overlay.
+    /// This conversion performs no file access or multimedia process launch.
+    pub fn to_uncompressed_tga(&self) -> Option<Vec<u8>> {
+        let area = usize::from(self.width).checked_mul(usize::from(self.height))?;
+        if area == 0 || area > MAX_BITMAP_PIXELS || self.rgba.len() != area.checked_mul(4)? {
+            return None;
+        }
+        let mut output = vec![0_u8; 18 + self.rgba.len()];
+        output[2] = 2; // uncompressed true color
+        output[12..14].copy_from_slice(&self.width.to_le_bytes());
+        output[14..16].copy_from_slice(&self.height.to_le_bytes());
+        output[16] = 32; // 32-bit BGRA
+        output[17] = 0x28; // top-left origin with eight alpha bits
+        for (rgba, bgra) in self.rgba.chunks_exact(4).zip(output[18..].chunks_exact_mut(4)) {
+            bgra.copy_from_slice(&[rgba[2], rgba[1], rgba[0], rgba[3]]);
+        }
+        Some(output)
+    }
+}
+
 #[derive(Clone, Copy)]
 struct ObjectRef {
     id: u16,
