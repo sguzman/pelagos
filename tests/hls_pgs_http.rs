@@ -300,7 +300,7 @@ async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
     .access_token;
     let app = app::router(Arc::new(AppState::with_auth_dir(
         "server".to_owned(),
-        state_dir,
+        state_dir.clone(),
     )));
     let response = call(&app, "/Items", Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -349,4 +349,32 @@ async fn embedded_matroska_pgs_is_burned_through_authenticated_hls() {
         );
     }
     assert_eq!(fs::read(&source).unwrap(), original);
+
+    // Publication ownership does not override current library grants.
+    // Revocation must deny already-encoded private TS segments.
+    let segment_url = format!("/Videos/{id}/{}", segments[1]);
+    assert_eq!(
+        call(&app, &segment_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::OK
+    );
+
+    // An embedded PGS track is part of the source itself: modifying the
+    // source invalidates every previously published encoded segment.
+    let mut modified = original.clone();
+    modified.extend_from_slice(b"synthetic source revision");
+    fs::write(&source, &modified).unwrap();
+    assert_eq!(
+        call(&app, &segment_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
 }
