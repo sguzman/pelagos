@@ -85,7 +85,7 @@ pub(super) async fn video_next(
         ..PlaylistQuery::default()
     };
     generate_hls_playlist(
-        state,
+        state.clone(),
         item,
         "video",
         request,
