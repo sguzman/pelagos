@@ -1028,8 +1028,7 @@ mod tests {
         assert_eq!(frames.len(), 12);
         assert_eq!(frames.first().unwrap().pts_90khz, 79 * 90_000);
         assert_eq!(frames.last().unwrap().pts_90khz, 90 * 90_000);
-        let windows =
-            plan_graphic_window_chunks(&frames, 80 * 90_000, 90 * 90_000).unwrap();
+        let windows = plan_graphic_window_chunks(&frames, 80 * 90_000, 90 * 90_000).unwrap();
         assert_eq!(windows.len(), 10);
         for (index, chunk) in windows.iter().enumerate() {
             let cue = 80 + index as u32;
@@ -1042,10 +1041,8 @@ mod tests {
             }
         }
         // A final explicit clear remains safe through end of source.
-        let tail = render_epoch_timeline_for_window(&stream, 94 * 90_000, 97 * 90_000)
-            .unwrap();
-        let tail_chunks =
-            plan_graphic_window_chunks(&tail, 94 * 90_000, 97 * 90_000).unwrap();
+        let tail = render_epoch_timeline_for_window(&stream, 94 * 90_000, 97 * 90_000).unwrap();
+        let tail_chunks = plan_graphic_window_chunks(&tail, 94 * 90_000, 97 * 90_000).unwrap();
         assert_eq!(tail_chunks.len(), 3);
         assert_eq!(tail_chunks[2].graphic, WindowGraphic::Clear);
 
