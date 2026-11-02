@@ -25,8 +25,9 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
 };
+#[cfg(test)]
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;

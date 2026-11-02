@@ -1,7 +1,7 @@
 //! Token-scoped private HLS sessions: bounded publication, LRU eviction and admission.
 use super::*;
 use crate::transcode::TranscodeController;
-use std::{collections::VecDeque, sync::Mutex};
+use std::{collections::VecDeque, sync::Mutex, time::Duration};
 use tokio::sync::Semaphore;
 
 const MAX_PUBLISHED: usize = 3;
