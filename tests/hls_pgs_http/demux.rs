@@ -79,6 +79,7 @@ pub(super) async fn assert_authenticated_hls_network_demux(
     app: &Router,
     token: &str,
     playlist_path: &str,
+    live: bool,
 ) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -87,14 +88,28 @@ pub(super) async fn assert_authenticated_hls_network_demux(
         axum::serve(listener, routed_app).await.unwrap();
     });
     let url = format!("http://{address}{playlist_path}");
+    let mut ffmpeg = tokio::process::Command::new("ffmpeg");
+    ffmpeg
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-headers"])
+        .arg(format!("X-Emby-Token: {token}\r\n"));
+    if live {
+        // Begin at the first advertised segment rather than the newest
+        // live-edge segment, so playback crosses a source-window boundary.
+        ffmpeg.args(["-live_start_index", "0"]);
+    }
+    ffmpeg
+        .arg("-i")
+        .arg(url)
+        .args(["-map", "0:v:0", "-map", "0:a:0"]);
+    if live {
+        // A rolling playlist correctly has no ENDLIST; bound this client's
+        // playback instead of waiting for the entire source to complete.
+        ffmpeg.args(["-t", "2.5"]);
+    }
     let result = tokio::time::timeout(
         Duration::from_secs(30),
-        tokio::process::Command::new("ffmpeg")
-            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-headers"])
-            .arg(format!("X-Emby-Token: {token}\r\n"))
-            .arg("-i")
-            .arg(url)
-            .args(["-map", "0:v:0", "-map", "0:a:0", "-f", "framemd5", "-"])
+        ffmpeg
+            .args(["-f", "framemd5", "-"])
             .kill_on_drop(true)
             .output(),
     )
