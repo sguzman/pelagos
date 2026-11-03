@@ -4,7 +4,10 @@
 use super::*;
 use std::{
     collections::VecDeque,
-    sync::{Mutex, atomic::{AtomicBool, Ordering}},
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -555,7 +558,9 @@ mod tests {
             .unwrap();
         assert!(created);
         assert_eq!(
-            registry.register_rolling(first.clone(), "viewer-token").err(),
+            registry
+                .register_rolling(first.clone(), "viewer-token")
+                .err(),
             Some(StatusCode::TOO_MANY_REQUESTS)
         );
         rolling.ready.store(true, Ordering::Release);
