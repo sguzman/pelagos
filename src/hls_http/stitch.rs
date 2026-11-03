@@ -260,7 +260,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn preview_rejects_noncanonical_fragment_headers_and_segments() {
         let temp = tempfile::tempdir().unwrap();
@@ -295,7 +294,10 @@ mod tests {
             pristine.trim_end_matches('\n').to_owned(),
         ];
         for (index, fragment) in malformed.into_iter().enumerate() {
-            assert_ne!(fragment, pristine, "malformed fixture {index} had no effect");
+            assert_ne!(
+                fragment, pristine,
+                "malformed fixture {index} had no effect"
+            );
             first.media_playlist = fragment;
             assert_eq!(
                 make_preview("synthetic-item", &first, &next),
@@ -317,7 +319,11 @@ mod tests {
         ] {
             later.media_playlist = fragment;
             assert_eq!(
-                make_preview("synthetic-item", &sample(temp.path(), "early", 100_000_000, 40_000_000, 0, 2), &later),
+                make_preview(
+                    "synthetic-item",
+                    &sample(temp.path(), "early", 100_000_000, 40_000_000, 0, 2),
+                    &later
+                ),
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             );
         }
