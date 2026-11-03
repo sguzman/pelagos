@@ -1703,7 +1703,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(eof_rolling.status(), StatusCode::OK);
     let ended = body(eof_rolling).await;
     assert!(ended.ends_with("#EXT-X-ENDLIST\n"));
-    assert!(ended.contains(&final_segment_uri));
+    assert!(ended.contains(&first_uri));
     assert_eq!(
         body(call(&app, &eof_rolling_path, Some(&token)).await).await,
         ended
