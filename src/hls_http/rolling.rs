@@ -2,6 +2,7 @@
 //! at most three completed PGS publications, no background transcode worker.
 //! It does not imply full Jellyfin Smart TV compatibility.
 use super::*;
+use axum::http::header::{ETAG, IF_NONE_MATCH};
 use std::{
     collections::VecDeque,
     sync::{
@@ -50,6 +51,26 @@ struct Snapshot {
 
 fn interval(duration_ticks: u64) -> Duration {
     Duration::from_millis(duration_ticks.div_ceil(10_000).clamp(100, 600_000))
+}
+
+/// A strong validator is scoped to this random session ID and its immutable
+/// playlist generation. Never include a credential or source filename.
+fn rolling_etag(session: &RollingSession, generation: u64) -> String {
+    format!("\"rolling-{}-{generation}\"", session.id)
+}
+
+/// If-None-Match uses weak comparison for GET (RFC 9110). The generated
+/// validator contains only ASCII letters, digits and hyphens, so matching
+/// a comma-delimited ETag list cannot split one of our own values.
+fn matches_if_none_match(headers: &HeaderMap, expected: &str) -> bool {
+    headers
+        .get(IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|values| {
+            values.split(',').map(str::trim).any(|value| {
+                value == "*" || value.strip_prefix("W/").unwrap_or(value) == expected
+            })
+        })
 }
 
 impl RollingSession {
@@ -302,7 +323,26 @@ async fn response_for_session(
             snapshot.eof,
             session.target_duration,
         )?;
-        let mut response = playlist_response(&playlist);
+        let etag = rolling_etag(session, snapshot.generation);
+        // Revalidate the token, current library grant, source/sidecar revision
+        // and snapshot generation BEFORE considering a conditional 304. A
+        // matching validator never grants access to a revoked publication.
+        let not_modified = matches_if_none_match(headers, &etag);
+        let mut response = if not_modified {
+            let mut response = Response::new(Body::empty());
+            *response.status_mut() = StatusCode::NOT_MODIFIED;
+            response.headers_mut().insert(
+                CACHE_CONTROL,
+                HeaderValue::from_static("private, no-store"),
+            );
+            response
+        } else {
+            playlist_response(&playlist)
+        };
+        response.headers_mut().insert(
+            ETAG,
+            HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
         response
             .headers_mut()
             .insert("x-pelagos-rolling", HeaderValue::from_static("true"));
@@ -523,6 +563,30 @@ mod tests {
             segments: vec![(root.join(id).join("0.ts"), 376)],
             variants: Vec::new(),
         })
+    }
+
+    #[test]
+    fn rolling_etag_is_generation_scoped_and_matches_conditional_reloads() {
+        let root = tempfile::tempdir().unwrap();
+        let session = RollingSession::new(example(root.path(), "first", 0)).unwrap();
+        let first = rolling_etag(&session, 0);
+        let next = rolling_etag(&session, 1);
+        assert_ne!(first, next);
+        let mut headers = HeaderMap::new();
+        assert!(!matches_if_none_match(&headers, &first));
+        headers.insert(
+            IF_NONE_MATCH,
+            HeaderValue::from_str(&first).unwrap(),
+        );
+        assert!(matches_if_none_match(&headers, &first));
+        assert!(!matches_if_none_match(&headers, &next));
+        headers.insert(
+            IF_NONE_MATCH,
+            HeaderValue::from_str(&format!("\"unrelated\", W/{first}")).unwrap(),
+        );
+        assert!(matches_if_none_match(&headers, &first));
+        headers.insert(IF_NONE_MATCH, HeaderValue::from_static("*"));
+        assert!(matches_if_none_match(&headers, &first));
     }
 
     #[test]

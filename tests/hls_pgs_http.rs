@@ -1621,6 +1621,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let started = call(&app, &rolling_start, Some(&token)).await;
     assert_eq!(started.status(), StatusCode::OK);
     assert_eq!(started.headers()["x-pelagos-rolling"], "true");
+    let opening_etag = started.headers()["etag"].to_str().unwrap().to_owned();
+    assert!(opening_etag.starts_with("\"rolling-"));
     let rolling_path = started.headers()["x-pelagos-rolling-path"]
         .to_str()
         .unwrap()
@@ -1634,6 +1636,48 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(opening.contains(&format!("/Videos/{id}/{first_segment}")));
     assert!(!opening.contains("#EXT-X-ENDLIST"));
     assert!(!opening.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
+    let conditional = Request::builder()
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", opening_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let unchanged = app.clone().oneshot(conditional).await.unwrap();
+    assert_eq!(unchanged.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(unchanged.headers()["etag"], opening_etag);
+    assert!(to_bytes(unchanged.into_body(), 64).await.unwrap().is_empty());
+    let invalid_etag = Request::builder()
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", "\"unknown-generation\"")
+        .body(Body::empty())
+        .unwrap();
+    let changed = app.clone().oneshot(invalid_etag).await.unwrap();
+    assert_eq!(changed.status(), StatusCode::OK);
+    assert_eq!(changed.headers()["etag"], opening_etag);
+    assert_eq!(body(changed).await, opening);
+    let wrong_token_conditional = Request::builder()
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", other.as_str())
+        .header("If-None-Match", opening_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(wrong_token_conditional).await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    let revoked_conditional = Request::builder()
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", opening_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(revoked_conditional).await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         call(&app, &rolling_path, Some(&other)).await.status(),
         StatusCode::NOT_FOUND
@@ -1651,6 +1695,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
     let second_rolling = call(&app, &rolling_path, Some(&token)).await;
     assert_eq!(second_rolling.status(), StatusCode::OK);
+    assert_ne!(second_rolling.headers()["etag"], opening_etag);
     let second_rolling = body(second_rolling).await;
     assert!(second_rolling.lines().any(|line| line == stable_target));
     assert!(second_rolling.contains(&format!("/Videos/{id}/{second_segment}")));
