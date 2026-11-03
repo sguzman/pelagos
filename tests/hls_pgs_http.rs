@@ -1835,7 +1835,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let active_segment = last_live
         .lines()
         .filter(|line| line.starts_with(&format!("/Videos/{id}/hls1/")) && line.ends_with(".ts"))
-        .last()
+        .next_back()
         .unwrap()
         .to_owned();
     for seconds in [590_u64, 591, 592, 593] {
