@@ -1,13 +1,14 @@
-//! Explicit, token-scoped two-window HLS preview built only from completed
+//! Explicit, token-scoped two/three-window HLS preview built only from completed
 //! private PGS publications. Does not encode, retain an unbounded chain or
 //! advertise a partial source as a complete Jellyfin VOD.
 
 use super::*;
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct StitchQuery {
     next: String,
+    after_next: Option<String>,
 }
 
 fn lookup<'a>(entry: &'a Published, token: &'a str) -> CacheLookup<'a> {
@@ -129,26 +130,41 @@ fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> 
     Ok((target, pieces))
 }
 
-fn make_preview(
+/// Read-only composition of two or three completed adjacent private HLS
+/// excerpts. No segment is generated here, and three is the hard cap imposed
+/// by the token-scoped publication registry.
+fn make_preview_chain(
     item: &str,
-    first: &Published,
-    next: &Published,
+    publications: &[&Published],
 ) -> Result<(String, u64), StatusCode> {
-    validate_pair(first, next)?;
-    let (target_a, cues_a) = verified_fragment(first)?;
-    let (target_b, cues_b) = verified_fragment(next)?;
-    let duration = first
-        .excerpt_duration_ticks
-        .and_then(|a| next.excerpt_duration_ticks?.checked_add(a))
+    if !(2..=3).contains(&publications.len()) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    for pair in publications.windows(2) {
+        validate_pair(pair[0], pair[1])?;
+    }
+    let fragments = publications
+        .iter()
+        .map(|publication| verified_fragment(publication))
+        .collect::<Result<Vec<_>, _>>()?;
+    let target = fragments
+        .iter()
+        .map(|(target, _)| *target)
+        .max()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let duration = publications
+        .iter()
+        .try_fold(0_u64, |total, publication| {
+            total.checked_add(publication.excerpt_duration_ticks?)
+        })
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let first = publications[0];
     let mut playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{}\n#EXT-X-MEDIA-SEQUENCE:{}\n#EXT-X-DISCONTINUITY-SEQUENCE:{}\n#EXT-X-PLAYLIST-TYPE:VOD\n",
-        target_a.max(target_b),
-        first.media_sequence,
-        first.media_sequence
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{target}\n#EXT-X-MEDIA-SEQUENCE:{}\n#EXT-X-DISCONTINUITY-SEQUENCE:{}\n#EXT-X-PLAYLIST-TYPE:VOD\n",
+        first.media_sequence, first.media_sequence
     );
     let mut written = 0_usize;
-    for (publication, cues) in [(first, cues_a), (next, cues_b)] {
+    for (publication, (_, cues)) in publications.iter().zip(&fragments) {
         for (index, cue) in cues.iter().enumerate() {
             if written > 0 {
                 playlist.push_str("#EXT-X-DISCONTINUITY\n");
@@ -169,6 +185,14 @@ fn make_preview(
     Ok((playlist, duration))
 }
 
+fn make_preview(
+    item: &str,
+    first: &Published,
+    next: &Published,
+) -> Result<(String, u64), StatusCode> {
+    make_preview_chain(item, &[first, next])
+}
+
 pub(super) async fn video_stitch(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist_id)): RoutePath<(String, String)>,
@@ -184,12 +208,31 @@ pub(super) async fn video_stitch(
         .lookup(&query.next, &item, "video", &token)
         .ok_or(StatusCode::NOT_FOUND)?;
     validate_pair(&first, &next)?;
-    // Pair validation is cheap, but each source/sidecar reauthorization may
-    // read bounded subtitle bytes. Share the existing preflight limit.
+    let third = query
+        .after_next
+        .as_deref()
+        .map(|id| {
+            registry
+                .lookup(id, &item, "video", &token)
+                .ok_or(StatusCode::NOT_FOUND)
+        })
+        .transpose()?;
+    if let Some(third) = third.as_deref() {
+        validate_pair(&next, third)?;
+    }
+    // All publications must be independently reauthorized; accepting a third
+    // UUID never widens access beyond the caller's current token and grants.
     let _probe = registry.acquire_track_probe()?;
     reauthorize_publication(&state, &headers, &lookup(&first, &token)).await?;
     reauthorize_publication(&state, &headers, &lookup(&next, &token)).await?;
-    let (playlist, duration) = make_preview(&item, &first, &next)?;
+    if let Some(third) = third.as_deref() {
+        reauthorize_publication(&state, &headers, &lookup(third, &token)).await?;
+    }
+    let (playlist, duration) = if let Some(third) = third.as_deref() {
+        make_preview_chain(&item, &[first.as_ref(), next.as_ref(), third])?
+    } else {
+        make_preview(&item, &first, &next)?
+    };
     let mut response = Response::new(Body::from(playlist.clone()));
     set_private_headers(
         &mut response,
@@ -200,7 +243,8 @@ pub(super) async fn video_stitch(
     response
         .headers_mut()
         .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
-    set_continuation_path(&mut response, &item, &next.id, Some(duration));
+    let last_id = third.as_ref().map_or(&next.id, |publication| &publication.id);
+    set_continuation_path(&mut response, &item, last_id, Some(duration));
     Ok(response)
 }
 
@@ -327,6 +371,48 @@ mod tests {
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             );
         }
+    }
+
+    #[test]
+    fn preview_chain_requires_three_adjacent_publications_and_monotonic_segments() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = sample(temp.path(), "first", 100_000_000, 40_000_000, 0, 2);
+        let middle = sample(temp.path(), "middle", 140_000_000, 20_000_000, 2, 1);
+        let mut third = sample(temp.path(), "third", 160_000_000, 20_000_000, 3, 2);
+        let (manifest, duration) =
+            make_preview_chain("synthetic-item", &[&first, &middle, &third]).unwrap();
+        assert_eq!(duration, 80_000_000);
+        assert_eq!(manifest.matches("#EXTINF:").count(), 5);
+        assert_eq!(manifest.matches("#EXT-X-DISCONTINUITY\n").count(), 4);
+        assert!(manifest.contains("/Videos/synthetic-item/hls1/third/1.ts\n"));
+        assert!(manifest.ends_with("#EXT-X-ENDLIST\n"));
+
+        third.media_sequence += 1;
+        assert_eq!(
+            make_preview_chain("synthetic-item", &[&first, &middle, &third]),
+            Err(StatusCode::NOT_FOUND)
+        );
+        third.media_sequence -= 1;
+        third.start_time_ticks += 1;
+        assert_eq!(
+            make_preview_chain("synthetic-item", &[&first, &middle, &third]),
+            Err(StatusCode::NOT_FOUND)
+        );
+        third.start_time_ticks -= 1;
+
+        third.media_playlist = third.media_playlist.replace("#EXT-X-ENDLIST\n", "");
+        assert_eq!(
+            make_preview_chain("synthetic-item", &[&first, &middle, &third]),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+        assert_eq!(
+            make_preview_chain("synthetic-item", &[&first]),
+            Err(StatusCode::NOT_FOUND)
+        );
+        assert_eq!(
+            make_preview_chain("synthetic-item", &[&first, &middle, &third, &first]),
+            Err(StatusCode::NOT_FOUND)
+        );
     }
 
     #[test]
