@@ -4,7 +4,7 @@
 use super::*;
 use std::{
     collections::VecDeque,
-    sync::Mutex,
+    sync::{Mutex, atomic::{AtomicBool, Ordering}},
     time::{Duration, Instant},
 };
 
@@ -19,6 +19,9 @@ pub(super) struct RollingSession {
     digest: [u8; 32],
     hard_expires_at: Instant,
     last_accessed: Mutex<Instant>,
+    /// A newly admitted session is hidden from start retries until its first
+    /// authorized response has been fully constructed.
+    ready: AtomicBool,
     target_duration: u32,
     /// Prevent two playlist reloads from encoding the same successor.
     advance: tokio::sync::Mutex<()>,
@@ -65,6 +68,7 @@ impl RollingSession {
             digest: publication.digest,
             hard_expires_at: Instant::now() + ROLLING_HARD_LIFETIME,
             last_accessed: Mutex::new(Instant::now()),
+            ready: AtomicBool::new(false),
             target_duration,
             advance: tokio::sync::Mutex::new(()),
             window: Mutex::new(RollingWindow {
@@ -177,6 +181,9 @@ impl HlsRegistry {
                     .front()
                     .is_some_and(|entry| entry.id == first.id)
         }) {
+            if !existing.ready.load(Ordering::Acquire) {
+                return Err(StatusCode::TOO_MANY_REQUESTS);
+            }
             return Ok((existing.clone(), false));
         }
         if sessions.len() >= MAX_ROLLING_SESSIONS {
@@ -285,6 +292,7 @@ async fn response_for_session(
     // Only an authenticated, revision-checked successful response refreshes
     // the inactivity deadline. Failed grant/source probes cannot pin media.
     session.touch();
+    session.ready.store(true, Ordering::Release);
     Ok(response)
 }
 
@@ -398,7 +406,9 @@ pub(super) async fn video_rolling_start(
     // its control URI. An existing session belongs to another in-flight
     // request and must not be revoked by a failed retry.
     if started.is_err() && created {
-        state.hls_registry().release_rolling(&session.id, &item, &token);
+        state
+            .hls_registry()
+            .release_rolling(&session.id, &item, &token);
     }
     started
 }
@@ -544,6 +554,11 @@ mod tests {
             .register_rolling(first.clone(), "viewer-token")
             .unwrap();
         assert!(created);
+        assert_eq!(
+            registry.register_rolling(first.clone(), "viewer-token").err(),
+            Some(StatusCode::TOO_MANY_REQUESTS)
+        );
+        rolling.ready.store(true, Ordering::Release);
         let (again, created) = registry.register_rolling(first, "viewer-token").unwrap();
         assert!(!created);
         assert_eq!(rolling.id, again.id);
