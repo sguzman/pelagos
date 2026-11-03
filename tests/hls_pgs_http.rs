@@ -1075,8 +1075,51 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &next_url, Some(&other)).await.status(),
         StatusCode::NOT_FOUND
     );
+    // One-step advance performs the next bounded encode and composes a
+    // guarded two-window preview; regular next requests reuse that result.
+    let advance_url = format!("/Videos/{id}/hls1/{publication_id}/advance.m3u8");
+    assert_eq!(
+        call(&app, &advance_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &advance_url, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(advance_url.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(head).await.unwrap().status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    let advanced = call(&app, &advance_url, Some(&token)).await;
+    assert_eq!(advanced.status(), StatusCode::OK);
+    assert_eq!(advanced.headers()["x-pelagos-stitched"], "true");
+    assert_eq!(
+        advanced.headers()["x-pelagos-excerpt-start-ticks"],
+        "6050000000"
+    );
+    let advanced_next = advanced.headers()["x-pelagos-next-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let advanced_playlist = body(advanced).await;
+    assert!(advanced_playlist.contains("#EXT-X-PLAYLIST-TYPE:VOD\n"));
+    assert!(advanced_playlist.contains(&format!("/Videos/{id}/hls1/{publication_id}/0.ts")));
+    assert_eq!(advanced_playlist.matches("#EXTINF:").count(), 4);
+    assert_eq!(
+        advanced_playlist.matches("#EXT-X-DISCONTINUITY\n").count(),
+        3
+    );
+    assert!(advanced_playlist.ends_with("#EXT-X-ENDLIST\n"));
+
     let response = call(&app, &next_url, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-pelagos-next-path"], advanced_next);
     assert_eq!(response.headers()["x-pelagos-excerpt"], "true");
     assert_eq!(
         response.headers()["x-pelagos-excerpt-start-ticks"],
@@ -1216,6 +1259,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &exhausted, Some(&token)).await.status(),
         StatusCode::NO_CONTENT
     );
+    let advance_eof = format!("/Videos/{id}/hls1/{final_id}/advance.m3u8");
+    assert_eq!(
+        call(&app, &advance_eof, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
 
     // The selected two-quality publication must also continue with two
     // independently encoded variants and the same exact source interval.
@@ -1340,6 +1388,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
         call(&app, &stitch_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&app, &advance_url, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(

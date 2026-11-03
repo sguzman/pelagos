@@ -36,7 +36,7 @@ use continuation::video_next;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
 use segments::serve_segment;
-use stitch::video_stitch;
+use stitch::{video_advance, video_stitch};
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
 
 const MAX_MANIFEST: usize = 32 * 1024;
@@ -928,6 +928,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/stitch.m3u8",
             get(video_stitch).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
+        )
+        .route(
+            "/Videos/{item_id}/hls1/{playlist_id}/advance.m3u8",
+            get(video_advance).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
         )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",

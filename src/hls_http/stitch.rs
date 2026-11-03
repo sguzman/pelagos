@@ -193,6 +193,47 @@ fn make_preview(
     make_preview_chain(item, &[first, next])
 }
 
+/// Revalidate every retained publication immediately before exposing a
+/// stitched manifest. Automatic one-step advance and manual read-only stitch
+/// must enforce identical token, grant and source-revision constraints.
+async fn render_stitched(
+    state: &Arc<AppState>,
+    item: &str,
+    headers: &HeaderMap,
+    token: &str,
+    publications: &[Arc<Published>],
+) -> Result<Response, StatusCode> {
+    if !(2..=3).contains(&publications.len()) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    for pair in publications.windows(2) {
+        validate_pair(&pair[0], &pair[1])?;
+    }
+    let _probe = state.hls_registry().acquire_track_probe()?;
+    for publication in publications {
+        reauthorize_publication(state, headers, &lookup(publication, token)).await?;
+    }
+    let borrowed = publications.iter().map(Arc::as_ref).collect::<Vec<_>>();
+    let (playlist, duration) = make_preview_chain(item, &borrowed)?;
+    let mut response = Response::new(Body::from(playlist.clone()));
+    set_private_headers(
+        &mut response,
+        "application/vnd.apple.mpegurl",
+        playlist.len(),
+    );
+    set_excerpt_headers(
+        &mut response,
+        publications[0].start_time_ticks,
+        Some(duration),
+    );
+    response
+        .headers_mut()
+        .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
+    let last = publications.last().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    set_continuation_path(&mut response, item, &last.id, Some(duration));
+    Ok(response)
+}
+
 pub(super) async fn video_stitch(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist_id)): RoutePath<(String, String)>,
@@ -217,37 +258,62 @@ pub(super) async fn video_stitch(
                 .ok_or(StatusCode::NOT_FOUND)
         })
         .transpose()?;
-    if let Some(third) = third.as_deref() {
-        validate_pair(&next, third)?;
+    let mut publications = vec![first, next];
+    if let Some(third) = third {
+        publications.push(third);
     }
-    // All publications must be independently reauthorized; accepting a third
-    // UUID never widens access beyond the caller's current token and grants.
-    let _probe = registry.acquire_track_probe()?;
-    reauthorize_publication(&state, &headers, &lookup(&first, &token)).await?;
-    reauthorize_publication(&state, &headers, &lookup(&next, &token)).await?;
-    if let Some(third) = third.as_deref() {
-        reauthorize_publication(&state, &headers, &lookup(third, &token)).await?;
+    render_stitched(&state, &item, &headers, &token, &publications).await
+}
+
+/// Extract only Pelagos's own trusted continuation UUID from an internal
+/// response. Never interpret a client-supplied URL as a publication ID.
+fn continuation_publication_id<'a>(path: &'a str, item: &str) -> Option<&'a str> {
+    let prefix = format!("/Videos/{item}/hls1/");
+    let id = path.strip_prefix(&prefix)?.strip_suffix("/next.m3u8")?;
+    (id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
+}
+
+/// Explicit one-step composition: publish exactly one adjacent bounded PGS
+/// excerpt using the existing authorization/FFmpeg admission path, then
+/// stitch it to the current window. No background job, open-ended playlist
+/// or automatic HLS reload is implied.
+pub(super) async fn video_advance(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, playlist_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
+    let first = state
+        .hls_registry()
+        .lookup(&playlist_id, &item, "video", &token)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    if first.rendition_count != 1 || first.excerpt_duration_ticks.is_none() {
+        return Err(StatusCode::NOT_FOUND);
     }
-    let (playlist, duration) = if let Some(third) = third.as_deref() {
-        make_preview_chain(&item, &[first.as_ref(), next.as_ref(), third])?
-    } else {
-        make_preview(&item, &first, &next)?
-    };
-    let mut response = Response::new(Body::from(playlist.clone()));
-    set_private_headers(
-        &mut response,
-        "application/vnd.apple.mpegurl",
-        playlist.len(),
-    );
-    set_excerpt_headers(&mut response, first.start_time_ticks, Some(duration));
-    response
-        .headers_mut()
-        .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
-    let last_id = third
-        .as_ref()
-        .map_or(&next.id, |publication| &publication.id);
-    set_continuation_path(&mut response, &item, last_id, Some(duration));
-    Ok(response)
+    let next_response = super::continuation::video_next(
+        State(state.clone()),
+        RoutePath((item.clone(), playlist_id)),
+        headers.clone(),
+    )
+    .await?;
+    if next_response.status() == StatusCode::NO_CONTENT {
+        return Ok(next_response);
+    }
+    if next_response.status() != StatusCode::OK {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let path = next_response
+        .headers()
+        .get("x-pelagos-next-path")
+        .and_then(|header| header.to_str().ok())
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let next_id =
+        continuation_publication_id(path, &item).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let next = state
+        .hls_registry()
+        .lookup(next_id, &item, "video", &token)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    render_stitched(&state, &item, &headers, &token, &[first, next]).await
 }
 
 #[cfg(test)]
@@ -415,6 +481,28 @@ mod tests {
             make_preview_chain("synthetic-item", &[&first, &middle, &third, &first]),
             Err(StatusCode::NOT_FOUND)
         );
+    }
+
+    #[test]
+    fn continuation_path_is_only_accepted_for_exact_internal_uuid() {
+        let item = "synthetic-item";
+        let id = "0123456789abcdef0123456789abcdef";
+        assert_eq!(
+            continuation_publication_id(
+                "/Videos/synthetic-item/hls1/0123456789abcdef0123456789abcdef/next.m3u8",
+                item
+            ),
+            Some(id)
+        );
+        for path in [
+            "/Videos/other-item/hls1/0123456789abcdef0123456789abcdef/next.m3u8",
+            "/Videos/synthetic-item/hls1/not-a-uuid/next.m3u8",
+            "/Videos/synthetic-item/hls1/0123456789abcdef0123456789abcdef/other.m3u8",
+            "/Videos/synthetic-item/hls1/0123456789abcdef0123456789abcdeg/next.m3u8",
+            "/Videos/synthetic-item/hls1/0123456789abcdef0123456789abcdef/next.m3u8/extra",
+        ] {
+            assert_eq!(continuation_publication_id(path, item), None);
+        }
     }
 
     #[test]
