@@ -1719,7 +1719,13 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .to_str()
         .unwrap()
         .to_owned();
-    assert!(!body(started_eof).await.contains("#EXT-X-ENDLIST"));
+    let eof_opening = body(started_eof).await;
+    assert!(!eof_opening.contains("#EXT-X-ENDLIST"));
+    // Retrying the same start URI with a larger prebuffer request must
+    // not trigger an unexpected source probe or advance an existing session.
+    let retry_eof = call(&app, &format!("{eof_start}?prebuffer=2"), Some(&token)).await;
+    assert_eq!(retry_eof.status(), StatusCode::OK);
+    assert_eq!(body(retry_eof).await, eof_opening);
     tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
     let eof_rolling = call(&app, &eof_rolling_path, Some(&token)).await;
     assert_eq!(eof_rolling.status(), StatusCode::OK);
