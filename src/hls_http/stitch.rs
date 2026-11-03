@@ -185,6 +185,7 @@ fn make_preview_chain(
     Ok((playlist, duration))
 }
 
+#[cfg(test)]
 fn make_preview(
     item: &str,
     first: &Published,
