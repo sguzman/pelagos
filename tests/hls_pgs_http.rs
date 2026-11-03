@@ -1554,9 +1554,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
 
     // Automatic, bounded three-window mode must reuse these same private
     // publications and produce exactly the verified manual composition.
-    let auto_three_url = format!(
-        "/Videos/{id}/hls1/{first_id}/advance.m3u8?windows=3"
-    );
+    let auto_three_url = format!("/Videos/{id}/hls1/{first_id}/advance.m3u8?windows=3");
     assert_eq!(
         call(&app, &auto_three_url, None).await.status(),
         StatusCode::UNAUTHORIZED
