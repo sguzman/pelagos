@@ -123,6 +123,30 @@ impl HlsRegistry {
             .cloned()
     }
 
+    /// Releasing a lease never revokes another client's preview. Its private
+    /// TS files are dropped once no cache, lease or in-flight response owns
+    /// the underlying publication Arcs.
+    pub(super) fn release_retained(
+        &self,
+        id: &str,
+        item: &str,
+        token: &str,
+    ) -> bool {
+        let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
+        let removed = {
+            let mut leases = self
+                .retained
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            leases.retain(|lease| lease.expires_at > Instant::now());
+            leases
+                .iter()
+                .position(|lease| lease.id == id && lease.item == item && lease.digest == digest)
+                .and_then(|index| leases.remove(index))
+        };
+        removed.is_some()
+    }
+
     pub(super) fn retained_publication(
         &self,
         id: &str,
@@ -224,6 +248,25 @@ pub(super) async fn video_retained(
         return Err(StatusCode::NOT_FOUND);
     }
     preview_response(&lease)
+}
+
+/// Release is a token-scoped control-plane action, not a request to delete
+/// source media or global HLS cache entries.
+pub(super) async fn video_release(
+    State(state): State<Arc<AppState>>,
+    RoutePath((item, lease_id)): RoutePath<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let (_, token) = auth_api::authenticated(state.clone(), headers).await?;
+    if !state.hls_registry().release_retained(&lease_id, &item, &token) {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = StatusCode::NO_CONTENT;
+    response
+        .headers_mut()
+        .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
+    Ok(response)
 }
 
 #[cfg(test)]
@@ -353,5 +396,17 @@ mod tests {
                 .retained_preview(&first_group.id, "movie", "viewer-token")
                 .is_some()
         );
+        assert!(!registry.release_retained(&first_group.id, "movie", "different-token"));
+        assert!(registry.release_retained(&first_group.id, "movie", "viewer-token"));
+        assert!(!registry.release_retained(&first_group.id, "movie", "viewer-token"));
+        assert!(
+            registry
+                .retained_preview(&first_group.id, "movie", "viewer-token")
+                .is_none()
+        );
+        // The other preview shares the middle and retains the third, but not
+        // the first publication after it has been evicted from the LRU.
+        assert!(registry.lookup("first", "movie", "video", "viewer-token").is_none());
+        assert!(registry.lookup("third", "movie", "video", "viewer-token").is_some());
     }
 }

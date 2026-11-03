@@ -36,7 +36,7 @@ mod tracks;
 use continuation::video_next;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
-use retention::{RetainedPreview, video_retained};
+use retention::{RetainedPreview, video_release, video_retained};
 use segments::serve_segment;
 use stitch::{video_advance, video_stitch};
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
@@ -937,7 +937,9 @@ pub fn router() -> Router<Arc<AppState>> {
         )
         .route(
             "/Videos/{item_id}/hls1/{lease_id}/retained.m3u8",
-            get(video_retained).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
+            get(video_retained)
+                .head(|| async { StatusCode::METHOD_NOT_ALLOWED })
+                .delete(video_release),
         )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",

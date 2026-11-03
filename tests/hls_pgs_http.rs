@@ -1661,5 +1661,29 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             .status(),
         StatusCode::NOT_FOUND
     );
+    let wrong_release = Request::builder()
+        .method("DELETE")
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", other.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(wrong_release).await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    let release = Request::builder()
+        .method("DELETE")
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(release).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(&app, &retained_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(fs::read(&source).unwrap(), original);
 }
