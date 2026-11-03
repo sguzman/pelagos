@@ -4,7 +4,12 @@
 //! This is not a real unmodified Jellyfin client or remote HTTP playback.
 use super::call;
 use axum::{Router, body::to_bytes, http::StatusCode};
-use std::{fs, path::Path, process::{Command, Output}, time::Duration};
+use std::{
+    fs,
+    path::Path,
+    process::{Command, Output},
+    time::Duration,
+};
 
 pub(super) async fn assert_authenticated_hls_demux(
     app: &Router,
@@ -75,9 +80,7 @@ pub(super) async fn assert_authenticated_hls_network_demux(
     token: &str,
     playlist_path: &str,
 ) {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let routed_app = app.clone();
     let server = tokio::spawn(async move {
@@ -98,7 +101,9 @@ pub(super) async fn assert_authenticated_hls_network_demux(
     .await;
     server.abort();
     let _ = server.await;
-    let decoded = result.expect("FFmpeg network HLS decode timed out").unwrap();
+    let decoded = result
+        .expect("FFmpeg network HLS decode timed out")
+        .unwrap();
     assert_av_frames(&decoded);
 }
 
