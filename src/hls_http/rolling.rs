@@ -1,8 +1,9 @@
 //! Experimental, opt-in on-demand HLS sliding session. One active session,
 //! at most three completed PGS publications, no background transcode worker.
 //! It does not imply full Jellyfin Smart TV compatibility.
+use super::conditional::matches_if_none_match;
 use super::*;
-use axum::http::header::{ETAG, IF_NONE_MATCH};
+use axum::http::header::ETAG;
 use std::{
     collections::VecDeque,
     sync::{
@@ -57,21 +58,6 @@ fn interval(duration_ticks: u64) -> Duration {
 /// playlist generation. Never include a credential or source filename.
 fn rolling_etag(session: &RollingSession, generation: u64) -> String {
     format!("\"rolling-{}-{generation}\"", session.id)
-}
-
-/// If-None-Match uses weak comparison for GET (RFC 9110). The generated
-/// validator contains only ASCII letters, digits and hyphens, so matching
-/// a comma-delimited ETag list cannot split one of our own values.
-fn matches_if_none_match(headers: &HeaderMap, expected: &str) -> bool {
-    headers
-        .get(IF_NONE_MATCH)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|values| {
-            values
-                .split(',')
-                .map(str::trim)
-                .any(|value| value == "*" || value.strip_prefix("W/").unwrap_or(value) == expected)
-        })
 }
 
 impl RollingSession {
@@ -566,24 +552,10 @@ mod tests {
     }
 
     #[test]
-    fn rolling_etag_is_generation_scoped_and_matches_conditional_reloads() {
+    fn rolling_etag_changes_with_playlist_generation() {
         let root = tempfile::tempdir().unwrap();
         let session = RollingSession::new(example(root.path(), "first", 0)).unwrap();
-        let first = rolling_etag(&session, 0);
-        let next = rolling_etag(&session, 1);
-        assert_ne!(first, next);
-        let mut headers = HeaderMap::new();
-        assert!(!matches_if_none_match(&headers, &first));
-        headers.insert(IF_NONE_MATCH, HeaderValue::from_str(&first).unwrap());
-        assert!(matches_if_none_match(&headers, &first));
-        assert!(!matches_if_none_match(&headers, &next));
-        headers.insert(
-            IF_NONE_MATCH,
-            HeaderValue::from_str(&format!("\"unrelated\", W/{first}")).unwrap(),
-        );
-        assert!(matches_if_none_match(&headers, &first));
-        headers.insert(IF_NONE_MATCH, HeaderValue::from_static("*"));
-        assert!(matches_if_none_match(&headers, &first));
+        assert_ne!(rolling_etag(&session, 0), rolling_etag(&session, 1));
     }
 
     #[test]

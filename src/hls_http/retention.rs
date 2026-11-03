@@ -1,8 +1,10 @@
 //! Small, expiring token-scoped HLS preview leases, independent of the
 //! three-entry LRU transcode cache. Leases keep completed private segment
 //! roots alive while unrelated clients publish, never schedule new media.
+use super::conditional::matches_if_none_match;
 use super::registry::matches_cache_query;
 use super::*;
+use axum::http::header::ETAG;
 use std::time::{Duration, Instant};
 
 const MAX_RETAINED_PREVIEWS: usize = 2;
@@ -185,6 +187,11 @@ impl HlsRegistry {
 
 pub(super) fn preview_response(lease: &RetainedPreview) -> Result<Response, StatusCode> {
     let mut response = Response::new(Body::from(lease.manifest.clone()));
+    let etag = format!("\"retained-{}\"", lease.id);
+    response.headers_mut().insert(
+        ETAG,
+        HeaderValue::from_str(&etag).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+    );
     set_private_headers(
         &mut response,
         "application/vnd.apple.mpegurl",
@@ -242,7 +249,20 @@ pub(super) async fn video_retained(
     {
         return Err(StatusCode::NOT_FOUND);
     }
-    preview_response(&lease)
+    let mut response = preview_response(&lease)?;
+    // The exact same library/source/sidecar reauthorization must precede a
+    // matching ETag: a 304 cannot keep a revoked private playlist accessible.
+    let etag = response
+        .headers()
+        .get(ETAG)
+        .and_then(|value| value.to_str().ok())
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    if matches_if_none_match(&headers, etag) {
+        *response.status_mut() = StatusCode::NOT_MODIFIED;
+        *response.body_mut() = Body::empty();
+        response.headers_mut().remove(CONTENT_LENGTH);
+    }
+    Ok(response)
 }
 
 /// Release is a token-scoped control-plane action, not a request to delete

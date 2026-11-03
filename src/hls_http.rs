@@ -27,6 +27,7 @@ use std::{
 };
 use uuid::Uuid;
 
+mod conditional;
 mod continuation;
 mod registry;
 mod retention;

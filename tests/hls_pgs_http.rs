@@ -1603,7 +1603,55 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     );
     let retained = call(&app, &retained_path, Some(&token)).await;
     assert_eq!(retained.status(), StatusCode::OK);
+    let retained_etag = retained.headers()["etag"].to_str().unwrap().to_owned();
+    assert!(retained_etag.starts_with("\"retained-"));
     assert_eq!(body(retained).await, three_playlist);
+    let unchanged_request = Request::builder()
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", retained_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let unchanged = app.clone().oneshot(unchanged_request).await.unwrap();
+    assert_eq!(unchanged.status(), StatusCode::NOT_MODIFIED);
+    assert_eq!(unchanged.headers()["etag"], retained_etag);
+    assert!(
+        to_bytes(unchanged.into_body(), 64)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let mismatched_request = Request::builder()
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", "\"not-this-retention\"")
+        .body(Body::empty())
+        .unwrap();
+    let mismatched = app.clone().oneshot(mismatched_request).await.unwrap();
+    assert_eq!(mismatched.status(), StatusCode::OK);
+    assert_eq!(body(mismatched).await, three_playlist);
+    let sibling_request = Request::builder()
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", other.as_str())
+        .header("If-None-Match", retained_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(sibling_request).await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    let revoked_request = Request::builder()
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", retained_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(revoked_request).await.unwrap().status(),
+        StatusCode::NOT_FOUND
+    );
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
 
     // Start the separate, one-slot sliding mode from a token-owned PGS
     // excerpt. Its stable media URI is reloaded by an HLS client, never
@@ -1754,6 +1802,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     }
     let retained_again = call(&app, &retained_path, Some(&token)).await;
     assert_eq!(retained_again.status(), StatusCode::OK);
+    assert_eq!(retained_again.headers()["etag"], retained_etag);
     assert_eq!(body(retained_again).await, three_playlist);
 
     // Release the active sliding session, then reuse the final second of
