@@ -3,11 +3,7 @@
 //! locally rebound copy of the *same playlist* through FFmpeg's HLS demuxer.
 //! This is not a real unmodified Jellyfin client or remote HTTP playback.
 use super::call;
-use axum::{
-    Router,
-    body::to_bytes,
-    http::StatusCode,
-};
+use axum::{Router, body::to_bytes, http::StatusCode};
 use std::{fs, path::Path, process::Command};
 
 pub(super) async fn assert_authenticated_hls_demux(
@@ -25,7 +21,11 @@ pub(super) async fn assert_authenticated_hls_demux(
     for line in manifest.lines() {
         if line.starts_with("/Videos/") && line.ends_with(".ts") {
             let response = call(app, line, Some(token)).await;
-            assert_eq!(response.status(), StatusCode::OK, "missing HLS segment {line}");
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "missing HLS segment {line}"
+            );
             let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
                 .await
                 .unwrap();
@@ -75,8 +75,14 @@ pub(super) async fn assert_authenticated_hls_demux(
         .filter(|line| !line.starts_with('#'))
         .filter_map(|line| line.split(',').next().map(str::trim))
         .collect::<Vec<_>>();
-    let video_frames = frame_streams.iter().filter(|stream| **stream == "0").count();
-    let audio_frames = frame_streams.iter().filter(|stream| **stream == "1").count();
+    let video_frames = frame_streams
+        .iter()
+        .filter(|stream| **stream == "0")
+        .count();
+    let audio_frames = frame_streams
+        .iter()
+        .filter(|stream| **stream == "1")
+        .count();
     assert!(
         video_frames >= 10,
         "expected decoded frames across at least two PGS windows; video={video_frames}, audio={audio_frames}"
