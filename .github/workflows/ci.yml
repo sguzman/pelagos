@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    # Stable FFmpeg-equipped runner baseline; ubuntu-latest can migrate to
+    # an image whose apt components have not yet exposed universe packages.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
