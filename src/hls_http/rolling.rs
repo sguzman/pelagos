@@ -278,12 +278,8 @@ async fn response_for_session(
         let snapshot = session.snapshot();
         let _probe = state.hls_registry().acquire_track_probe()?;
         for publication in &snapshot.publications {
-            reauthorize_publication(
-                state,
-                headers,
-                &super::stitch::lookup(publication, token),
-            )
-            .await?;
+            reauthorize_publication(state, headers, &super::stitch::lookup(publication, token))
+                .await?;
         }
         if state
             .hls_registry()
