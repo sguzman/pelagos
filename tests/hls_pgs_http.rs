@@ -1618,6 +1618,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap()
         .to_owned();
     let opening = body(started).await;
+    let stable_target = opening
+        .lines()
+        .find(|line| line.starts_with("#EXT-X-TARGETDURATION:"))
+        .unwrap()
+        .to_owned();
     assert!(opening.contains(&format!("/Videos/{id}/{first_segment}")));
     assert!(!opening.contains("#EXT-X-ENDLIST"));
     assert!(!opening.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
@@ -1639,6 +1644,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let second_rolling = call(&app, &rolling_path, Some(&token)).await;
     assert_eq!(second_rolling.status(), StatusCode::OK);
     let second_rolling = body(second_rolling).await;
+    assert!(second_rolling.lines().any(|line| line == stable_target));
     assert!(second_rolling.contains(&format!("/Videos/{id}/{second_segment}")));
     assert_eq!(
         second_rolling.matches("#EXTINF:").count(),
@@ -1648,6 +1654,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let third_rolling = call(&app, &rolling_path, Some(&token)).await;
     assert_eq!(third_rolling.status(), StatusCode::OK);
     let third_rolling = body(third_rolling).await;
+    assert!(third_rolling.lines().any(|line| line == stable_target));
     assert!(third_rolling.contains(&format!("/Videos/{id}/{third_segment}")));
     assert_eq!(
         third_rolling.matches("#EXTINF:").count(),

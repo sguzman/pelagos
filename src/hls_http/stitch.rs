@@ -71,7 +71,7 @@ pub(super) fn validate_pair(first: &Published, next: &Published) -> Result<(), S
 /// grammar produced by Pelagos. A plausible EXTINF count is insufficient:
 /// duplicate headers, unexpected tags or misplaced ENDLIST may otherwise be
 /// silently carried into an authenticated stitched publication.
-fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> {
+pub(super) fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> {
     let body = &entry.media_playlist;
     if body.len() > MAX_MANIFEST || !body.ends_with('\n') || entry.segments.is_empty() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
@@ -192,6 +192,7 @@ pub(super) fn make_rolling_playlist(
     item: &str,
     publications: &[&Published],
     endlist: bool,
+    target_duration: u32,
 ) -> Result<String, StatusCode> {
     if publications.is_empty() || publications.len() > 3 {
         return Err(StatusCode::NOT_FOUND);
@@ -203,14 +204,17 @@ pub(super) fn make_rolling_playlist(
         .iter()
         .map(|publication| verified_fragment(publication))
         .collect::<Result<Vec<_>, _>>()?;
-    let target = fragments
-        .iter()
-        .map(|(target, _)| *target)
-        .max()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    // RFC 8216: TARGETDURATION is invariant throughout a live playlist.
+    // Reject any later FFmpeg fragment that exceeds the session's pinned
+    // duration rather than silently changing it on an existing HLS URI.
+    if !(1..=600).contains(&target_duration)
+        || fragments.iter().any(|(target, _)| *target > target_duration)
+    {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
     let sequence = publications[0].media_sequence;
     let mut playlist = format!(
-        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{target}\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n"
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{target_duration}\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n"
     );
     let mut written = 0_usize;
     for (publication, (_, cues)) in publications.iter().zip(&fragments) {
@@ -511,23 +515,29 @@ mod tests {
         let first = sample(temp.path(), "first", 100_000_000, 20_000_000, 0, 1);
         let second = sample(temp.path(), "second", 120_000_000, 20_000_000, 1, 1);
         let third = sample(temp.path(), "third", 140_000_000, 20_000_000, 2, 1);
-        let opening = make_rolling_playlist("synthetic-item", &[&first], false).unwrap();
+        let opening = make_rolling_playlist("synthetic-item", &[&first], false, 3).unwrap();
+        assert!(opening.contains("#EXT-X-TARGETDURATION:3\n"));
         assert!(opening.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
         assert!(!opening.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
         assert!(!opening.contains("#EXT-X-ENDLIST"));
         let live =
-            make_rolling_playlist("synthetic-item", &[&first, &second, &third], false).unwrap();
+            make_rolling_playlist("synthetic-item", &[&first, &second, &third], false, 3).unwrap();
         assert_eq!(live.matches("#EXTINF:").count(), 3);
         assert_eq!(live.matches("#EXT-X-DISCONTINUITY\n").count(), 2);
         assert!(!live.contains("#EXT-X-ENDLIST"));
-        let tail = make_rolling_playlist("synthetic-item", &[&second, &third], true).unwrap();
+        let tail = make_rolling_playlist("synthetic-item", &[&second, &third], true, 3).unwrap();
         assert!(tail.contains("#EXT-X-MEDIA-SEQUENCE:1\n"));
         assert!(tail.contains("#EXT-X-DISCONTINUITY-SEQUENCE:1\n"));
         assert!(tail.ends_with("#EXT-X-ENDLIST\n"));
         assert!(!tail.contains("/hls1/first/0.ts"));
         assert!(tail.contains("/hls1/third/0.ts"));
+        assert!(tail.contains("#EXT-X-TARGETDURATION:3\n"));
         assert_eq!(
-            make_rolling_playlist("synthetic-item", &[&third, &first], false),
+            make_rolling_playlist("synthetic-item", &[&first, &second], false, 1),
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        );
+        assert_eq!(
+            make_rolling_playlist("synthetic-item", &[&third, &first], false, 3),
             Err(StatusCode::NOT_FOUND)
         );
     }

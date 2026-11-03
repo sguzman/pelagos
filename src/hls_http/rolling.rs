@@ -17,6 +17,7 @@ pub(super) struct RollingSession {
     item: String,
     digest: [u8; 32],
     expires_at: Instant,
+    target_duration: u32,
     /// Prevent two playlist reloads from encoding the same successor.
     advance: tokio::sync::Mutex<()>,
     window: Mutex<RollingWindow>,
@@ -41,20 +42,30 @@ fn interval(duration_ticks: u64) -> Duration {
 }
 
 impl RollingSession {
-    fn new(publication: Arc<Published>) -> Self {
-        let duration_ticks = publication.excerpt_duration_ticks.unwrap_or(10_000_000);
-        Self {
+    fn new(publication: Arc<Published>) -> Result<Self, StatusCode> {
+        let duration_ticks = publication
+            .excerpt_duration_ticks
+            .ok_or(StatusCode::NOT_FOUND)?;
+        let first_target = super::stitch::verified_fragment(&publication)?.0;
+        let window_seconds = duration_ticks.div_ceil(10_000_000).min(u64::from(u32::MAX)) as u32;
+        // A small bound above the initial clip's requested segment interval
+        // accommodates FFmpeg timebase rounding while preserving fast reloads
+        // for very short excerpts.
+        let nominal = publication.target_seconds.min(window_seconds).saturating_add(1).min(600);
+        let target_duration = first_target.max(nominal);
+        Ok(Self {
             id: Uuid::new_v4().simple().to_string(),
             item: publication.item.clone(),
             digest: publication.digest,
             expires_at: Instant::now() + ROLLING_LIFETIME,
+            target_duration,
             advance: tokio::sync::Mutex::new(()),
             window: Mutex::new(RollingWindow {
                 publications: VecDeque::from([publication]),
                 eof: false,
                 next_due: Instant::now() + interval(duration_ticks),
             }),
-        }
+        })
     }
 
     fn snapshot(&self) -> Snapshot {
@@ -147,7 +158,7 @@ impl HlsRegistry {
         if sessions.len() >= MAX_ROLLING_SESSIONS {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
-        let session = Arc::new(RollingSession::new(first));
+        let session = Arc::new(RollingSession::new(first)?);
         sessions.push_back(session.clone());
         Ok(session)
     }
@@ -232,7 +243,12 @@ async fn response_for_session(
         .iter()
         .map(Arc::as_ref)
         .collect::<Vec<_>>();
-    let playlist = super::stitch::make_rolling_playlist(&session.item, &refs, snapshot.eof)?;
+    let playlist = super::stitch::make_rolling_playlist(
+        &session.item,
+        &refs,
+        snapshot.eof,
+        session.target_duration,
+    )?;
     let mut response = playlist_response(&playlist);
     response
         .headers_mut()
@@ -316,6 +332,9 @@ pub(super) async fn video_rolling(
                             .lookup(next_id, &item, "video", &token)
                             .ok_or(StatusCode::NOT_FOUND)?;
                         super::stitch::validate_pair(last, &next)?;
+                        if super::stitch::verified_fragment(&next)?.0 > session.target_duration {
+                            return Err(StatusCode::NOT_IMPLEMENTED);
+                        }
                         let _probe = state.hls_registry().acquire_track_probe()?;
                         reauthorize_publication(
                             &state,
@@ -363,6 +382,15 @@ mod tests {
     use super::*;
 
     fn example(root: &Path, id: &str, start: u64) -> Arc<Published> {
+        let sequence = start / 10_000_000;
+        let discontinuity = if sequence == 0 {
+            String::new()
+        } else {
+            format!("#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")
+        };
+        let manifest = format!(
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n{discontinuity}#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:2.000,\n0.ts\n#EXT-X-ENDLIST\n"
+        );
         Arc::new(Published {
             id: id.to_owned(),
             item: "movie".to_owned(),
@@ -374,15 +402,15 @@ mod tests {
             target_seconds: 1,
             start_time_ticks: start,
             excerpt_duration_ticks: Some(10_000_000),
-            media_sequence: start / 10_000_000,
+            media_sequence: sequence,
             rendition_count: 1,
             subtitle_stream_index: Some(1),
             sidecar: None,
             private_root: root.join(id),
             main_playlist: String::new(),
             master_playlist: String::new(),
-            media_playlist: String::new(),
-            segments: Vec::new(),
+            media_playlist: manifest,
+            segments: vec![(root.join(id).join("0.ts"), 376)],
             variants: Vec::new(),
         })
     }
