@@ -16,6 +16,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
+#[path = "hls_pgs_http/demux.rs"]
+mod demux;
+
 async fn call(app: &Router, uri: &str, token: Option<&str>) -> Response {
     let mut request = Request::builder().uri(uri);
     if let Some(token) = token {
@@ -1663,6 +1666,13 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
             + third_body.matches("#EXTINF:").count()
     );
     assert!(!third_rolling.contains("#EXT-X-ENDLIST"));
+    demux::assert_authenticated_hls_demux(
+        &app,
+        &token,
+        &third_rolling,
+        &temp.path().join("rolling-three-demux"),
+    )
+    .await;
 
     // Force LRU eviction with four distinct authenticated publications
     // from the same synthetic source. The two/three-window lease must keep
@@ -1859,6 +1869,13 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(sequence > 0);
     assert!(last_live.contains(&format!("#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")));
     assert!(!last_live.contains(&initial_segment_path));
+    demux::assert_authenticated_hls_demux(
+        &app,
+        &token,
+        &last_live,
+        &temp.path().join("rolling-slid-demux"),
+    )
+    .await;
     // A startup retry can independently promote the first publication in
     // the global three-entry LRU. Sliding removal must not revoke that
     // separate cache ownership. Force unrelated publications to evict it,
