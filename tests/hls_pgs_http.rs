@@ -457,6 +457,10 @@ async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() 
         }
     }
     assert!(!stale_uri.is_empty());
+    // A real HTTP demuxer must follow the token-scoped adaptive master into
+    // an authorized child rendition and decode both video and AAC. Segment
+    // parsing alone cannot verify that its nested URLs are usable.
+    demux::assert_authenticated_hls_network_demux(&app, &token, &master_url, false).await;
     assert_eq!(fs::read(&source).unwrap(), original);
     let mut changed = sup;
     let palette = changed
