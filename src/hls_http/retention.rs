@@ -126,12 +126,7 @@ impl HlsRegistry {
     /// Releasing a lease never revokes another client's preview. Its private
     /// TS files are dropped once no cache, lease or in-flight response owns
     /// the underlying publication Arcs.
-    pub(super) fn release_retained(
-        &self,
-        id: &str,
-        item: &str,
-        token: &str,
-    ) -> bool {
+    pub(super) fn release_retained(&self, id: &str, item: &str, token: &str) -> bool {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         let removed = {
             let mut leases = self
@@ -258,7 +253,10 @@ pub(super) async fn video_release(
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
     let (_, token) = auth_api::authenticated(state.clone(), headers).await?;
-    if !state.hls_registry().release_retained(&lease_id, &item, &token) {
+    if !state
+        .hls_registry()
+        .release_retained(&lease_id, &item, &token)
+    {
         return Err(StatusCode::NOT_FOUND);
     }
     let mut response = Response::new(Body::empty());
@@ -406,7 +404,15 @@ mod tests {
         );
         // The other preview shares the middle and retains the third, but not
         // the first publication after it has been evicted from the LRU.
-        assert!(registry.lookup("first", "movie", "video", "viewer-token").is_none());
-        assert!(registry.lookup("third", "movie", "video", "viewer-token").is_some());
+        assert!(
+            registry
+                .lookup("first", "movie", "video", "viewer-token")
+                .is_none()
+        );
+        assert!(
+            registry
+                .lookup("third", "movie", "video", "viewer-token")
+                .is_some()
+        );
     }
 }
