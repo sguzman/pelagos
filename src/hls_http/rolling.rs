@@ -9,14 +9,16 @@ use std::{
 };
 
 const MAX_ROLLING_SESSIONS: usize = 1;
-const ROLLING_LIFETIME: Duration = Duration::from_secs(1_860);
+const ROLLING_IDLE_LIFETIME: Duration = Duration::from_secs(900);
+const ROLLING_HARD_LIFETIME: Duration = Duration::from_secs(86_400);
 
 #[derive(Debug)]
 pub(super) struct RollingSession {
     id: String,
     item: String,
     digest: [u8; 32],
-    expires_at: Instant,
+    hard_expires_at: Instant,
+    last_accessed: Mutex<Instant>,
     target_duration: u32,
     /// Prevent two playlist reloads from encoding the same successor.
     advance: tokio::sync::Mutex<()>,
@@ -61,7 +63,8 @@ impl RollingSession {
             id: Uuid::new_v4().simple().to_string(),
             item: publication.item.clone(),
             digest: publication.digest,
-            expires_at: Instant::now() + ROLLING_LIFETIME,
+            hard_expires_at: Instant::now() + ROLLING_HARD_LIFETIME,
+            last_accessed: Mutex::new(Instant::now()),
             target_duration,
             advance: tokio::sync::Mutex::new(()),
             window: Mutex::new(RollingWindow {
@@ -70,6 +73,23 @@ impl RollingSession {
                 next_due: Instant::now() + interval(duration_ticks),
             }),
         })
+    }
+
+    fn alive(&self, now: Instant) -> bool {
+        now < self.hard_expires_at
+            && now.saturating_duration_since(
+                *self
+                    .last_accessed
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            ) < ROLLING_IDLE_LIFETIME
+    }
+
+    fn touch(&self) {
+        *self
+            .last_accessed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Instant::now();
     }
 
     fn snapshot(&self) -> Snapshot {
@@ -124,7 +144,7 @@ impl HlsRegistry {
         self.rolling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|session| session.expires_at > Instant::now());
+            .retain(|session| session.alive(Instant::now()));
     }
 
     fn register_rolling(
@@ -145,7 +165,7 @@ impl HlsRegistry {
             .rolling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        sessions.retain(|session| session.expires_at > Instant::now());
+        sessions.retain(|session| session.alive(Instant::now()));
         if let Some(existing) = sessions.iter().find(|session| {
             session.item == first.item
                 && session.digest == digest
@@ -173,7 +193,7 @@ impl HlsRegistry {
             .rolling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        sessions.retain(|session| session.expires_at > Instant::now());
+        sessions.retain(|session| session.alive(Instant::now()));
         sessions
             .iter()
             .find(|session| session.id == id && session.item == item && session.digest == digest)
@@ -191,7 +211,7 @@ impl HlsRegistry {
             .rolling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        sessions.retain(|session| session.expires_at > Instant::now());
+        sessions.retain(|session| session.alive(Instant::now()));
         sessions
             .iter()
             .filter(|session| session.item == item && &session.digest == digest)
@@ -213,7 +233,7 @@ impl HlsRegistry {
             .rolling
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        sessions.retain(|session| session.expires_at > Instant::now());
+        sessions.retain(|session| session.alive(Instant::now()));
         sessions
             .iter()
             .position(|session| {
@@ -262,6 +282,9 @@ async fn response_for_session(
         "x-pelagos-rolling-path",
         HeaderValue::from_str(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
+    // Only an authenticated, revision-checked successful response refreshes
+    // the inactivity deadline. Failed grant/source probes cannot pin media.
+    session.touch();
     Ok(response)
 }
 
@@ -417,6 +440,37 @@ mod tests {
             segments: vec![(root.join(id).join("0.ts"), 376)],
             variants: Vec::new(),
         })
+    }
+
+    #[test]
+    fn rolling_session_renews_only_when_touched_and_expires_when_abandoned() {
+        let root = tempfile::tempdir().unwrap();
+        let first = example(root.path(), "first", 0);
+        let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
+        let session = registry.register_rolling(first.clone(), "viewer-token").unwrap();
+        {
+            let mut last_accessed = session
+                .last_accessed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *last_accessed = Instant::now() - ROLLING_IDLE_LIFETIME - Duration::from_secs(1);
+        }
+        assert!(!session.alive(Instant::now()));
+        assert!(registry.rolling_session(&session.id, "movie", "viewer-token").is_none());
+        let renewed = registry.register_rolling(first, "viewer-token").unwrap();
+        assert_ne!(session.id, renewed.id);
+        renewed.touch();
+        assert!(renewed.alive(Instant::now()));
+        assert!(registry
+            .rolling_session(&renewed.id, "movie", "viewer-token")
+            .is_some());
+
+        // Absolute lifetime remains bounded even for a frequently touched
+        // session. No stale publication may occupy the single rolling slot.
+        let mut no_refs = RollingSession::new(example(root.path(), "hard-cap", 0)).unwrap();
+        no_refs.hard_expires_at = Instant::now() - Duration::from_secs(1);
+        no_refs.touch();
+        assert!(!no_refs.alive(Instant::now()));
     }
 
     #[test]
