@@ -1763,9 +1763,72 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         );
     }
 
+    // The final-second rolling session has reached ENDLIST. Release it
+    // before starting a new independent session over four clear PGS windows.
+    // This must *slide*: after four published windows, the first drops out of
+    // both the three-window session and the three-entry global cache.
+    let stop_eof = Request::builder()
+        .method("DELETE")
+        .uri(eof_rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(stop_eof).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let sliding_first = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6000000000&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=10000000"
+    );
+    let start_segmented = call(&app, &sliding_first, Some(&token)).await;
+    assert_eq!(start_segmented.status(), StatusCode::OK);
+    let start_segments = body(start_segmented).await;
+    let start_leaf = start_segments
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap();
+    let initial_segment_path = format!("/Videos/{id}/{start_leaf}");
+    let initial_id = start_leaf.split('/').nth(1).unwrap();
+    let sliding_start = format!("/Videos/{id}/hls1/{initial_id}/rolling-start.m3u8");
+    let sliding_response = call(&app, &sliding_start, Some(&token)).await;
+    assert_eq!(sliding_response.status(), StatusCode::OK);
+    let sliding_path = sliding_response.headers()["x-pelagos-rolling-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let initial_live = body(sliding_response).await;
+    let stable_target = initial_live
+        .lines()
+        .find(|line| line.starts_with("#EXT-X-TARGETDURATION:"))
+        .unwrap()
+        .to_owned();
+    assert!(initial_live.contains(&initial_segment_path));
+    let mut last_live = initial_live;
+    for _ in 0..3 {
+        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+        let step = call(&app, &sliding_path, Some(&token)).await;
+        assert_eq!(step.status(), StatusCode::OK);
+        last_live = body(step).await;
+        assert!(last_live.lines().any(|line| line == stable_target));
+        assert!(!last_live.contains("#EXT-X-ENDLIST"));
+    }
+    let sequence = last_live
+        .lines()
+        .find_map(|line| line.strip_prefix("#EXT-X-MEDIA-SEQUENCE:"))
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    assert!(sequence > 0);
+    assert!(last_live.contains(&format!("#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")));
+    assert!(!last_live.contains(&initial_segment_path));
+    assert_eq!(
+        call(&app, &initial_segment_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
-        call(&app, &eof_rolling_path, Some(&token)).await.status(),
+        call(&app, &sliding_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
@@ -1808,7 +1871,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     );
     let release_rolling = Request::builder()
         .method("DELETE")
-        .uri(eof_rolling_path.as_str())
+        .uri(sliding_path.as_str())
         .header("X-Emby-Token", token.as_str())
         .body(Body::empty())
         .unwrap();
@@ -1817,7 +1880,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        call(&app, &eof_rolling_path, Some(&token)).await.status(),
+        call(&app, &sliding_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(&source).unwrap(), original);
