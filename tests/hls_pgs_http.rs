@@ -460,7 +460,8 @@ async fn adaptive_external_pgs_hls_aligns_cues_across_real_bitrate_renditions() 
     // A real HTTP demuxer must follow the token-scoped adaptive master into
     // an authorized child rendition and decode both video and AAC. Segment
     // parsing alone cannot verify that its nested URLs are usable.
-    demux::assert_authenticated_hls_network_demux(&app, &token, &master_url, false).await;
+    demux::assert_authenticated_hls_network_demux(&app, &token, &master_url, false, false).await;
+    demux::assert_authenticated_hls_network_demux(&app, &token, &master_url, false, true).await;
     assert_eq!(fs::read(&source).unwrap(), original);
     let mut changed = sup;
     let palette = changed
@@ -1677,8 +1678,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         &temp.path().join("rolling-three-demux"),
     )
     .await;
-    demux::assert_authenticated_hls_network_demux(&app, &token, &retained_path, false).await;
-    demux::assert_authenticated_hls_network_demux(&app, &token, &rolling_path, true).await;
+    demux::assert_authenticated_hls_network_demux(&app, &token, &retained_path, false, false).await;
+    demux::assert_authenticated_hls_network_demux(&app, &token, &rolling_path, true, false).await;
 
     // Force LRU eviction with four distinct authenticated publications
     // from the same synthetic source. The two/three-window lease must keep

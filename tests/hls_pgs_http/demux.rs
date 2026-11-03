@@ -80,6 +80,7 @@ pub(super) async fn assert_authenticated_hls_network_demux(
     token: &str,
     playlist_path: &str,
     live: bool,
+    jellyfin_auth: bool,
 ) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -89,9 +90,18 @@ pub(super) async fn assert_authenticated_hls_network_demux(
     });
     let url = format!("http://{address}{playlist_path}");
     let mut ffmpeg = tokio::process::Command::new("ffmpeg");
+    // Exercise both the direct token header and Jellyfin's MediaBrowser
+    // Authorization grammar. Tokens are generated inside this test only.
+    let authorization = if jellyfin_auth {
+        format!(
+            "Authorization: MediaBrowser Client=\"PelagosCI\", Device=\"Loopback\", DeviceId=\"synthetic\", Version=\"1\", Token=\"{token}\"\r\n"
+        )
+    } else {
+        format!("X-Emby-Token: {token}\r\n")
+    };
     ffmpeg
         .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-headers"])
-        .arg(format!("X-Emby-Token: {token}\r\n"));
+        .arg(authorization);
     if live {
         // Begin at the first advertised segment rather than the newest
         // live-edge segment, so playback crosses a source-window boundary.
