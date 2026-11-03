@@ -243,7 +243,9 @@ pub(super) async fn video_stitch(
     response
         .headers_mut()
         .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
-    let last_id = third.as_ref().map_or(&next.id, |publication| &publication.id);
+    let last_id = third
+        .as_ref()
+        .map_or(&next.id, |publication| &publication.id);
     set_continuation_path(&mut response, &item, last_id, Some(duration));
     Ok(response)
 }
