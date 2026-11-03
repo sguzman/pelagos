@@ -276,15 +276,26 @@ fn continuation_publication_id<'a>(path: &'a str, item: &str) -> Option<&'a str>
     (id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
 }
 
-/// Explicit one-step composition: publish exactly one adjacent bounded PGS
-/// excerpt using the existing authorization/FFmpeg admission path, then
-/// stitch it to the current window. No background job, open-ended playlist
-/// or automatic HLS reload is implied.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct AdvanceQuery {
+    windows: Option<u8>,
+}
+
+/// Explicit bounded composition of two or three adjacent private PGS excerpts.
+/// Each missing successor is generated through the existing authenticated,
+/// revision-pinned one-window encoder. The caller must opt in to three windows;
+/// no unbounded scheduler, long-VOD promise or background work is introduced.
 pub(super) async fn video_advance(
     State(state): State<Arc<AppState>>,
     RoutePath((item, playlist_id)): RoutePath<(String, String)>,
+    Query(query): Query<AdvanceQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
+    let requested = query.windows.unwrap_or(2);
+    if !(2..=3).contains(&requested) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let first = state
         .hls_registry()
@@ -293,30 +304,43 @@ pub(super) async fn video_advance(
     if first.rendition_count != 1 || first.excerpt_duration_ticks.is_none() {
         return Err(StatusCode::NOT_FOUND);
     }
-    let next_response = super::continuation::video_next(
-        State(state.clone()),
-        RoutePath((item.clone(), playlist_id)),
-        headers.clone(),
-    )
-    .await?;
-    if next_response.status() == StatusCode::NO_CONTENT {
-        return Ok(next_response);
+    let mut publications = vec![first];
+    for _ in 1..requested {
+        let current = publications
+            .last()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let next_response = super::continuation::video_next(
+            State(state.clone()),
+            RoutePath((item.clone(), current.id.clone())),
+            headers.clone(),
+        )
+        .await?;
+        if next_response.status() == StatusCode::NO_CONTENT {
+            if publications.len() == 1 {
+                return Ok(next_response);
+            }
+            // The requested third window may be beyond EOF; retain only
+            // actual adjacent source intervals in the bounded preview.
+            break;
+        }
+        if next_response.status() != StatusCode::OK {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        let path = next_response
+            .headers()
+            .get("x-pelagos-next-path")
+            .and_then(|header| header.to_str().ok())
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let next_id =
+            continuation_publication_id(path, &item).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let next = state
+            .hls_registry()
+            .lookup(next_id, &item, "video", &token)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        validate_pair(current, &next)?;
+        publications.push(next);
     }
-    if next_response.status() != StatusCode::OK {
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    }
-    let path = next_response
-        .headers()
-        .get("x-pelagos-next-path")
-        .and_then(|header| header.to_str().ok())
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let next_id =
-        continuation_publication_id(path, &item).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let next = state
-        .hls_registry()
-        .lookup(next_id, &item, "video", &token)
-        .ok_or(StatusCode::NOT_FOUND)?;
-    render_stitched(&state, &item, &headers, &token, &[first, next]).await
+    render_stitched(&state, &item, &headers, &token, &publications).await
 }
 
 #[cfg(test)]

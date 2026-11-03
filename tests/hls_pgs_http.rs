@@ -1116,6 +1116,19 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         3
     );
     assert!(advanced_playlist.ends_with("#EXT-X-ENDLIST\n"));
+    // Three-window requests near EOF clamp to the actual two published
+    // excerpts; they must not fabricate a third window past source end.
+    let three_near_eof = format!("{advance_url}?windows=3");
+    let response = call(&app, &three_near_eof, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body(response).await, advanced_playlist);
+    for invalid in ["1", "4", "255", "bogus"] {
+        let uri = format!("{advance_url}?windows={invalid}");
+        assert_eq!(
+            call(&app, &uri, Some(&token)).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
 
     let response = call(&app, &next_url, Some(&token)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1538,6 +1551,28 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         entries.len() - 1
     );
     assert!(three_playlist.ends_with("#EXT-X-ENDLIST\n"));
+
+    // Automatic, bounded three-window mode must reuse these same private
+    // publications and produce exactly the verified manual composition.
+    let auto_three_url = format!(
+        "/Videos/{id}/hls1/{first_id}/advance.m3u8?windows=3"
+    );
+    assert_eq!(
+        call(&app, &auto_three_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &auto_three_url, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let auto_three = call(&app, &auto_three_url, Some(&token)).await;
+    assert_eq!(auto_three.status(), StatusCode::OK);
+    assert_eq!(auto_three.headers()["x-pelagos-stitched"], "true");
+    assert_eq!(
+        auto_three.headers()["x-pelagos-excerpt-duration-ticks"],
+        "30000000"
+    );
+    assert_eq!(body(auto_three).await, three_playlist);
 
     // The first excerpt is clear; the second starts after the PGS show cue,
     // and the third still contains the visible graphic before its clear cue.
