@@ -1640,13 +1640,21 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(second_rolling.status(), StatusCode::OK);
     let second_rolling = body(second_rolling).await;
     assert!(second_rolling.contains(&format!("/Videos/{id}/{second_segment}")));
-    assert_eq!(second_rolling.matches("#EXTINF:").count(), 2);
+    assert_eq!(
+        second_rolling.matches("#EXTINF:").count(),
+        first_body.matches("#EXTINF:").count() + second_body.matches("#EXTINF:").count()
+    );
     tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
     let third_rolling = call(&app, &rolling_path, Some(&token)).await;
     assert_eq!(third_rolling.status(), StatusCode::OK);
     let third_rolling = body(third_rolling).await;
     assert!(third_rolling.contains(&format!("/Videos/{id}/{third_segment}")));
-    assert_eq!(third_rolling.matches("#EXTINF:").count(), 3);
+    assert_eq!(
+        third_rolling.matches("#EXTINF:").count(),
+        first_body.matches("#EXTINF:").count()
+            + second_body.matches("#EXTINF:").count()
+            + third_body.matches("#EXTINF:").count()
+    );
     assert!(!third_rolling.contains("#EXT-X-ENDLIST"));
 
     // Force LRU eviction with four distinct authenticated publications
