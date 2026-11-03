@@ -12,6 +12,7 @@ use std::{
 };
 
 const MAX_ROLLING_SESSIONS: usize = 1;
+const MAX_SNAPSHOT_RETRIES: usize = 3;
 const ROLLING_IDLE_LIFETIME: Duration = Duration::from_secs(900);
 const ROLLING_HARD_LIFETIME: Duration = Duration::from_secs(86_400);
 
@@ -36,6 +37,7 @@ struct RollingWindow {
     publications: VecDeque<Arc<Published>>,
     eof: bool,
     next_due: Instant,
+    generation: u64,
 }
 
 #[derive(Clone)]
@@ -43,6 +45,7 @@ struct Snapshot {
     publications: Vec<Arc<Published>>,
     eof: bool,
     next_due: Instant,
+    generation: u64,
 }
 
 fn interval(duration_ticks: u64) -> Duration {
@@ -78,6 +81,7 @@ impl RollingSession {
                 publications: VecDeque::from([publication]),
                 eof: false,
                 next_due: Instant::now() + interval(duration_ticks),
+                generation: 0,
             }),
         })
     }
@@ -108,6 +112,7 @@ impl RollingSession {
             publications: window.publications.iter().cloned().collect(),
             eof: window.eof,
             next_due: window.next_due,
+            generation: window.generation,
         }
     }
 
@@ -134,6 +139,7 @@ impl RollingSession {
                     .ok_or(StatusCode::NOT_FOUND)?,
             );
         window.publications.push_back(publication);
+        window.generation = window.generation.saturating_add(1);
         Ok(())
     }
 
@@ -142,7 +148,10 @@ impl RollingSession {
             .window
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        window.eof = true;
+        if !window.eof {
+            window.eof = true;
+            window.generation = window.generation.saturating_add(1);
+        }
     }
 }
 
@@ -260,43 +269,59 @@ async fn response_for_session(
     token: &str,
     session: &Arc<RollingSession>,
 ) -> Result<Response, StatusCode> {
-    let snapshot = session.snapshot();
-    let _probe = state.hls_registry().acquire_track_probe()?;
-    for publication in &snapshot.publications {
-        reauthorize_publication(state, headers, &super::stitch::lookup(publication, token)).await?;
+    // FFprobe and media/sidecar grant checks are asynchronous. A concurrent
+    // rolling GET may append a new publication or confirm EOF while a first
+    // request is reauthorizing its snapshot. Never publish that stale view:
+    // retry with the new version, at most three times and without bypassing
+    // reauthorization for any newly visible segment.
+    for _ in 0..MAX_SNAPSHOT_RETRIES {
+        let snapshot = session.snapshot();
+        let _probe = state.hls_registry().acquire_track_probe()?;
+        for publication in &snapshot.publications {
+            reauthorize_publication(
+                state,
+                headers,
+                &super::stitch::lookup(publication, token),
+            )
+            .await?;
+        }
+        if state
+            .hls_registry()
+            .rolling_session(&session.id, &session.item, token)
+            .is_none()
+        {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        if session.snapshot().generation != snapshot.generation {
+            continue;
+        }
+        let refs = snapshot
+            .publications
+            .iter()
+            .map(Arc::as_ref)
+            .collect::<Vec<_>>();
+        let playlist = super::stitch::make_rolling_playlist(
+            &session.item,
+            &refs,
+            snapshot.eof,
+            session.target_duration,
+        )?;
+        let mut response = playlist_response(&playlist);
+        response
+            .headers_mut()
+            .insert("x-pelagos-rolling", HeaderValue::from_static("true"));
+        let path = format!("/Videos/{}/hls1/{}/rolling.m3u8", session.item, session.id);
+        response.headers_mut().insert(
+            "x-pelagos-rolling-path",
+            HeaderValue::from_str(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        );
+        // Only an authenticated, revision-checked successful response may
+        // refresh the inactivity deadline or expose a new session.
+        session.touch();
+        session.ready.store(true, Ordering::Release);
+        return Ok(response);
     }
-    if state
-        .hls_registry()
-        .rolling_session(&session.id, &session.item, token)
-        .is_none()
-    {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    let refs = snapshot
-        .publications
-        .iter()
-        .map(Arc::as_ref)
-        .collect::<Vec<_>>();
-    let playlist = super::stitch::make_rolling_playlist(
-        &session.item,
-        &refs,
-        snapshot.eof,
-        session.target_duration,
-    )?;
-    let mut response = playlist_response(&playlist);
-    response
-        .headers_mut()
-        .insert("x-pelagos-rolling", HeaderValue::from_static("true"));
-    let path = format!("/Videos/{}/hls1/{}/rolling.m3u8", session.item, session.id);
-    response.headers_mut().insert(
-        "x-pelagos-rolling-path",
-        HeaderValue::from_str(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-    );
-    // Only an authenticated, revision-checked successful response refreshes
-    // the inactivity deadline. Failed grant/source probes cannot pin media.
-    session.touch();
-    session.ready.store(true, Ordering::Release);
-    Ok(response)
+    Err(StatusCode::TOO_MANY_REQUESTS)
 }
 
 #[derive(Deserialize)]
@@ -578,13 +603,21 @@ mod tests {
                 .rolling_session(&rolling.id, "movie", "another-token")
                 .is_none()
         );
+        assert_eq!(rolling.snapshot().generation, 0);
         rolling.append("first", second).unwrap();
+        assert_eq!(rolling.snapshot().generation, 1);
         rolling.append("second", third).unwrap();
         rolling.append("third", fourth).unwrap();
         let snapshot = rolling.snapshot();
+        assert_eq!(snapshot.generation, 3);
         assert_eq!(snapshot.publications.len(), 3);
         assert_eq!(snapshot.publications[0].id, "second");
         assert_eq!(snapshot.publications[2].id, "fourth");
+        rolling.finish();
+        assert!(rolling.snapshot().eof);
+        assert_eq!(rolling.snapshot().generation, 4);
+        rolling.finish();
+        assert_eq!(rolling.snapshot().generation, 4);
         assert!(
             registry
                 .rolling_publication("first", "movie", "video", &rolling.digest)
