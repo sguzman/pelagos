@@ -288,11 +288,74 @@ async fn response_for_session(
     Ok(response)
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RollingStartQuery {
+    prebuffer: Option<u8>,
+}
+
+/// Return one true adjacent publication, or false only after the existing
+/// authenticated FFprobe continuation confirms EOF. The session's serial
+/// advance guard must be held by the caller.
+async fn advance_once(
+    state: &Arc<AppState>,
+    item: &str,
+    headers: &HeaderMap,
+    token: &str,
+    session: &Arc<RollingSession>,
+) -> Result<bool, StatusCode> {
+    let current = session.snapshot();
+    if current.eof {
+        return Ok(false);
+    }
+    let last = current
+        .publications
+        .last()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let response = super::continuation::video_next(
+        State(state.clone()),
+        RoutePath((item.to_owned(), last.id.clone())),
+        headers.clone(),
+    )
+    .await?;
+    if response.status() == StatusCode::NO_CONTENT {
+        session.finish();
+        return Ok(false);
+    }
+    if response.status() != StatusCode::OK {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let path = response
+        .headers()
+        .get("x-pelagos-next-path")
+        .and_then(|value| value.to_str().ok())
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let next_id = super::stitch::continuation_publication_id(path, item)
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let next = state
+        .hls_registry()
+        .lookup(next_id, item, "video", token)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    super::stitch::validate_pair(last, &next)?;
+    if super::stitch::verified_fragment(&next)?.0 > session.target_duration {
+        return Err(StatusCode::NOT_IMPLEMENTED);
+    }
+    let _probe = state.hls_registry().acquire_track_probe()?;
+    reauthorize_publication(state, headers, &super::stitch::lookup(&next, token)).await?;
+    session.append(&last.id, next)?;
+    Ok(true)
+}
+
 pub(super) async fn video_rolling_start(
     State(state): State<Arc<AppState>>,
     RoutePath((item, publication_id)): RoutePath<(String, String)>,
+    Query(query): Query<RollingStartQuery>,
     headers: HeaderMap,
 ) -> Result<Response, StatusCode> {
+    let prebuffer = query.prebuffer.unwrap_or(0);
+    if prebuffer > 2 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     let (_, token) = auth_api::authenticated(state.clone(), headers.clone()).await?;
     let first = state
         .hls_registry()
@@ -308,6 +371,21 @@ pub(super) async fn video_rolling_start(
     reauthorize_publication(&state, &headers, &super::stitch::lookup(&first, &token)).await?;
     drop(_probe);
     let session = state.hls_registry().register_rolling(first, &token)?;
+    if prebuffer > 0 {
+        let _advance = session
+            .advance
+            .try_lock()
+            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
+        // An already-started session has its own progress and timing: never
+        // secretly generate extra successors when its start URL is retried.
+        if session.snapshot().publications.len() == 1 {
+            for _ in 0..prebuffer {
+                if !advance_once(&state, &item, &headers, &token, &session).await? {
+                    break;
+                }
+            }
+        }
+    }
     response_for_session(&state, &headers, &token, &session).await
 }
 
@@ -322,60 +400,17 @@ pub(super) async fn video_rolling(
         .rolling_session(&session_id, &item, &token)
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    // Reloading the SAME URI advances at most one bounded adjacent source
-    // window when its scheduled interval has elapsed. Concurrent requests
-    // receive the prior valid representation rather than queue more FFmpeg.
+    // A normal reload advances at most one adjacent excerpt when due.
+    // Overloaded concurrent requests reuse the prior authorized manifest,
+    // rather than scheduling extra FFmpeg jobs or an unbounded worker queue.
     let snapshot = session.snapshot();
     if !snapshot.eof && snapshot.next_due <= Instant::now() {
-        if let Ok(_gate) = session.advance.try_lock() {
+        if let Ok(_advance) = session.advance.try_lock() {
             let current = session.snapshot();
             if !current.eof && current.next_due <= Instant::now() {
-                let last = current
-                    .publications
-                    .last()
-                    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                let result = super::continuation::video_next(
-                    State(state.clone()),
-                    RoutePath((item.clone(), last.id.clone())),
-                    headers.clone(),
-                )
-                .await;
-                match result {
-                    Ok(response) if response.status() == StatusCode::NO_CONTENT => {
-                        // EOF is confirmed by the same authenticated FFprobe
-                        // path that handles explicit private continuation.
-                        session.finish();
-                    }
-                    Ok(response) if response.status() == StatusCode::OK => {
-                        let path = response
-                            .headers()
-                            .get("x-pelagos-next-path")
-                            .and_then(|value| value.to_str().ok())
-                            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        let next_id = super::stitch::continuation_publication_id(path, &item)
-                            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        let next = state
-                            .hls_registry()
-                            .lookup(next_id, &item, "video", &token)
-                            .ok_or(StatusCode::NOT_FOUND)?;
-                        super::stitch::validate_pair(last, &next)?;
-                        if super::stitch::verified_fragment(&next)?.0 > session.target_duration {
-                            return Err(StatusCode::NOT_IMPLEMENTED);
-                        }
-                        let _probe = state.hls_registry().acquire_track_probe()?;
-                        reauthorize_publication(
-                            &state,
-                            &headers,
-                            &super::stitch::lookup(&next, &token),
-                        )
-                        .await?;
-                        session.append(&last.id, next)?;
-                    }
-                    Err(StatusCode::TOO_MANY_REQUESTS) | Err(StatusCode::SERVICE_UNAVAILABLE) => {
-                        // Keep valid segments available; a future reload may
-                        // retry the bounded worker rather than crash playback.
-                    }
-                    Ok(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+                match advance_once(&state, &item, &headers, &token, &session).await {
+                    Ok(_) => {}
+                    Err(StatusCode::TOO_MANY_REQUESTS) | Err(StatusCode::SERVICE_UNAVAILABLE) => {}
                     Err(error) => return Err(error),
                 }
             }

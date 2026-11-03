@@ -1789,7 +1789,13 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap();
     let initial_segment_path = format!("/Videos/{id}/{start_leaf}");
     let initial_id = start_leaf.split('/').nth(1).unwrap();
-    let sliding_start = format!("/Videos/{id}/hls1/{initial_id}/rolling-start.m3u8");
+    let sliding_start = format!("/Videos/{id}/hls1/{initial_id}/rolling-start.m3u8?prebuffer=2");
+    let invalid_prebuffer =
+        format!("/Videos/{id}/hls1/{initial_id}/rolling-start.m3u8?prebuffer=3");
+    assert_eq!(
+        call(&app, &invalid_prebuffer, Some(&token)).await.status(),
+        StatusCode::BAD_REQUEST
+    );
     let sliding_response = call(&app, &sliding_start, Some(&token)).await;
     assert_eq!(sliding_response.status(), StatusCode::OK);
     let sliding_path = sliding_response.headers()["x-pelagos-rolling-path"]
@@ -1803,15 +1809,16 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap()
         .to_owned();
     assert!(initial_live.contains(&initial_segment_path));
-    let mut last_live = initial_live;
-    for _ in 0..3 {
-        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
-        let step = call(&app, &sliding_path, Some(&token)).await;
-        assert_eq!(step.status(), StatusCode::OK);
-        last_live = body(step).await;
-        assert!(last_live.lines().any(|line| line == stable_target));
-        assert!(!last_live.contains("#EXT-X-ENDLIST"));
-    }
+    assert!(initial_live.matches("#EXTINF:").count() >= 3);
+    let retried_start = call(&app, &sliding_start, Some(&token)).await;
+    assert_eq!(retried_start.status(), StatusCode::OK);
+    assert_eq!(body(retried_start).await, initial_live);
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let step = call(&app, &sliding_path, Some(&token)).await;
+    assert_eq!(step.status(), StatusCode::OK);
+    let last_live = body(step).await;
+    assert!(last_live.lines().any(|line| line == stable_target));
+    assert!(!last_live.contains("#EXT-X-ENDLIST"));
     let sequence = last_live
         .lines()
         .find_map(|line| line.strip_prefix("#EXT-X-MEDIA-SEQUENCE:"))
