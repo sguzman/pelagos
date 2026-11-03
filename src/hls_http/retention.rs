@@ -212,7 +212,7 @@ pub(super) fn preview_response(lease: &RetainedPreview) -> Result<Response, Stat
     Ok(response)
 }
 
-/// An immutable 180-second playlist URL. Per-request reauthorization is
+/// An immutable, expiry-bounded private playlist URL. Per-request reauthorization is
 /// mandatory; pinning the encoded TS bytes does not pin library permissions.
 pub(super) async fn video_retained(
     State(state): State<Arc<AppState>>,
