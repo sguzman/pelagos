@@ -1697,7 +1697,22 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &rolling_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
-    let eof_start = format!("/Videos/{id}/hls1/{final_id}/rolling-start.m3u8");
+    // The old final-second UUID predates an intentional source mutation
+    // above. Restore bytes alone must not resurrect its source revision.
+    // Publish a fresh final excerpt against the current indexed revision.
+    let eof_first = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6090000000&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=10000000"
+    );
+    let eof_publication = call(&app, &eof_first, Some(&token)).await;
+    assert_eq!(eof_publication.status(), StatusCode::OK);
+    let eof_manifest = body(eof_publication).await;
+    let eof_segment = eof_manifest
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap();
+    let eof_segment_uri = format!("/Videos/{id}/{eof_segment}");
+    let eof_id = eof_segment.split('/').nth(1).unwrap();
+    let eof_start = format!("/Videos/{id}/hls1/{eof_id}/rolling-start.m3u8");
     let started_eof = call(&app, &eof_start, Some(&token)).await;
     assert_eq!(started_eof.status(), StatusCode::OK);
     let eof_rolling_path = started_eof.headers()["x-pelagos-rolling-path"]
@@ -1710,7 +1725,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(eof_rolling.status(), StatusCode::OK);
     let ended = body(eof_rolling).await;
     assert!(ended.ends_with("#EXT-X-ENDLIST\n"));
-    assert!(ended.contains(&first_uri));
+    assert!(ended.contains(&eof_segment_uri));
     assert_eq!(
         body(call(&app, &eof_rolling_path, Some(&token)).await).await,
         ended
