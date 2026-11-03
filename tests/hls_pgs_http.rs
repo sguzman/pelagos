@@ -1129,6 +1129,18 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &stitch_url, Some(&other)).await.status(),
         StatusCode::NOT_FOUND
     );
+    // The optional third-window UUID is never synthesized or accepted unless
+    // it names an existing adjacent publication owned by this same token.
+    let missing_third = format!("{stitch_url}&afterNext=missing-publication");
+    assert_eq!(
+        call(&app, &missing_third, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let replay_first = format!("{stitch_url}&afterNext={publication_id}");
+    assert_eq!(
+        call(&app, &replay_first, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     let stitched = call(&app, &stitch_url, Some(&token)).await;
     assert_eq!(stitched.status(), StatusCode::OK);
     assert_eq!(stitched.headers()["x-pelagos-stitched"], "true");
