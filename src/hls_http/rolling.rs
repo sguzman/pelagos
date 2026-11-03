@@ -37,11 +37,7 @@ struct Snapshot {
 }
 
 fn interval(duration_ticks: u64) -> Duration {
-    Duration::from_millis(
-        duration_ticks
-            .div_ceil(10_000)
-            .clamp(100, 600_000),
-    )
+    Duration::from_millis(duration_ticks.div_ceil(10_000).clamp(100, 600_000))
 }
 
 impl RollingSession {
@@ -78,14 +74,23 @@ impl RollingSession {
             .window
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if window.eof || window.publications.back().is_none_or(|entry| entry.id != previous_id) {
+        if window.eof
+            || window
+                .publications
+                .back()
+                .is_none_or(|entry| entry.id != previous_id)
+        {
             return Err(StatusCode::NOT_FOUND);
         }
         if window.publications.len() >= 3 {
             window.publications.pop_front();
         }
         window.next_due = Instant::now()
-            + interval(publication.excerpt_duration_ticks.ok_or(StatusCode::NOT_FOUND)?);
+            + interval(
+                publication
+                    .excerpt_duration_ticks
+                    .ok_or(StatusCode::NOT_FOUND)?,
+            );
         window.publications.push_back(publication);
         Ok(())
     }
@@ -196,7 +201,9 @@ impl HlsRegistry {
         sessions.retain(|session| session.expires_at > Instant::now());
         sessions
             .iter()
-            .position(|session| session.id == id && session.item == item && session.digest == digest)
+            .position(|session| {
+                session.id == id && session.item == item && session.digest == digest
+            })
             .and_then(|position| sessions.remove(position))
             .is_some()
     }
@@ -230,10 +237,7 @@ async fn response_for_session(
     response
         .headers_mut()
         .insert("x-pelagos-rolling", HeaderValue::from_static("true"));
-    let path = format!(
-        "/Videos/{}/hls1/{}/rolling.m3u8",
-        session.item, session.id
-    );
+    let path = format!("/Videos/{}/hls1/{}/rolling.m3u8", session.item, session.id);
     response.headers_mut().insert(
         "x-pelagos-rolling-path",
         HeaderValue::from_str(&path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
@@ -283,7 +287,10 @@ pub(super) async fn video_rolling(
         if let Ok(_gate) = session.advance.try_lock() {
             let current = session.snapshot();
             if !current.eof && current.next_due <= Instant::now() {
-                let last = current.publications.last().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+                let last = current
+                    .publications
+                    .last()
+                    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
                 let result = super::continuation::video_next(
                     State(state.clone()),
                     RoutePath((item.clone(), last.id.clone())),
@@ -318,8 +325,7 @@ pub(super) async fn video_rolling(
                         .await?;
                         session.append(&last.id, next)?;
                     }
-                    Err(StatusCode::TOO_MANY_REQUESTS)
-                    | Err(StatusCode::SERVICE_UNAVAILABLE) => {
+                    Err(StatusCode::TOO_MANY_REQUESTS) | Err(StatusCode::SERVICE_UNAVAILABLE) => {
                         // Keep valid segments available; a future reload may
                         // retry the bounded worker rather than crash playback.
                     }
@@ -389,14 +395,22 @@ mod tests {
         let second = example(root.path(), "second", 10_000_000);
         let third = example(root.path(), "third", 20_000_000);
         let fourth = example(root.path(), "fourth", 30_000_000);
-        let rolling = registry.register_rolling(first.clone(), "viewer-token").unwrap();
+        let rolling = registry
+            .register_rolling(first.clone(), "viewer-token")
+            .unwrap();
         let again = registry.register_rolling(first, "viewer-token").unwrap();
         assert_eq!(rolling.id, again.id);
         assert_eq!(
-            registry.register_rolling(second.clone(), "viewer-token").err(),
+            registry
+                .register_rolling(second.clone(), "viewer-token")
+                .err(),
             Some(StatusCode::TOO_MANY_REQUESTS)
         );
-        assert!(registry.rolling_session(&rolling.id, "movie", "another-token").is_none());
+        assert!(
+            registry
+                .rolling_session(&rolling.id, "movie", "another-token")
+                .is_none()
+        );
         rolling.append("first", second).unwrap();
         rolling.append("second", third).unwrap();
         rolling.append("third", fourth).unwrap();
@@ -404,14 +418,22 @@ mod tests {
         assert_eq!(snapshot.publications.len(), 3);
         assert_eq!(snapshot.publications[0].id, "second");
         assert_eq!(snapshot.publications[2].id, "fourth");
-        assert!(registry
-            .rolling_publication("first", "movie", "video", &rolling.digest)
-            .is_none());
-        assert!(registry
-            .rolling_publication("fourth", "movie", "video", &rolling.digest)
-            .is_some());
+        assert!(
+            registry
+                .rolling_publication("first", "movie", "video", &rolling.digest)
+                .is_none()
+        );
+        assert!(
+            registry
+                .rolling_publication("fourth", "movie", "video", &rolling.digest)
+                .is_some()
+        );
         assert!(!registry.release_rolling(&rolling.id, "movie", "another-token"));
         assert!(registry.release_rolling(&rolling.id, "movie", "viewer-token"));
-        assert!(registry.rolling_session(&rolling.id, "movie", "viewer-token").is_none());
+        assert!(
+            registry
+                .rolling_session(&rolling.id, "movie", "viewer-token")
+                .is_none()
+        );
     }
 }
