@@ -12,6 +12,8 @@ use pelagos::{
 };
 use serde_json::Value;
 use std::{fs, process::Command, sync::Arc};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use tower::ServiceExt;
 
 async fn call(app: &Router, uri: &str, token: Option<&str>) -> Response {
@@ -804,10 +806,27 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     .unwrap()
     .unwrap()
     .access_token;
-    let app = app::router(Arc::new(AppState::with_auth_dir(
-        "server".to_owned(),
-        state_dir.clone(),
-    )));
+    // A gated ffprobe wrapper permits deterministic revocation after the
+    // source probe begins, without changing the real ffprobe's output.
+    let probe_gate = temp.path().join("hold-ffprobe");
+    let probe_entered = temp.path().join("ffprobe-entered");
+    let probe_release = temp.path().join("resume-ffprobe");
+    let probe_wrapper = temp.path().join("ffprobe-gated.sh");
+    fs::write(
+        &probe_wrapper,
+        format!(
+            "#!/bin/sh\nif [ -e '{}' ]; then\n  : > '{}'\n  attempt=0\n  while [ ! -e '{}' ] && [ \"$attempt\" -lt 200 ]; do\n    sleep 0.05\n    attempt=$((attempt + 1))\n  done\nfi\nexec ffprobe \"$@\"\n",
+            probe_gate.display(),
+            probe_entered.display(),
+            probe_release.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&probe_wrapper, fs::Permissions::from_mode(0o700)).unwrap();
+    let app = app::router(Arc::new(
+        AppState::with_auth_dir("server".to_owned(), state_dir.clone())
+            .with_probe_executable(probe_wrapper),
+    ));
     let items = call(&app, "/Items", Some(&token)).await;
     assert_eq!(items.status(), StatusCode::OK);
     let items: Value = serde_json::from_str(&body(items).await).unwrap();
@@ -1257,6 +1276,32 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &adaptive_exhausted, Some(&token)).await.status(),
         StatusCode::NO_CONTENT
     );
+    // Force the next EOF request to pause *inside* FFprobe, revoke its
+    // library grant while the probe is running, and then release it.
+    // Without the post-probe authorization guard this would incorrectly
+    // return HTTP 204 based on an obsolete permission check.
+    fs::write(&probe_gate, b"hold").unwrap();
+    let concurrent_app = app.clone();
+    let concurrent_url = adaptive_exhausted.clone();
+    let concurrent_token = token.clone();
+    let pending_eof = tokio::spawn(async move {
+        call(&concurrent_app, &concurrent_url, Some(&concurrent_token))
+            .await
+            .status()
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !probe_entered.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap();
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    fs::write(&probe_release, b"resume").unwrap();
+    assert_eq!(pending_eof.await.unwrap(), StatusCode::NOT_FOUND);
+    fs::remove_file(&probe_gate).unwrap();
+    auth::grant_library(&state_dir, "viewer", &library).unwrap();
+
 
     // A token-scoped continuation cannot outlive the viewer's library grant,
     // including at EOF where no new FFmpeg job is needed.
