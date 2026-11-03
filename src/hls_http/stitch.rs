@@ -11,7 +11,7 @@ pub(super) struct StitchQuery {
     after_next: Option<String>,
 }
 
-fn lookup<'a>(entry: &'a Published, token: &'a str) -> CacheLookup<'a> {
+pub(super) fn lookup<'a>(entry: &'a Published, token: &'a str) -> CacheLookup<'a> {
     CacheLookup {
         item: &entry.item,
         kind: entry.kind,
@@ -216,25 +216,10 @@ async fn render_stitched(
     }
     let borrowed = publications.iter().map(Arc::as_ref).collect::<Vec<_>>();
     let (playlist, duration) = make_preview_chain(item, &borrowed)?;
-    let mut response = Response::new(Body::from(playlist.clone()));
-    set_private_headers(
-        &mut response,
-        "application/vnd.apple.mpegurl",
-        playlist.len(),
-    );
-    set_excerpt_headers(
-        &mut response,
-        publications[0].start_time_ticks,
-        Some(duration),
-    );
-    response
-        .headers_mut()
-        .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
-    let last = publications
-        .last()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    set_continuation_path(&mut response, item, &last.id, Some(duration));
-    Ok(response)
+    let lease = state
+        .hls_registry()
+        .retain_preview(item, token, publications, playlist, duration)?;
+    super::retention::preview_response(&lease)
 }
 
 pub(super) async fn video_stitch(

@@ -74,6 +74,7 @@ pub struct HlsRegistry {
     track_probes: Semaphore,
     pub(super) controller: TranscodeController,
     pub(super) entries: Mutex<VecDeque<Arc<Published>>>,
+    pub(super) retained: Mutex<VecDeque<Arc<RetainedPreview>>>,
 }
 impl HlsRegistry {
     pub fn new(executable: PathBuf) -> Self {
@@ -90,6 +91,7 @@ impl HlsRegistry {
             )
             .expect("constant HLS worker limits"),
             entries: Mutex::new(VecDeque::new()),
+            retained: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -143,44 +145,47 @@ impl HlsRegistry {
         token: &str,
     ) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let index = entries.iter().position(|entry| {
-            entry.id == id && entry.item == item && entry.kind == kind && entry.digest == digest
-        })?;
-        let entry = entries.remove(index)?;
-        entries.push_back(entry.clone());
-        Some(entry)
+        let cached = {
+            let mut entries = self
+                .entries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            entries
+                .iter()
+                .position(|entry| {
+                    entry.id == id
+                        && entry.item == item
+                        && entry.kind == kind
+                        && entry.digest == digest
+                })
+                .and_then(|index| {
+                    let entry = entries.remove(index)?;
+                    entries.push_back(entry.clone());
+                    Some(entry)
+                })
+        };
+        cached.or_else(|| self.retained_publication(id, item, kind, &digest))
     }
 
     /// Reuse an already completed rendition, never one owned by a sibling
     /// session or built for different source bytes/segment settings.
     pub(super) fn cached(&self, query: &CacheLookup<'_>) -> Option<Arc<Published>> {
         let digest: [u8; 32] = Sha256::digest(query.token.as_bytes()).into();
-        let mut entries = self
-            .entries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let index = entries.iter().rposition(|entry| {
-            entry.item == query.item
-                && entry.kind == query.kind
-                && entry.digest == digest
-                && entry.source == query.source
-                && entry.source_size == query.size
-                && entry.source_modified == query.modified
-                && entry.target_seconds == query.target_seconds
-                && entry.start_time_ticks == query.start_time_ticks
-                && entry.excerpt_duration_ticks == query.excerpt_duration_ticks
-                && entry.media_sequence == query.media_sequence
-                && entry.rendition_count == query.rendition_count
-                && entry.subtitle_stream_index == query.subtitle_stream_index
-                && entry.sidecar.as_ref() == query.sidecar
-        })?;
-        let entry = entries.remove(index)?;
-        entries.push_back(entry.clone());
-        Some(entry)
+        let cached = {
+            let mut entries = self
+                .entries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            entries
+                .iter()
+                .rposition(|entry| matches_cache_query(entry, query, &digest))
+                .and_then(|index| {
+                    let entry = entries.remove(index)?;
+                    entries.push_back(entry.clone());
+                    Some(entry)
+                })
+        };
+        cached.or_else(|| self.retained_cached(query, &digest))
     }
 
     pub(super) fn publish(&self, entry: Arc<Published>) {
@@ -196,4 +201,24 @@ impl HlsRegistry {
         };
         drop(removed);
     }
+}
+
+pub(super) fn matches_cache_query(
+    entry: &Published,
+    query: &CacheLookup<'_>,
+    digest: &[u8; 32],
+) -> bool {
+    entry.item == query.item
+        && entry.kind == query.kind
+        && &entry.digest == digest
+        && entry.source == query.source
+        && entry.source_size == query.size
+        && entry.source_modified == query.modified
+        && entry.target_seconds == query.target_seconds
+        && entry.start_time_ticks == query.start_time_ticks
+        && entry.excerpt_duration_ticks == query.excerpt_duration_ticks
+        && entry.media_sequence == query.media_sequence
+        && entry.rendition_count == query.rendition_count
+        && entry.subtitle_stream_index == query.subtitle_stream_index
+        && entry.sidecar.as_ref() == query.sidecar
 }

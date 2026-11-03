@@ -1570,7 +1570,39 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         auto_three.headers()["x-pelagos-excerpt-duration-ticks"],
         "30000000"
     );
+    let retained_path = auto_three.headers()["x-pelagos-retained-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
     assert_eq!(body(auto_three).await, three_playlist);
+    assert_eq!(
+        call(&app, &retained_path, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &retained_path, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let retained = call(&app, &retained_path, Some(&token)).await;
+    assert_eq!(retained.status(), StatusCode::OK);
+    assert_eq!(body(retained).await, three_playlist);
+
+    // Force LRU eviction with four distinct authenticated publications
+    // from the same synthetic source. The two/three-window lease must keep
+    // all referenced segment roots readable despite unrelated encodes.
+    for seconds in [600_u64, 601, 602, 603] {
+        let start_ticks = seconds * 10_000_000;
+        let unrelated = format!(
+            "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks={start_ticks}&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=10000000"
+        );
+        assert_eq!(
+            call(&app, &unrelated, Some(&token)).await.status(),
+            StatusCode::OK
+        );
+    }
+    let retained_again = call(&app, &retained_path, Some(&token)).await;
+    assert_eq!(retained_again.status(), StatusCode::OK);
+    assert_eq!(body(retained_again).await, three_playlist);
 
     // The first excerpt is clear; the second starts after the PGS show cue,
     // and the third still contains the visible graphic before its clear cue.
@@ -1605,6 +1637,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     }
 
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &retained_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
     assert_eq!(
         call(&app, &three_url, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
