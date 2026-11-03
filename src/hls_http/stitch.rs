@@ -229,7 +229,9 @@ async fn render_stitched(
     response
         .headers_mut()
         .insert("x-pelagos-stitched", HeaderValue::from_static("true"));
-    let last = publications.last().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let last = publications
+        .last()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     set_continuation_path(&mut response, item, &last.id, Some(duration));
     Ok(response)
 }
