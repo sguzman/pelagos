@@ -66,77 +66,64 @@ fn validate_pair(first: &Published, next: &Published) -> Result<(), StatusCode> 
     Ok(())
 }
 
+/// Accept only the exact bounded, independently encoded media-playlist
+/// grammar produced by Pelagos. A plausible EXTINF count is insufficient:
+/// duplicate headers, unexpected tags or misplaced ENDLIST may otherwise be
+/// silently carried into an authenticated stitched publication.
 fn verified_fragment(entry: &Published) -> Result<(u32, Vec<&str>), StatusCode> {
     let body = &entry.media_playlist;
-    if body.len() > MAX_MANIFEST || !body.starts_with("#EXTM3U\n") {
+    if body.len() > MAX_MANIFEST || !body.ends_with('\n') || entry.segments.is_empty() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
+    let mut lines = body.lines();
+    if lines.next() != Some("#EXTM3U") || lines.next() != Some("#EXT-X-VERSION:3") {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    let target = lines
+        .next()
+        .and_then(|line| line.strip_prefix("#EXT-X-TARGETDURATION:"))
+        .and_then(|raw| raw.parse::<u32>().ok())
+        .filter(|seconds| (1..=600).contains(seconds))
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let expected_sequence = format!("#EXT-X-MEDIA-SEQUENCE:{}", entry.media_sequence);
-    if body
-        .lines()
-        .filter(|line| *line == expected_sequence)
-        .count()
-        != 1
-    {
+    if lines.next() != Some(expected_sequence.as_str()) {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
     if entry.media_sequence != 0 {
         let expected = format!("#EXT-X-DISCONTINUITY-SEQUENCE:{}", entry.media_sequence);
-        if !body.lines().any(|line| line == expected) {
+        if lines.next() != Some(expected.as_str()) {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
-    let target = body
-        .lines()
-        .find_map(|line| line.strip_prefix("#EXT-X-TARGETDURATION:"))
-        .and_then(|raw| raw.parse::<u32>().ok())
-        .filter(|seconds| (1..=600).contains(seconds))
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let pieces = body
-        .lines()
-        .filter(|line| line.starts_with("#EXTINF:"))
-        .collect::<Vec<_>>();
-    if pieces.len() != entry.segments.len()
-        || pieces.is_empty()
-        || body.matches("#EXT-X-DISCONTINUITY\n").count() != pieces.len() - 1
-    {
+    if lines.next() != Some("#EXT-X-PLAYLIST-TYPE:VOD") {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
-    for (index, line) in pieces.iter().enumerate() {
-        let (number, title) = line
+
+    let mut pieces = Vec::with_capacity(entry.segments.len());
+    for index in 0..entry.segments.len() {
+        if index > 0 && lines.next() != Some("#EXT-X-DISCONTINUITY") {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+        let cue = lines.next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let (number, title) = cue
             .strip_prefix("#EXTINF:")
             .and_then(|raw| raw.split_once(','))
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-        if !title.is_empty()
-            || number.parse::<f64>().ok().is_none_or(|duration| {
-                !duration.is_finite() || !(0.001..=600.0).contains(&duration)
-            })
-            || !body.contains(&format!("{line}\n{index}.ts\n"))
-        {
+        let duration = number
+            .parse::<f64>()
+            .ok()
+            .filter(|seconds| seconds.is_finite() && (0.001..=600.0).contains(seconds))
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        if !title.is_empty() || duration.ceil() > f64::from(target) {
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
-    }
-    // Verify in stream order: a same-duration EXTINF at another position
-    // must not make a swapped segment reference look valid.
-    let mut expected = 0_usize;
-    let mut lines = body.lines();
-    let mut preceding = None;
-    while let Some(line) = lines.next() {
-        if line.starts_with("#EXTINF:") {
-            if expected > 0 && preceding != Some("#EXT-X-DISCONTINUITY") {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-            let actual = lines.next().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-            if actual != format!("{expected}.ts") {
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-            expected += 1;
-            preceding = Some(actual);
-        } else {
-            preceding = Some(line);
+        let expected_path = format!("{index}.ts");
+        if lines.next() != Some(expected_path.as_str()) {
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
+        pieces.push(cue);
     }
-    if expected != pieces.len() {
+    if lines.next() != Some("#EXT-X-ENDLIST") || lines.next().is_some() {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
     Ok((target, pieces))
@@ -270,6 +257,69 @@ mod tests {
             media_playlist,
             segments,
             variants: Vec::new(),
+        }
+    }
+
+
+    #[test]
+    fn preview_rejects_noncanonical_fragment_headers_and_segments() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut first = sample(temp.path(), "first", 100_000_000, 40_000_000, 0, 2);
+        let next = sample(temp.path(), "next", 140_000_000, 20_000_000, 2, 1);
+        let pristine = first.media_playlist.clone();
+        assert!(make_preview("synthetic-item", &first, &next).is_ok());
+
+        let malformed = [
+            pristine.replace("#EXT-X-VERSION:3\n", ""),
+            pristine.replace("#EXT-X-VERSION:3\n", "#EXT-X-VERSION:3\n#EXT-X-VERSION:3\n"),
+            pristine.replace(
+                "#EXT-X-MEDIA-SEQUENCE:0\n",
+                "#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-MEDIA-SEQUENCE:99\n",
+            ),
+            pristine.replace(
+                "#EXT-X-PLAYLIST-TYPE:VOD\n",
+                "#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n",
+            ),
+            pristine.replace("#EXT-X-TARGETDURATION:2\n", "#EXT-X-TARGETDURATION:1\n"),
+            pristine.replace("#EXT-X-DISCONTINUITY\n", ""),
+            pristine.replace(
+                "#EXTINF:2.000,\n1.ts\n",
+                "#EXT-X-DISCONTINUITY\n#EXTINF:2.000,\n0.ts\n",
+            ),
+            pristine.replace(
+                "#EXTINF:2.000,\n1.ts\n",
+                "#EXTINF:2.000,\n1.ts\n#EXT-X-KEY:METHOD=NONE\n",
+            ),
+            pristine.replace("#EXT-X-ENDLIST\n", ""),
+            pristine.replace("#EXT-X-ENDLIST\n", "#EXT-X-ENDLIST\n0.ts\n"),
+            pristine.trim_end_matches('\n').to_owned(),
+        ];
+        for (index, fragment) in malformed.into_iter().enumerate() {
+            assert_ne!(fragment, pristine, "malformed fixture {index} had no effect");
+            first.media_playlist = fragment;
+            assert_eq!(
+                make_preview("synthetic-item", &first, &next),
+                Err(StatusCode::INTERNAL_SERVER_ERROR),
+                "accepted malformed fixture {index}"
+            );
+        }
+
+        // A later, nonzero media-sequence fragment must carry one matching
+        // discontinuity-sequence header in the canonical header position.
+        let mut later = sample(temp.path(), "later", 140_000_000, 20_000_000, 2, 1);
+        let late_original = later.media_playlist.clone();
+        for fragment in [
+            late_original.replace("#EXT-X-DISCONTINUITY-SEQUENCE:2\n", ""),
+            late_original.replace(
+                "#EXT-X-DISCONTINUITY-SEQUENCE:2\n",
+                "#EXT-X-DISCONTINUITY-SEQUENCE:2\n#EXT-X-DISCONTINUITY-SEQUENCE:2\n",
+            ),
+        ] {
+            later.media_playlist = fragment;
+            assert_eq!(
+                make_preview("synthetic-item", &sample(temp.path(), "early", 100_000_000, 40_000_000, 0, 2), &later),
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            );
         }
     }
 
