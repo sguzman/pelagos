@@ -1828,11 +1828,35 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(sequence > 0);
     assert!(last_live.contains(&format!("#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")));
     assert!(!last_live.contains(&initial_segment_path));
+    // A startup retry can independently promote the first publication in
+    // the global three-entry LRU. Sliding removal must not revoke that
+    // separate cache ownership. Force unrelated publications to evict it,
+    // then confirm the rolling session still pins its newest TS segments.
+    let active_segment = last_live
+        .lines()
+        .filter(|line| line.starts_with(&format!("/Videos/{id}/hls1/")) && line.ends_with(".ts"))
+        .last()
+        .unwrap()
+        .to_owned();
+    for seconds in [590_u64, 591, 592, 593] {
+        let start_ticks = seconds * 10_000_000;
+        let unrelated = format!(
+            "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks={start_ticks}&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=10000000"
+        );
+        assert_eq!(
+            call(&app, &unrelated, Some(&token)).await.status(),
+            StatusCode::OK
+        );
+    }
     assert_eq!(
         call(&app, &initial_segment_path, Some(&token))
             .await
             .status(),
         StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(&app, &active_segment, Some(&token)).await.status(),
+        StatusCode::OK
     );
 
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
