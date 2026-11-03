@@ -1780,9 +1780,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     // Explicit prebuffering at the source boundary must clamp immediately
     // to a completed live playlist. No phantom successor is generated and
     // the original authenticated segment URI remains valid.
-    let eof_prebuffer_start = format!(
-        "/Videos/{id}/hls1/{eof_id}/rolling-start.m3u8?prebuffer=2"
-    );
+    let eof_prebuffer_start = format!("/Videos/{id}/hls1/{eof_id}/rolling-start.m3u8?prebuffer=2");
     let eof_ready = call(&app, &eof_prebuffer_start, Some(&token)).await;
     assert_eq!(eof_ready.status(), StatusCode::OK);
     let eof_ready_path = eof_ready.headers()["x-pelagos-rolling-path"]
@@ -1797,7 +1795,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .body(Body::empty())
         .unwrap();
     assert_eq!(
-        app.clone().oneshot(release_eof_ready).await.unwrap().status(),
+        app.clone()
+            .oneshot(release_eof_ready)
+            .await
+            .unwrap()
+            .status(),
         StatusCode::NO_CONTENT
     );
     let sliding_first = format!(
