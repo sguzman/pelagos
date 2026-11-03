@@ -259,7 +259,10 @@ mod tests {
     fn retention_lifetime_covers_bounded_hls_playback_without_unbounded_lease() {
         assert_eq!(preview_lifetime(10_000_000), Duration::from_secs(180));
         assert_eq!(preview_lifetime(600 * 10_000_000), Duration::from_secs(660));
-        assert_eq!(preview_lifetime(1800 * 10_000_000), Duration::from_secs(1860));
+        assert_eq!(
+            preview_lifetime(1800 * 10_000_000),
+            Duration::from_secs(1860)
+        );
         assert_eq!(preview_lifetime(u64::MAX), Duration::from_secs(1860));
     }
 
