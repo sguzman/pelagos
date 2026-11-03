@@ -1822,7 +1822,9 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert!(last_live.contains(&format!("#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n")));
     assert!(!last_live.contains(&initial_segment_path));
     assert_eq!(
-        call(&app, &initial_segment_path, Some(&token)).await.status(),
+        call(&app, &initial_segment_path, Some(&token))
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
 
