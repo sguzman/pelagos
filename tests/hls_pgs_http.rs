@@ -1302,6 +1302,39 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     fs::remove_file(&probe_gate).unwrap();
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
 
+    // A subtitle sidecar revision is equally significant. FFprobe only
+    // examines the media container, so a sidecar replacement during its
+    // asynchronous wait must not produce a successful EOF response.
+    fs::remove_file(&probe_entered).unwrap();
+    fs::remove_file(&probe_release).unwrap();
+    fs::write(&probe_gate, b"hold").unwrap();
+    let concurrent_app = app.clone();
+    let concurrent_url = adaptive_exhausted.clone();
+    let concurrent_token = token.clone();
+    let pending_sidecar_eof = tokio::spawn(async move {
+        call(&concurrent_app, &concurrent_url, Some(&concurrent_token))
+            .await
+            .status()
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !probe_entered.exists() {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let mut stale_sidecar = sup.clone();
+    stale_sidecar.push(0);
+    fs::write(&sidecar, stale_sidecar).unwrap();
+    fs::write(&probe_release, b"resume").unwrap();
+    assert_eq!(pending_sidecar_eof.await.unwrap(), StatusCode::NOT_FOUND);
+    fs::remove_file(&probe_gate).unwrap();
+    fs::write(&sidecar, &sup).unwrap();
+    assert_eq!(
+        call(&app, &adaptive_exhausted, Some(&token)).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
     // A token-scoped continuation cannot outlive the viewer's library grant,
     // including at EOF where no new FFmpeg job is needed.
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
