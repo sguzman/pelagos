@@ -67,9 +67,10 @@ fn matches_if_none_match(headers: &HeaderMap, expected: &str) -> bool {
         .get(IF_NONE_MATCH)
         .and_then(|value| value.to_str().ok())
         .is_some_and(|values| {
-            values.split(',').map(str::trim).any(|value| {
-                value == "*" || value.strip_prefix("W/").unwrap_or(value) == expected
-            })
+            values
+                .split(',')
+                .map(str::trim)
+                .any(|value| value == "*" || value.strip_prefix("W/").unwrap_or(value) == expected)
         })
 }
 
@@ -331,10 +332,9 @@ async fn response_for_session(
         let mut response = if not_modified {
             let mut response = Response::new(Body::empty());
             *response.status_mut() = StatusCode::NOT_MODIFIED;
-            response.headers_mut().insert(
-                CACHE_CONTROL,
-                HeaderValue::from_static("private, no-store"),
-            );
+            response
+                .headers_mut()
+                .insert(CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
             response
         } else {
             playlist_response(&playlist)
@@ -574,10 +574,7 @@ mod tests {
         assert_ne!(first, next);
         let mut headers = HeaderMap::new();
         assert!(!matches_if_none_match(&headers, &first));
-        headers.insert(
-            IF_NONE_MATCH,
-            HeaderValue::from_str(&first).unwrap(),
-        );
+        headers.insert(IF_NONE_MATCH, HeaderValue::from_str(&first).unwrap());
         assert!(matches_if_none_match(&headers, &first));
         assert!(!matches_if_none_match(&headers, &next));
         headers.insert(

@@ -1645,7 +1645,12 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     let unchanged = app.clone().oneshot(conditional).await.unwrap();
     assert_eq!(unchanged.status(), StatusCode::NOT_MODIFIED);
     assert_eq!(unchanged.headers()["etag"], opening_etag);
-    assert!(to_bytes(unchanged.into_body(), 64).await.unwrap().is_empty());
+    assert!(
+        to_bytes(unchanged.into_body(), 64)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     let invalid_etag = Request::builder()
         .uri(rolling_path.as_str())
         .header("X-Emby-Token", token.as_str())
@@ -1663,7 +1668,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .body(Body::empty())
         .unwrap();
     assert_eq!(
-        app.clone().oneshot(wrong_token_conditional).await.unwrap().status(),
+        app.clone()
+            .oneshot(wrong_token_conditional)
+            .await
+            .unwrap()
+            .status(),
         StatusCode::NOT_FOUND
     );
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
@@ -1674,7 +1683,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .body(Body::empty())
         .unwrap();
     assert_eq!(
-        app.clone().oneshot(revoked_conditional).await.unwrap().status(),
+        app.clone()
+            .oneshot(revoked_conditional)
+            .await
+            .unwrap()
+            .status(),
         StatusCode::NOT_FOUND
     );
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
