@@ -151,7 +151,7 @@ impl HlsRegistry {
         &self,
         first: Arc<Published>,
         token: &str,
-    ) -> Result<Arc<RollingSession>, StatusCode> {
+    ) -> Result<(Arc<RollingSession>, bool), StatusCode> {
         let digest: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         if first.digest != digest
             || first.kind != "video"
@@ -177,14 +177,14 @@ impl HlsRegistry {
                     .front()
                     .is_some_and(|entry| entry.id == first.id)
         }) {
-            return Ok(existing.clone());
+            return Ok((existing.clone(), false));
         }
         if sessions.len() >= MAX_ROLLING_SESSIONS {
             return Err(StatusCode::TOO_MANY_REQUESTS);
         }
         let session = Arc::new(RollingSession::new(first)?);
         sessions.push_back(session.clone());
-        Ok(session)
+        Ok((session, true))
     }
 
     fn rolling_session(&self, id: &str, item: &str, token: &str) -> Option<Arc<RollingSession>> {
@@ -370,15 +370,16 @@ pub(super) async fn video_rolling_start(
     let _probe = state.hls_registry().acquire_track_probe()?;
     reauthorize_publication(&state, &headers, &super::stitch::lookup(&first, &token)).await?;
     drop(_probe);
-    let session = state.hls_registry().register_rolling(first, &token)?;
-    if prebuffer > 0 {
-        let _advance = session
-            .advance
-            .try_lock()
-            .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
-        // An already-started session has its own progress and timing: never
-        // secretly generate extra successors when its start URL is retried.
-        if session.snapshot().publications.len() == 1 {
+    let (session, created) = state.hls_registry().register_rolling(first, &token)?;
+    let started: Result<Response, StatusCode> = async {
+        // Starting a previously registered session is read-only even if its
+        // very first response contained just one window. Never surprise a
+        // caller by encoding additional media on a retried start URL.
+        if prebuffer > 0 && created {
+            let _advance = session
+                .advance
+                .try_lock()
+                .map_err(|_| StatusCode::TOO_MANY_REQUESTS)?;
             for _ in 0..prebuffer {
                 match advance_once(&state, &item, &headers, &token, &session).await {
                     Ok(true) => {}
@@ -389,8 +390,17 @@ pub(super) async fn video_rolling_start(
                 }
             }
         }
+        response_for_session(&state, &headers, &token, &session).await
     }
-    response_for_session(&state, &headers, &token, &session).await
+    .await;
+    // An authorization, source-revision or prebuffer error must not strand a
+    // newly registered session in the only global slot without ever exposing
+    // its control URI. An existing session belongs to another in-flight
+    // request and must not be revoked by a failed retry.
+    if started.is_err() && created {
+        state.hls_registry().release_rolling(&session.id, &item, &token);
+    }
+    started
 }
 
 pub(super) async fn video_rolling(
@@ -486,9 +496,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let first = example(root.path(), "first", 0);
         let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
-        let session = registry
+        let (session, created) = registry
             .register_rolling(first.clone(), "viewer-token")
             .unwrap();
+        assert!(created);
         {
             let mut last_accessed = session
                 .last_accessed
@@ -502,7 +513,8 @@ mod tests {
                 .rolling_session(&session.id, "movie", "viewer-token")
                 .is_none()
         );
-        let renewed = registry.register_rolling(first, "viewer-token").unwrap();
+        let (renewed, created) = registry.register_rolling(first, "viewer-token").unwrap();
+        assert!(created);
         assert_ne!(session.id, renewed.id);
         renewed.touch();
         assert!(renewed.alive(Instant::now()));
@@ -528,10 +540,12 @@ mod tests {
         let second = example(root.path(), "second", 10_000_000);
         let third = example(root.path(), "third", 20_000_000);
         let fourth = example(root.path(), "fourth", 30_000_000);
-        let rolling = registry
+        let (rolling, created) = registry
             .register_rolling(first.clone(), "viewer-token")
             .unwrap();
-        let again = registry.register_rolling(first, "viewer-token").unwrap();
+        assert!(created);
+        let (again, created) = registry.register_rolling(first, "viewer-token").unwrap();
+        assert!(!created);
         assert_eq!(rolling.id, again.id);
         assert_eq!(
             registry
@@ -568,5 +582,13 @@ mod tests {
                 .rolling_session(&rolling.id, "movie", "viewer-token")
                 .is_none()
         );
+        // Simulate an unsuccessful *new* start after admission: releasing
+        // only its owned slot must permit the next authorized request.
+        let fresh = example(root.path(), "fresh", 40_000_000);
+        let (admitted, created) = registry.register_rolling(fresh, "viewer-token").unwrap();
+        assert!(created);
+        assert!(registry.release_rolling(&admitted.id, "movie", "viewer-token"));
+        let next = example(root.path(), "next", 50_000_000);
+        assert!(registry.register_rolling(next, "viewer-token").is_ok());
     }
 }
