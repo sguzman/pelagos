@@ -65,6 +65,10 @@ pub(super) async fn video_next(
         .filter(|value| value.is_finite() && (0.1..=86_400.0).contains(value))
         .ok_or(StatusCode::NOT_IMPLEMENTED)?;
     let source_end_ticks = (source_seconds * 10_000_000.0).floor() as u64;
+    // FFprobe is asynchronous: tokens, library grants, media bytes and PGS
+    // sidecars can change during the probe. Recheck even at EOF, where no
+    // subsequent encoder publication would otherwise enforce the revision.
+    reauthorize_publication(&state, &headers, &query).await?;
     let Some((next_start, next_duration)) =
         next_interval(publication.start_time_ticks, duration, source_end_ticks)?
     else {
