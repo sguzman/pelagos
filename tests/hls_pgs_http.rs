@@ -1583,6 +1583,16 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &retained_path, Some(&other)).await.status(),
         StatusCode::NOT_FOUND
     );
+    let retained_head = Request::builder()
+        .method("HEAD")
+        .uri(retained_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(retained_head).await.unwrap().status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
     let retained = call(&app, &retained_path, Some(&token)).await;
     assert_eq!(retained.status(), StatusCode::OK);
     assert_eq!(body(retained).await, three_playlist);

@@ -230,7 +230,7 @@ pub(super) async fn video_retained(
 mod tests {
     use super::*;
 
-    fn fake(id: &str, start: u64) -> Arc<Published> {
+    fn fake(root: &Path, id: &str, start: u64) -> Arc<Published> {
         Arc::new(Published {
             id: id.to_owned(),
             item: "movie".to_owned(),
@@ -246,7 +246,7 @@ mod tests {
             rendition_count: 1,
             subtitle_stream_index: Some(1),
             sidecar: None,
-            private_root: std::env::temp_dir().join(format!("pelagos-test-never-created-{id}")),
+            private_root: root.join(id),
             main_playlist: String::new(),
             master_playlist: String::new(),
             media_playlist: String::new(),
@@ -268,10 +268,11 @@ mod tests {
 
     #[test]
     fn retained_roots_survive_lru_eviction_and_obey_token_and_capacity() {
+        let root = tempfile::tempdir().unwrap();
         let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
-        let first = fake("first", 0);
-        let second = fake("second", 10_000_000);
-        let third = fake("third", 20_000_000);
+        let first = fake(root.path(), "first", 0);
+        let second = fake(root.path(), "second", 10_000_000);
+        let third = fake(root.path(), "third", 20_000_000);
         for publication in [&first, &second, &third] {
             registry.publish(publication.clone());
         }
@@ -322,6 +323,7 @@ mod tests {
 
         for position in 0..4 {
             registry.publish(fake(
+                root.path(),
                 &format!("unrelated-{position}"),
                 1_000_000_000 + position,
             ));
