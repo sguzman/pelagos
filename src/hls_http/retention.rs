@@ -2,6 +2,7 @@
 //! three-entry LRU transcode cache. Leases keep completed private segment
 //! roots alive while unrelated clients publish, never schedule new media.
 use super::*;
+use super::registry::matches_cache_query;
 use std::time::{Duration, Instant};
 
 const MAX_RETAINED_PREVIEWS: usize = 2;
