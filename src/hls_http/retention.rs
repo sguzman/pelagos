@@ -6,7 +6,19 @@ use super::*;
 use std::time::{Duration, Instant};
 
 const MAX_RETAINED_PREVIEWS: usize = 2;
-const PREVIEW_LIFETIME: Duration = Duration::from_secs(180);
+const MIN_PREVIEW_LIFETIME_SECONDS: u64 = 180;
+const MAX_PREVIEW_LIFETIME_SECONDS: u64 = 1_860;
+
+/// Retain a complete preview for its advertised duration plus one minute,
+/// clamped to three minutes minimum and 31 minutes maximum. Longer source
+/// windows cannot outlive the bounded three-publication preview contract.
+fn preview_lifetime(duration_ticks: u64) -> Duration {
+    let seconds = duration_ticks
+        .div_ceil(10_000_000)
+        .saturating_add(60)
+        .clamp(MIN_PREVIEW_LIFETIME_SECONDS, MAX_PREVIEW_LIFETIME_SECONDS);
+    Duration::from_secs(seconds)
+}
 
 #[derive(Debug)]
 pub(super) struct RetainedPreview {
@@ -21,6 +33,17 @@ pub(super) struct RetainedPreview {
 }
 
 impl HlsRegistry {
+    /// Expired leases drop their Arc-held segment roots once no in-flight
+    /// HTTP response still references them. Sweep on new publications and
+    /// every retention lookup, without a background cleanup worker.
+    pub(super) fn prune_retained(&self) {
+        let now = Instant::now();
+        self.retained
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|lease| lease.expires_at > now);
+    }
+
     /// A bounded lease retains at most three single-quality PGS excerpts.
     /// Repeating the same chain returns its original stable URI and expiry.
     /// Once both slots are occupied, new previews receive HTTP 429 rather
@@ -75,7 +98,7 @@ impl HlsRegistry {
             start_ticks: publications[0].start_time_ticks,
             duration_ticks,
             publications: publications.to_vec(),
-            expires_at: now + PREVIEW_LIFETIME,
+            expires_at: now + preview_lifetime(duration_ticks),
         });
         leases.push_back(lease.clone());
         Ok(lease)
@@ -230,6 +253,14 @@ mod tests {
             segments: Vec::new(),
             variants: Vec::new(),
         })
+    }
+
+    #[test]
+    fn retention_lifetime_covers_bounded_hls_playback_without_unbounded_lease() {
+        assert_eq!(preview_lifetime(10_000_000), Duration::from_secs(180));
+        assert_eq!(preview_lifetime(600 * 10_000_000), Duration::from_secs(660));
+        assert_eq!(preview_lifetime(1800 * 10_000_000), Duration::from_secs(1860));
+        assert_eq!(preview_lifetime(u64::MAX), Duration::from_secs(1860));
     }
 
     #[test]

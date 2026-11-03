@@ -200,6 +200,7 @@ impl HlsRegistry {
                 .flatten()
         };
         drop(removed);
+        self.prune_retained();
     }
 }
 
