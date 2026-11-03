@@ -1313,11 +1313,149 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         call(&app, &adaptive_exhausted, Some(&token)).await.status(),
         StatusCode::NO_CONTENT
     );
-    let mut replacement = original;
+    let mut replacement = original.clone();
     replacement.extend_from_slice(b"synthetic changed source revision");
     fs::write(&source, replacement).unwrap();
     assert_eq!(
         call(&app, &adaptive_exhausted, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
+
+    // Reuse the 610-second real-media fixture to exercise three independent
+    // adjacent PGS excerpts, their actual encoded pixels and authenticated
+    // segment transport. This is not proof of a rolling HLS scheduler.
+    fs::write(&source, &original).unwrap();
+    catalog::index(&state_dir, &library).unwrap();
+    let three_first = format!(
+        "/Videos/{id}/main.m3u8?segmentLength=10&startTimeTicks=6050000000&subtitleStreamIndex={index}&subtitleMethod=Encode&pelagosExcerptDurationTicks=10000000"
+    );
+    let first_response = call(&app, &three_first, Some(&token)).await;
+    assert_eq!(first_response.status(), StatusCode::OK);
+    let first_body = body(first_response).await;
+    let first_segment = first_body
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .to_owned();
+    let first_id = first_segment.split('/').nth(1).unwrap();
+    let second_url = format!("/Videos/{id}/hls1/{first_id}/next.m3u8");
+    let second_response = call(&app, &second_url, Some(&token)).await;
+    assert_eq!(second_response.status(), StatusCode::OK);
+    assert_eq!(
+        second_response.headers()["x-pelagos-excerpt-start-ticks"],
+        "6060000000"
+    );
+    let second_body = body(second_response).await;
+    let second_segment = second_body
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .to_owned();
+    let second_id = second_segment.split('/').nth(1).unwrap();
+    let third_url = format!("/Videos/{id}/hls1/{second_id}/next.m3u8");
+    let third_response = call(&app, &third_url, Some(&token)).await;
+    assert_eq!(third_response.status(), StatusCode::OK);
+    assert_eq!(
+        third_response.headers()["x-pelagos-excerpt-start-ticks"],
+        "6070000000"
+    );
+    let third_body = body(third_response).await;
+    let third_segment = third_body
+        .lines()
+        .find(|line| line.starts_with("hls1/") && line.ends_with(".ts"))
+        .unwrap()
+        .to_owned();
+    let third_id = third_segment.split('/').nth(1).unwrap();
+    assert_ne!(first_id, second_id);
+    assert_ne!(second_id, third_id);
+
+    let three_url = format!(
+        "/Videos/{id}/hls1/{first_id}/stitch.m3u8?next={second_id}&afterNext={third_id}"
+    );
+    assert_eq!(
+        call(&app, &three_url, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &three_url, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let response = call(&app, &three_url, Some(&token)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-pelagos-stitched"], "true");
+    assert_eq!(
+        response.headers()["x-pelagos-excerpt-start-ticks"],
+        "6050000000"
+    );
+    assert_eq!(
+        response.headers()["x-pelagos-excerpt-duration-ticks"],
+        "30000000"
+    );
+    assert_eq!(
+        response.headers()["x-pelagos-next-path"],
+        third_url
+    );
+    let three_playlist = body(response).await;
+    assert!(three_playlist.contains(&format!("/Videos/{id}/{first_segment}")));
+    assert!(three_playlist.contains(&format!("/Videos/{id}/{second_segment}")));
+    assert!(three_playlist.contains(&format!("/Videos/{id}/{third_segment}")));
+    let entries = three_playlist
+        .lines()
+        .filter(|line| line.starts_with(&format!("/Videos/{id}/hls1/")) && line.ends_with(".ts"))
+        .collect::<Vec<_>>();
+    assert!(entries.len() >= 3);
+    assert_eq!(
+        three_playlist.matches("#EXT-X-DISCONTINUITY\n").count(),
+        entries.len() - 1
+    );
+    assert!(three_playlist.ends_with("#EXT-X-ENDLIST\n"));
+
+    // The first excerpt is clear; the second starts after the PGS show cue,
+    // and the third still contains the visible graphic before its clear cue.
+    for (position, (segment, visible)) in [
+        (first_segment.as_str(), false),
+        (second_segment.as_str(), true),
+        (third_segment.as_str(), true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let url = format!("/Videos/{id}/{segment}");
+        assert_eq!(
+            call(&app, &url, Some(&other)).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let transport = call(&app, &url, Some(&token)).await;
+        assert_eq!(transport.status(), StatusCode::OK);
+        let bytes = to_bytes(transport.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap()
+            .to_vec();
+        assert!(!bytes.is_empty());
+        assert!(bytes.chunks_exact(188).all(|packet| packet[0] == 0x47));
+        assert_eq!(
+            visible_center(
+                &bytes,
+                &temp.path().join(format!("three-window-{position}.ts"))
+            ),
+            visible
+        );
+    }
+
+    auth::revoke_library(&state_dir, "viewer", &library).unwrap();
+    assert_eq!(
+        call(&app, &three_url, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        call(
+            &app,
+            &format!("/Videos/{id}/{third_segment}"),
+            Some(&token)
+        )
+        .await
+        .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(fs::read(&source).unwrap(), original);
 }
