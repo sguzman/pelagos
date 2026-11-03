@@ -1390,9 +1390,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         response.headers()["x-pelagos-excerpt-duration-ticks"],
         "30000000"
     );
+    let after_third = format!("/Videos/{id}/hls1/{third_id}/next.m3u8");
     assert_eq!(
         response.headers()["x-pelagos-next-path"].to_str().unwrap(),
-        third_url.as_str()
+        after_third.as_str()
     );
     let three_playlist = body(response).await;
     assert!(three_playlist.contains(&format!("/Videos/{id}/{first_segment}")));
