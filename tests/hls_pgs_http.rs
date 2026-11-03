@@ -11,9 +11,9 @@ use pelagos::{
     auth, catalog,
 };
 use serde_json::Value;
-use std::{fs, process::Command, sync::Arc};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::{fs, process::Command, sync::Arc};
 use tower::ServiceExt;
 
 async fn call(app: &Router, uri: &str, token: Option<&str>) -> Response {
@@ -1301,7 +1301,6 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(pending_eof.await.unwrap(), StatusCode::NOT_FOUND);
     fs::remove_file(&probe_gate).unwrap();
     auth::grant_library(&state_dir, "viewer", &library).unwrap();
-
 
     // A token-scoped continuation cannot outlive the viewer's library grant,
     // including at EOF where no new FFmpeg job is needed.
