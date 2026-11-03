@@ -1287,11 +1287,11 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
 
     let first_uri = final_segment_uri;
     let mut modified = sup.clone();
-    let index = modified
+    let palette_offset = modified
         .windows(7)
         .position(|bytes| bytes == [0, 0, 1, 235, 128, 128, 255])
         .unwrap();
-    modified[index + 6] = 0;
+    modified[palette_offset + 6] = 0;
     fs::write(&sidecar, modified).unwrap();
     assert_eq!(
         call(&app, &stitch_url, Some(&token)).await.status(),
@@ -1392,8 +1392,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         "30000000"
     );
     assert_eq!(
-        response.headers()["x-pelagos-next-path"],
-        third_url
+        response.headers()["x-pelagos-next-path"].to_str().unwrap(),
+        third_url.as_str()
     );
     let three_playlist = body(response).await;
     assert!(three_playlist.contains(&format!("/Videos/{id}/{first_segment}")));
