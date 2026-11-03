@@ -380,8 +380,12 @@ pub(super) async fn video_rolling_start(
         // secretly generate extra successors when its start URL is retried.
         if session.snapshot().publications.len() == 1 {
             for _ in 0..prebuffer {
-                if !advance_once(&state, &item, &headers, &token, &session).await? {
-                    break;
+                match advance_once(&state, &item, &headers, &token, &session).await {
+                    Ok(true) => {}
+                    Ok(false)
+                    | Err(StatusCode::TOO_MANY_REQUESTS)
+                    | Err(StatusCode::SERVICE_UNAVAILABLE) => break,
+                    Err(error) => return Err(error),
                 }
             }
         }
