@@ -447,7 +447,9 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let first = example(root.path(), "first", 0);
         let registry = HlsRegistry::new(PathBuf::from("ffmpeg"));
-        let session = registry.register_rolling(first.clone(), "viewer-token").unwrap();
+        let session = registry
+            .register_rolling(first.clone(), "viewer-token")
+            .unwrap();
         {
             let mut last_accessed = session
                 .last_accessed
@@ -456,14 +458,20 @@ mod tests {
             *last_accessed = Instant::now() - ROLLING_IDLE_LIFETIME - Duration::from_secs(1);
         }
         assert!(!session.alive(Instant::now()));
-        assert!(registry.rolling_session(&session.id, "movie", "viewer-token").is_none());
+        assert!(
+            registry
+                .rolling_session(&session.id, "movie", "viewer-token")
+                .is_none()
+        );
         let renewed = registry.register_rolling(first, "viewer-token").unwrap();
         assert_ne!(session.id, renewed.id);
         renewed.touch();
         assert!(renewed.alive(Instant::now()));
-        assert!(registry
-            .rolling_session(&renewed.id, "movie", "viewer-token")
-            .is_some());
+        assert!(
+            registry
+                .rolling_session(&renewed.id, "movie", "viewer-token")
+                .is_some()
+        );
 
         // Absolute lifetime remains bounded even for a frequently touched
         // session. No stale publication may occupy the single rolling slot.
