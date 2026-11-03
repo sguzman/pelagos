@@ -1597,6 +1597,58 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(retained.status(), StatusCode::OK);
     assert_eq!(body(retained).await, three_playlist);
 
+    // Start the separate, one-slot sliding mode from a token-owned PGS
+    // excerpt. Its stable media URI is reloaded by an HLS client, never
+    // handed an ENDLIST before EOF. A one-second interval gives deterministic
+    // two-step rolling coverage without a multi-hour fixture.
+    let rolling_start = format!("/Videos/{id}/hls1/{first_id}/rolling-start.m3u8");
+    assert_eq!(
+        call(&app, &rolling_start, None).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        call(&app, &rolling_start, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let started = call(&app, &rolling_start, Some(&token)).await;
+    assert_eq!(started.status(), StatusCode::OK);
+    assert_eq!(started.headers()["x-pelagos-rolling"], "true");
+    let rolling_path = started.headers()["x-pelagos-rolling-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let opening = body(started).await;
+    assert!(opening.contains(&format!("/Videos/{id}/{first_segment}")));
+    assert!(!opening.contains("#EXT-X-ENDLIST"));
+    assert!(!opening.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
+    assert_eq!(
+        call(&app, &rolling_path, Some(&other)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let head = Request::builder()
+        .method("HEAD")
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(head).await.unwrap().status(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let second_rolling = call(&app, &rolling_path, Some(&token)).await;
+    assert_eq!(second_rolling.status(), StatusCode::OK);
+    let second_rolling = body(second_rolling).await;
+    assert!(second_rolling.contains(&format!("/Videos/{id}/{second_segment}")));
+    assert_eq!(second_rolling.matches("#EXTINF:").count(), 2);
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let third_rolling = call(&app, &rolling_path, Some(&token)).await;
+    assert_eq!(third_rolling.status(), StatusCode::OK);
+    let third_rolling = body(third_rolling).await;
+    assert!(third_rolling.contains(&format!("/Videos/{id}/{third_segment}")));
+    assert_eq!(third_rolling.matches("#EXTINF:").count(), 3);
+    assert!(!third_rolling.contains("#EXT-X-ENDLIST"));
+
     // Force LRU eviction with four distinct authenticated publications
     // from the same synthetic source. The two/three-window lease must keep
     // all referenced segment roots readable despite unrelated encodes.
@@ -1648,6 +1700,10 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
 
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
+        call(&app, &rolling_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
         call(&app, &retained_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
@@ -1683,6 +1739,20 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     );
     assert_eq!(
         call(&app, &retained_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let release_rolling = Request::builder()
+        .method("DELETE")
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(release_rolling).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(&app, &rolling_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(&source).unwrap(), original);

@@ -75,6 +75,7 @@ pub struct HlsRegistry {
     pub(super) controller: TranscodeController,
     pub(super) entries: Mutex<VecDeque<Arc<Published>>>,
     pub(super) retained: Mutex<VecDeque<Arc<RetainedPreview>>>,
+    pub(super) rolling: Mutex<VecDeque<Arc<RollingSession>>>,
 }
 impl HlsRegistry {
     pub fn new(executable: PathBuf) -> Self {
@@ -92,6 +93,7 @@ impl HlsRegistry {
             .expect("constant HLS worker limits"),
             entries: Mutex::new(VecDeque::new()),
             retained: Mutex::new(VecDeque::new()),
+            rolling: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -164,7 +166,9 @@ impl HlsRegistry {
                     Some(entry)
                 })
         };
-        cached.or_else(|| self.retained_publication(id, item, kind, &digest))
+        cached
+            .or_else(|| self.retained_publication(id, item, kind, &digest))
+            .or_else(|| self.rolling_publication(id, item, kind, &digest))
     }
 
     /// Reuse an already completed rendition, never one owned by a sibling
@@ -201,6 +205,7 @@ impl HlsRegistry {
         };
         drop(removed);
         self.prune_retained();
+        self.prune_rolling();
     }
 }
 

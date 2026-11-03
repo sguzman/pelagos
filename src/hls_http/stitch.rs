@@ -31,7 +31,7 @@ pub(super) fn lookup<'a>(entry: &'a Published, token: &'a str) -> CacheLookup<'a
 
 /// Only two *already generated* single-quality excerpts can be stitched. The
 /// next UUID must denote an exactly adjacent publication, not a new source.
-fn validate_pair(first: &Published, next: &Published) -> Result<(), StatusCode> {
+pub(super) fn validate_pair(first: &Published, next: &Published) -> Result<(), StatusCode> {
     let duration = first.excerpt_duration_ticks.ok_or(StatusCode::NOT_FOUND)?;
     let end = first
         .start_time_ticks
@@ -185,6 +185,57 @@ fn make_preview_chain(
     Ok((playlist, duration))
 }
 
+/// Render only the currently retained 1–3 independent PGS windows. Unlike a
+/// bounded VOD preview, a sliding media playlist MUST NOT claim ENDLIST until
+/// a source-duration probe has established there is no next window.
+pub(super) fn make_rolling_playlist(
+    item: &str,
+    publications: &[&Published],
+    endlist: bool,
+) -> Result<String, StatusCode> {
+    if publications.is_empty() || publications.len() > 3 {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    for pair in publications.windows(2) {
+        validate_pair(pair[0], pair[1])?;
+    }
+    let fragments = publications
+        .iter()
+        .map(|publication| verified_fragment(publication))
+        .collect::<Result<Vec<_>, _>>()?;
+    let target = fragments
+        .iter()
+        .map(|(target, _)| *target)
+        .max()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let sequence = publications[0].media_sequence;
+    let mut playlist = format!(
+        "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:{target}\n#EXT-X-MEDIA-SEQUENCE:{sequence}\n#EXT-X-DISCONTINUITY-SEQUENCE:{sequence}\n"
+    );
+    let mut written = 0_usize;
+    for (publication, (_, cues)) in publications.iter().zip(&fragments) {
+        for (index, cue) in cues.iter().enumerate() {
+            if written > 0 {
+                playlist.push_str("#EXT-X-DISCONTINUITY\n");
+            }
+            playlist.push_str(cue);
+            playlist.push('\n');
+            playlist.push_str(&format!(
+                "/Videos/{item}/hls1/{}/{index}.ts\n",
+                publication.id
+            ));
+            written += 1;
+        }
+    }
+    if endlist {
+        playlist.push_str("#EXT-X-ENDLIST\n");
+    }
+    if playlist.len() > MAX_MANIFEST {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    Ok(playlist)
+}
+
 #[cfg(test)]
 fn make_preview(
     item: &str,
@@ -256,7 +307,7 @@ pub(super) async fn video_stitch(
 
 /// Extract only Pelagos's own trusted continuation UUID from an internal
 /// response. Never interpret a client-supplied URL as a publication ID.
-fn continuation_publication_id<'a>(path: &'a str, item: &str) -> Option<&'a str> {
+pub(super) fn continuation_publication_id<'a>(path: &'a str, item: &str) -> Option<&'a str> {
     let prefix = format!("/Videos/{item}/hls1/");
     let id = path.strip_prefix(&prefix)?.strip_suffix("/next.m3u8")?;
     (id.len() == 32 && id.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(id)
@@ -452,6 +503,33 @@ mod tests {
                 Err(StatusCode::INTERNAL_SERVER_ERROR)
             );
         }
+    }
+
+    #[test]
+    fn rolling_manifest_is_live_until_eof_and_slides_media_sequence() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = sample(temp.path(), "first", 100_000_000, 20_000_000, 0, 1);
+        let second = sample(temp.path(), "second", 120_000_000, 20_000_000, 1, 1);
+        let third = sample(temp.path(), "third", 140_000_000, 20_000_000, 2, 1);
+        let opening = make_rolling_playlist("synthetic-item", &[&first], false).unwrap();
+        assert!(opening.contains("#EXT-X-MEDIA-SEQUENCE:0\n"));
+        assert!(!opening.contains("#EXT-X-PLAYLIST-TYPE:VOD"));
+        assert!(!opening.contains("#EXT-X-ENDLIST"));
+        let live =
+            make_rolling_playlist("synthetic-item", &[&first, &second, &third], false).unwrap();
+        assert_eq!(live.matches("#EXTINF:").count(), 3);
+        assert_eq!(live.matches("#EXT-X-DISCONTINUITY\n").count(), 2);
+        assert!(!live.contains("#EXT-X-ENDLIST"));
+        let tail = make_rolling_playlist("synthetic-item", &[&second, &third], true).unwrap();
+        assert!(tail.contains("#EXT-X-MEDIA-SEQUENCE:1\n"));
+        assert!(tail.contains("#EXT-X-DISCONTINUITY-SEQUENCE:1\n"));
+        assert!(tail.ends_with("#EXT-X-ENDLIST\n"));
+        assert!(!tail.contains("/hls1/first/0.ts"));
+        assert!(tail.contains("/hls1/third/0.ts"));
+        assert_eq!(
+            make_rolling_playlist("synthetic-item", &[&third, &first], false),
+            Err(StatusCode::NOT_FOUND)
+        );
     }
 
     #[test]

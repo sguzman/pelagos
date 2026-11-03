@@ -30,6 +30,7 @@ use uuid::Uuid;
 mod continuation;
 mod registry;
 mod retention;
+mod rolling;
 mod segments;
 mod stitch;
 mod tracks;
@@ -37,6 +38,7 @@ use continuation::video_next;
 pub use registry::HlsRegistry;
 use registry::{CacheLookup, Published, PublishedVariant, SidecarRevision};
 use retention::{RetainedPreview, video_release, video_retained};
+use rolling::{RollingSession, video_rolling, video_rolling_release, video_rolling_start};
 use segments::serve_segment;
 use stitch::{video_advance, video_stitch};
 use tracks::{HlsSubtitle, read_selected_sidecar, validate_hls_track_selection};
@@ -940,6 +942,16 @@ pub fn router() -> Router<Arc<AppState>> {
             get(video_retained)
                 .head(|| async { StatusCode::METHOD_NOT_ALLOWED })
                 .delete(video_release),
+        )
+        .route(
+            "/Videos/{item_id}/hls1/{publication_id}/rolling-start.m3u8",
+            get(video_rolling_start).head(|| async { StatusCode::METHOD_NOT_ALLOWED }),
+        )
+        .route(
+            "/Videos/{item_id}/hls1/{session_id}/rolling.m3u8",
+            get(video_rolling)
+                .head(|| async { StatusCode::METHOD_NOT_ALLOWED })
+                .delete(video_rolling_release),
         )
         .route(
             "/Videos/{item_id}/hls1/{playlist_id}/{segment_name}",
