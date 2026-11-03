@@ -4,7 +4,7 @@
 //! This is not a real unmodified Jellyfin client or remote HTTP playback.
 use super::call;
 use axum::{Router, body::to_bytes, http::StatusCode};
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path, process::{Command, Output}, time::Duration};
 
 pub(super) async fn assert_authenticated_hls_demux(
     app: &Router,
@@ -64,12 +64,51 @@ pub(super) async fn assert_authenticated_hls_demux(
         .args(["-map", "0:v:0", "-map", "0:a:0", "-f", "framemd5", "-"])
         .output()
         .unwrap();
+    assert_av_frames(&decoded);
+}
+
+/// Decode the immutable retained preview through the real localhost HTTP
+/// endpoint, including FFmpeg's own token-header propagation to every TS GET.
+/// The listener is test-only and bound to 127.0.0.1 on an ephemeral port.
+pub(super) async fn assert_authenticated_hls_network_demux(
+    app: &Router,
+    token: &str,
+    playlist_path: &str,
+) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap();
+    let address = listener.local_addr().unwrap();
+    let routed_app = app.clone();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, routed_app).await.unwrap();
+    });
+    let url = format!("http://{address}{playlist_path}");
+    let result = tokio::time::timeout(
+        Duration::from_secs(30),
+        tokio::process::Command::new("ffmpeg")
+            .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-headers"])
+            .arg(format!("X-Emby-Token: {token}\r\n"))
+            .arg("-i")
+            .arg(url)
+            .args(["-map", "0:v:0", "-map", "0:a:0", "-f", "framemd5", "-"])
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await;
+    server.abort();
+    let _ = server.await;
+    let decoded = result.expect("FFmpeg network HLS decode timed out").unwrap();
+    assert_av_frames(&decoded);
+}
+
+fn assert_av_frames(decoded: &Output) {
     assert!(
         decoded.status.success(),
-        "FFmpeg could not demux decoded rolling HLS: {}",
+        "FFmpeg could not demux authenticated HLS: {}",
         String::from_utf8_lossy(&decoded.stderr)
     );
-    let text = String::from_utf8(decoded.stdout).unwrap();
+    let text = String::from_utf8(decoded.stdout.clone()).unwrap();
     let frame_streams = text
         .lines()
         .filter(|line| !line.starts_with('#'))

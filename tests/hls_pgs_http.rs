@@ -1673,6 +1673,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         &temp.path().join("rolling-three-demux"),
     )
     .await;
+    demux::assert_authenticated_hls_network_demux(&app, &token, &retained_path).await;
 
     // Force LRU eviction with four distinct authenticated publications
     // from the same synthetic source. The two/three-window lease must keep
