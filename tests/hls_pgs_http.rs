@@ -1834,8 +1834,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     // then confirm the rolling session still pins its newest TS segments.
     let active_segment = last_live
         .lines()
-        .filter(|line| line.starts_with(&format!("/Videos/{id}/hls1/")) && line.ends_with(".ts"))
-        .next_back()
+        .rfind(|line| line.starts_with(&format!("/Videos/{id}/hls1/")) && line.ends_with(".ts"))
         .unwrap()
         .to_owned();
     for seconds in [590_u64, 591, 592, 593] {
