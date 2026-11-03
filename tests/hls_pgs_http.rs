@@ -1830,10 +1830,12 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .unwrap();
     let current_etag_response = app.clone().oneshot(current_etag_request).await.unwrap();
     assert_eq!(current_etag_response.status(), StatusCode::NOT_MODIFIED);
-    assert!(to_bytes(current_etag_response.into_body(), 64)
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(
+        to_bytes(current_etag_response.into_body(), 64)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         body(call(&app, &eof_rolling_path, Some(&token)).await).await,
         ended
