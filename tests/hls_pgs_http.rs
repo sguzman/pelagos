@@ -1674,6 +1674,41 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_eq!(retained_again.status(), StatusCode::OK);
     assert_eq!(body(retained_again).await, three_playlist);
 
+    // Release the active sliding session, then reuse the final second of
+    // this same real source to verify that only a confirmed EOF adds ENDLIST.
+    let stop_first = Request::builder()
+        .method("DELETE")
+        .uri(rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(stop_first).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        call(&app, &rolling_path, Some(&token)).await.status(),
+        StatusCode::NOT_FOUND
+    );
+    let eof_start = format!("/Videos/{id}/hls1/{final_id}/rolling-start.m3u8");
+    let started_eof = call(&app, &eof_start, Some(&token)).await;
+    assert_eq!(started_eof.status(), StatusCode::OK);
+    let eof_rolling_path = started_eof.headers()["x-pelagos-rolling-path"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    assert!(!body(started_eof).await.contains("#EXT-X-ENDLIST"));
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let eof_rolling = call(&app, &eof_rolling_path, Some(&token)).await;
+    assert_eq!(eof_rolling.status(), StatusCode::OK);
+    let ended = body(eof_rolling).await;
+    assert!(ended.ends_with("#EXT-X-ENDLIST\n"));
+    assert!(ended.contains(&final_segment_uri));
+    assert_eq!(
+        body(call(&app, &eof_rolling_path, Some(&token)).await).await,
+        ended
+    );
+
     // The first excerpt is clear; the second starts after the PGS show cue,
     // and the third still contains the visible graphic before its clear cue.
     for (position, (segment, visible)) in [
@@ -1708,7 +1743,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
 
     auth::revoke_library(&state_dir, "viewer", &library).unwrap();
     assert_eq!(
-        call(&app, &rolling_path, Some(&token)).await.status(),
+        call(&app, &eof_rolling_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(
@@ -1751,7 +1786,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     );
     let release_rolling = Request::builder()
         .method("DELETE")
-        .uri(rolling_path.as_str())
+        .uri(eof_rolling_path.as_str())
         .header("X-Emby-Token", token.as_str())
         .body(Body::empty())
         .unwrap();
@@ -1760,7 +1795,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NO_CONTENT
     );
     assert_eq!(
-        call(&app, &rolling_path, Some(&token)).await.status(),
+        call(&app, &eof_rolling_path, Some(&token)).await.status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(&source).unwrap(), original);
