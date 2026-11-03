@@ -208,7 +208,9 @@ pub(super) fn make_rolling_playlist(
     // Reject any later FFmpeg fragment that exceeds the session's pinned
     // duration rather than silently changing it on an existing HLS URI.
     if !(1..=600).contains(&target_duration)
-        || fragments.iter().any(|(target, _)| *target > target_duration)
+        || fragments
+            .iter()
+            .any(|(target, _)| *target > target_duration)
     {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }

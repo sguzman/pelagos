@@ -51,7 +51,11 @@ impl RollingSession {
         // A small bound above the initial clip's requested segment interval
         // accommodates FFmpeg timebase rounding while preserving fast reloads
         // for very short excerpts.
-        let nominal = publication.target_seconds.min(window_seconds).saturating_add(1).min(600);
+        let nominal = publication
+            .target_seconds
+            .min(window_seconds)
+            .saturating_add(1)
+            .min(600);
         let target_duration = first_target.max(nominal);
         Ok(Self {
             id: Uuid::new_v4().simple().to_string(),
