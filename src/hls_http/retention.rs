@@ -155,7 +155,12 @@ pub(super) fn preview_response(lease: &RetainedPreview) -> Result<Response, Stat
         .publications
         .last()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    set_continuation_path(&mut response, &lease.item, &last.id, Some(lease.duration_ticks));
+    set_continuation_path(
+        &mut response,
+        &lease.item,
+        &last.id,
+        Some(lease.duration_ticks),
+    );
     let path = format!("/Videos/{}/hls1/{}/retained.m3u8", lease.item, lease.id);
     response.headers_mut().insert(
         "x-pelagos-retained-path",
@@ -281,18 +286,35 @@ mod tests {
         );
 
         for position in 0..4 {
-            registry.publish(fake(&format!("unrelated-{position}"), 1_000_000_000 + position));
+            registry.publish(fake(
+                &format!("unrelated-{position}"),
+                1_000_000_000 + position,
+            ));
         }
-        assert!(registry.lookup("first", "movie", "video", "viewer-token").is_some());
-        assert!(registry.lookup("third", "movie", "video", "viewer-token").is_some());
-        assert!(registry
-            .lookup("first", "movie", "video", "different-token")
-            .is_none());
-        assert!(registry
-            .retained_preview(&first_group.id, "movie", "different-token")
-            .is_none());
-        assert!(registry
-            .retained_preview(&first_group.id, "movie", "viewer-token")
-            .is_some());
+        assert!(
+            registry
+                .lookup("first", "movie", "video", "viewer-token")
+                .is_some()
+        );
+        assert!(
+            registry
+                .lookup("third", "movie", "video", "viewer-token")
+                .is_some()
+        );
+        assert!(
+            registry
+                .lookup("first", "movie", "video", "different-token")
+                .is_none()
+        );
+        assert!(
+            registry
+                .retained_preview(&first_group.id, "movie", "different-token")
+                .is_none()
+        );
+        assert!(
+            registry
+                .retained_preview(&first_group.id, "movie", "viewer-token")
+                .is_some()
+        );
     }
 }

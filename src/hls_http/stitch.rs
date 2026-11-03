@@ -216,9 +216,10 @@ async fn render_stitched(
     }
     let borrowed = publications.iter().map(Arc::as_ref).collect::<Vec<_>>();
     let (playlist, duration) = make_preview_chain(item, &borrowed)?;
-    let lease = state
-        .hls_registry()
-        .retain_preview(item, token, publications, playlist, duration)?;
+    let lease =
+        state
+            .hls_registry()
+            .retain_preview(item, token, publications, playlist, duration)?;
     super::retention::preview_response(&lease)
 }
 
