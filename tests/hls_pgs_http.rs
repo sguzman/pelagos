@@ -1794,6 +1794,7 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         .to_str()
         .unwrap()
         .to_owned();
+    let eof_live_etag = started_eof.headers()["etag"].to_str().unwrap().to_owned();
     let eof_opening = body(started_eof).await;
     assert!(!eof_opening.contains("#EXT-X-ENDLIST"));
     // Retrying the same start URI with a larger prebuffer request must
@@ -1804,9 +1805,35 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
     let eof_rolling = call(&app, &eof_rolling_path, Some(&token)).await;
     assert_eq!(eof_rolling.status(), StatusCode::OK);
+    let eof_ended_etag = eof_rolling.headers()["etag"].to_str().unwrap().to_owned();
+    assert_ne!(eof_ended_etag, eof_live_etag);
     let ended = body(eof_rolling).await;
     assert!(ended.ends_with("#EXT-X-ENDLIST\n"));
     assert!(ended.contains(&eof_segment_uri));
+    // EOF changes the generation despite publishing no additional segment.
+    // An older validator must receive the ended playlist, while the current
+    // validator may return 304 only after full library/source reauthorization.
+    let old_etag_request = Request::builder()
+        .uri(eof_rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", eof_live_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let old_etag_response = app.clone().oneshot(old_etag_request).await.unwrap();
+    assert_eq!(old_etag_response.status(), StatusCode::OK);
+    assert_eq!(body(old_etag_response).await, ended);
+    let current_etag_request = Request::builder()
+        .uri(eof_rolling_path.as_str())
+        .header("X-Emby-Token", token.as_str())
+        .header("If-None-Match", eof_ended_etag.as_str())
+        .body(Body::empty())
+        .unwrap();
+    let current_etag_response = app.clone().oneshot(current_etag_request).await.unwrap();
+    assert_eq!(current_etag_response.status(), StatusCode::NOT_MODIFIED);
+    assert!(to_bytes(current_etag_response.into_body(), 64)
+        .await
+        .unwrap()
+        .is_empty());
     assert_eq!(
         body(call(&app, &eof_rolling_path, Some(&token)).await).await,
         ended
