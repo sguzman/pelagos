@@ -1369,9 +1369,8 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
     assert_ne!(first_id, second_id);
     assert_ne!(second_id, third_id);
 
-    let three_url = format!(
-        "/Videos/{id}/hls1/{first_id}/stitch.m3u8?next={second_id}&afterNext={third_id}"
-    );
+    let three_url =
+        format!("/Videos/{id}/hls1/{first_id}/stitch.m3u8?next={second_id}&afterNext={third_id}");
     assert_eq!(
         call(&app, &three_url, None).await.status(),
         StatusCode::UNAUTHORIZED
@@ -1448,13 +1447,9 @@ async fn private_long_source_pgs_excerpt_http_reauthorizes_segments_and_separate
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        call(
-            &app,
-            &format!("/Videos/{id}/{third_segment}"),
-            Some(&token)
-        )
-        .await
-        .status(),
+        call(&app, &format!("/Videos/{id}/{third_segment}"), Some(&token))
+            .await
+            .status(),
         StatusCode::NOT_FOUND
     );
     assert_eq!(fs::read(&source).unwrap(), original);
